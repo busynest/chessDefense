@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <!-- TITLE -->
+  <title>Chess Defense</title>
+  <!-- X-UA -->
+  <meta http-equiv="X-UA-Compatible"                      content="IE=edge">
+  <!-- VIEWPORT -->
+  <meta name="viewport"                                   content="width=device-width, initial-scale=1.0">
+  <!-- MANIFEST -->
+  <link rel="manifest"                                    href="manifest.json">
+  <!-- DESCRIPTION -->
+  <meta name="description"                                content="ChessDefense is a New Type of Game, a cross between Chess + Tower Defense!">
+  <!-- Disable tap highlight on IE -->
+  <meta name="msapplication-tap-highlight"                content="no">
+  <!-- Add to homescreen for Chrome on Android -->
+  <meta name="mobile-web-app-capable"                     content="yes">
+  <meta name="application-name"                           content="Chess Defense">
+  <meta name="theme-color"                                content="#303F9F">
+  <!-- Add to homescreen for Safari on iOS -->
+  <meta name="apple-mobile-web-app-capable"               content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style"      content="black-translucent">
+  <meta name="apple-mobile-web-app-title"                 content="Chess Defense">
+  <meta name="apple-mobile-web-app-status-bar-style"      content="#303F9F">
+  <!-- Tile icon for Win8 -->
+  <meta name="msapplication-TileColor"                    content="#3372DF">
+  <meta name="msapplication-navbutton-color"              content="#303F9F">
+
+  <style>
+
+    body {
+      margin: 0px;
+      background-color: #303030;
+    }
+    
+    .site {
+      height: 100vh;
+      width: 100vw;
+      display: grid;
+      grid-template-rows: 64px auto 64px;
+    }
+
+  </style>
+</head>
+
+<script src="../node_modules/@webcomponents/webcomponentsjs/webcomponents-loader.js" async></script> 
+
+<body>
+  <div class="site">
+    <head-navigation></head-navigation>
+    <main><chess-defense></chess-defense></main>
+    <foot-controls><foot-controls>
+  </div>
+
+  <script type="module" src="./src/chess-defense.js"></script>
+  <script type="module" src="./src/head-navigation.js"></script>
+  <script type="module" src="./src/foot-controls.js"></script>
+
+    <!--
+
+  <script src="https://www.gstatic.com/firebasejs/4.6.2/firebase.js"></script>
+  <script>
+  // Initialize Firebase
+  var config = {
+    apiKey: "AIzaSyAJfm5MahdHr4HzwRLWN7IBhVYXMjP65lQ",
+    authDomain: "inmostfire.firebaseapp.com",
+    databaseURL: "https://inmostfire.firebaseio.com",
+    projectId: "inmostfire",
+    storageBucket: "inmostfire.appspot.com",
+    messagingSenderId: "937289126032"
+  };
+  firebase.initializeApp(config);
+  </script>
+
+  -->
+
+</body>
+</html>
+
+
+    <!--
+
+  <script type="module" src="src/one-square.js" async></script>
+  <script type="module" src="src/four-square.js" async></script>
+  <script type="module" src="src/board-square.js" async></script>
+  <script type="module" src="src/chess-king.js" async></script>
+  <script type="module" src="src/chess-queen.js" async></script>
+  <script type="module" src="src/chess-rook.js" async></script>
+  <script type="module" src="src/chess-knight.js" async></script>
+  <script type="module" src="src/chess-bishop.js" async></script>
+  <script type="module" src="src/chess-pawn.js" async></script>
+  <script type="module" src="src/box-block.js" async></script>
+
+    -->
