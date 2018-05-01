@@ -1,5 +1,4 @@
-import {Element as PolymerElement}
-  from "../node_modules/@polymer/polymer/polymer-element.js"
+import { PolymerElement } from "@polymer/polymer/polymer-element.js";
 
 export class BoardSquare extends PolymerElement {
 
@@ -24,6 +23,11 @@ export class BoardSquare extends PolymerElement {
 
   connectedCallback() {
     super.connectedCallback();
+    var screen        = window.screen.availHeight;
+    console.log(screen / 16);
+    //this.$.RLB.addEventListener('click', e => this.handleClick(e));
+    //console.log("this.$.grid.setAttribute(\"style\", \"grid-template-rows: screen ;\")");
+    //this.$.grid.setAttribute("style", "grid-template-rows: ;");
   }
 
   disconnectedCallback() {
@@ -37,11 +41,22 @@ export class BoardSquare extends PolymerElement {
   ready() {
     super.ready();
     //this.addEventListener('keypress', e => this.handlePress(e));
+ 
+      this.pawn = document.querySelectorAll("chess-pawn");
+      //this.$.pawn.setAttribute("style", "position: absolute;");
+      console.log(345);
+   
+  }
+
+  _rook() {
+    //this.$.RLB.setAttribute("style", "display: none;")
   }
 
   block() {
   	const block = document.querySelector('block');
   }
+
+
 
   static get template() {
     return `
@@ -50,24 +65,40 @@ export class BoardSquare extends PolymerElement {
         }
 
         .grid {
+
           height: 100%;
           max-width: 800px;
           margin: auto;
           display: grid;
-          grid-template-columns: 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr;
-          grid-template-rows: 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr;"
+          grid-gap: 2px;
+          grid-template-columns:  1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr;
+          grid-template-rows:     1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr;
+        }
+
+        four-square {
+     
         }
 
         chess-pawn, chess-rook, chess-knight, chess-bishop, chess-king, chess-queen {
-          position:   absolute;
-          z-index:    3;
 
+         
+       
         }
 
+        @media only screen and (min-width: 800px) { .grid { height: 700px; width: 700px; } }
+        @media only screen and (max-width: 800px) { .grid { height: 700px; width: 700px; } }
+        @media only screen and (max-width: 700px) { .grid { height: 600px; width: 600px; } }
+        @media only screen and (max-width: 600px) { .grid { height: 500px; width: 500px; } }
+        @media only screen and (max-width: 500px) { .grid { height: 400px; width: 400px; } }
+        @media only screen and (max-width: 400px) { .grid { height: 300px; width: 300px; } }
+        @media only screen and (max-width: 300px) { .grid { height: 260px; width: 260px; } }
 
      </style>
 
      <!--
+
+            position:   absolute;
+          z-index:    3;
 
      width:      100%;
      height:     100%;
@@ -78,7 +109,8 @@ export class BoardSquare extends PolymerElement {
      <div id="grid" class="grid">
     	
      <!-- 1 -->
-     <four-square id="a1" widthBox="{{widthThis}}">
+     <four-square id="a1">
+        <chess-rook id="RLB" on-click="_rook" new="pop"></chess-rook>
      </four-square>
 
      <!-- 2 -->
@@ -113,7 +145,7 @@ export class BoardSquare extends PolymerElement {
 
      <!-- 8 -->
      <four-square id="h1">
-       <chess-rook></chess-rook>
+       <chess-rook on-click="_rook"></chess-rook>
      </four-square>
      
 
@@ -305,7 +337,7 @@ export class BoardSquare extends PolymerElement {
 
      <!-- 58 -->
      <four-square id="a8">
-           <chess-rook></chess-rook>
+           <chess-rook on-click="_rook"></chess-rook>
      </four-square>
      <!-- 59 -->
      <four-square id="b8">
@@ -333,7 +365,7 @@ export class BoardSquare extends PolymerElement {
      </four-square>
      <!-- 64 -->
      <four-square id="h8">
-           <chess-rook></chess-rook>
+           <chess-rook on-click="_rook"></chess-rook>
      </four-square>
 
      </div>

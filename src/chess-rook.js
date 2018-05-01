@@ -1,7 +1,6 @@
-import {Element as PolymerElement}
-  from "../node_modules/@polymer/polymer/polymer-element.js"
+import { PolymerElement } from "@polymer/polymer/polymer-element.js";
 
-import "../node_modules/@polymer/iron-iconset-svg/iron-iconset-svg.js"
+//import "../node_modules/@polymer/iron-iconset-svg/iron-iconset-svg.js"
 
 export class ChessRook extends PolymerElement {
 
@@ -38,6 +37,10 @@ export class ChessRook extends PolymerElement {
     //this.addEventListener('keypress', e => this.handlePress(e));
   }
 
+  rook() {
+    this.setAttribute("style", "display: none;")
+  }
+
   static get template() {
     return`
     <style>
@@ -61,11 +64,11 @@ export class ChessRook extends PolymerElement {
 
     </style>
 
-        <svg class="myPath" width="25" height="25" xmlns="http://www.w3.org/2000/svg">
-          <g id="arrow-back">
-            <path id="svg_1" d="m1.995,10.55105l8.02134,0l2.47866,-8.02131l2.47866,8.02131l8.02134,0l-6.48939,4.95738l2.47879,8.02131l-6.48939,-4.95752l-6.48939,4.95752l2.47879,-8.02131l-6.48939,-4.95738z" stroke-width="1.5" stroke="#000" fill="#fff"/>
-          </g>
-        </svg>
+    <div id="LT">
+      <svg viewBox="0 0 100 100" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg" on-click="rook" >
+        <circle cx="50" cy="50" r="15" stroke="green" stroke-width="4" fill="yellow" />
+      </svg>
+    </div>
 
   `
   }

@@ -1,5 +1,4 @@
-import {Element as PolymerElement}
-  from "../node_modules/@polymer/polymer/polymer-element.js"
+import { PolymerElement } from "@polymer/polymer/polymer-element.js";
 
 export class HeadNavigation extends PolymerElement {
 

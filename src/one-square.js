@@ -1,5 +1,4 @@
-import {Element as PolymerElement}
-  from "../node_modules/@polymer/polymer/polymer-element.js"
+import { PolymerElement } from "@polymer/polymer/polymer-element.js";
 
 export class OneSquare extends PolymerElement {
 
@@ -24,6 +23,10 @@ export class OneSquare extends PolymerElement {
       	//observer: 'thingCountChanged',
       	notify: true
     	},
+
+      pop: String,
+
+      clicks: String
 
   	};
   }
@@ -56,9 +59,12 @@ export class OneSquare extends PolymerElement {
 
   ready() {
     //Create Block on Double Tap
-    this.addEventListener('click', e => this.handleClick(e).delay);
     //this.ensureAttribue('tabIndex', 0);
     super.ready();
+  }
+
+  _box()  {
+    this.setAttribute("style", "background-color: brown;");
   }
 
   static get template() {
@@ -68,6 +74,10 @@ export class OneSquare extends PolymerElement {
 
       :host {
 
+      }
+
+      .box {
+        border-bottom: 2px dotted blue;
       }
 
       div::before {
@@ -86,9 +96,15 @@ export class OneSquare extends PolymerElement {
         div:pressed {
           background-color: black;
         }
+
+        slot {
+          height: 100%;
+          width: 100%;
+        }
+
     	</style>
 	
-			<div pressed class="box" onclick="[[toggleThis]]"></div>
+			<div pressed id="box" on-click="_box"></div>
 
       `
   }

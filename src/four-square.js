@@ -1,4 +1,4 @@
-import {Element as PolymerElement} from "../node_modules/@polymer/polymer/polymer-element.js";
+import { PolymerElement } from "@polymer/polymer/polymer-element.js";
 import "./one-square.js";
 
 export class FourSquare extends PolymerElement {
@@ -51,7 +51,7 @@ export class FourSquare extends PolymerElement {
 
   ready() {
     super.ready();
-    this.widthBox = parseInt(this.shadowRoot.querySelector('.white').style.width);
+    //this.widthBox = parseInt(this.shadowRoot.querySelector('.white').style.width);
    //this.width = FSwidth.width();
   }
 
@@ -61,7 +61,7 @@ export class FourSquare extends PolymerElement {
     	<style>
 
     		.green {
-    			background-color: rgb(118,150,86);
+          background-color: rgb(118,150,86);
     		}
 
     		.white {
@@ -69,35 +69,50 @@ export class FourSquare extends PolymerElement {
         }
         
         .orange {
-    			background-color: orange;
+    			background-color: rgb(238,238,210);
         }
         
         .pink {
-    			background-color: pink;
+    			background-color: rgb(118,150,86);
     		}
 
     		slot {
-
-
+      
     		}
 
     	</style>
-        
-        <div style="height:   100%;
-        						width:    100%; 
-        						display:  grid;
-        						grid-template-columns: 1fr 1fr;
-                    grid-template-rows: 1fr 1fr;">
-                    
-          <slot height="100%" width="100%"></slot>
+       
+      <div  style="
+            height:   100%;
+            width:    100%;
+       
+            position: relative;
+            z-index: 1;
+
+            display:  grid;
+            grid-template-columns: 1fr;">
+
+      <slot></slot>
+      <div style="height:   100%;
+                  width:    100%;
+  
+                  position: absolute;
+                  z-index: -1;
+             
+                  display:  grid;
+                  grid-gap: 2px;
+                  grid-template-columns: 1fr 1fr;
+                  grid-template-rows: 1fr 1fr;
+        					">
           
-          <one-square class="green">  </one-square>
-          <one-square class="white">  </one-square>
-          <one-square class="orange"> </one-square>
-          <one-square class="pink">   </one-square>
-
-        </div>
-
+                  
+        <one-square id="aa" class="green">  </one-square>
+        <one-square class="white">  </one-square>
+        <one-square class="orange"> </one-square>
+        <one-square class="pink">   </one-square>
+      
+      </div>
+</div>
       `
   }
 

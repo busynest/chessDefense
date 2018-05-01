@@ -1,5 +1,4 @@
-
-import { Element as PolymerElement } from '../node_modules/@polymer/polymer/polymer-element.js';
+import { PolymerElement } from "@polymer/polymer/polymer-element.js";
 
 import "./four-square.js";
 import "./board-square.js";
@@ -31,16 +30,31 @@ export class ChessDefense extends PolymerElement {
 
   constructor() {
     super();
-    //console.log('chess-defense constructor!');
+
+    for ( var i = 0; i < 3; i++ ) {
+      //var backside = document.createElement("four-square");
+      //backside.className = 'card';
+      //this.ChessDefense.appendChild(backside);
+      console.log( i );
+    }
+
   }
 
   connectedCallback() {
     super.connectedCallback();
+
+    var i;
+    for ( i = 0; i < 5; i++ ) {
+      console.log( i );
+
+      
+    }
+
     console.log('chess-defense Connected!');
   }
 
   disconnectedCallback() {
-    
+
   }
 
   attributeChangedCallback() {
@@ -59,6 +73,9 @@ export class ChessDefense extends PolymerElement {
           height: 100%;
           width: 100%;
         }
+
+        
+
       </style>
 
      <board-square></board-square>
@@ -68,8 +85,8 @@ export class ChessDefense extends PolymerElement {
 
 
   _heightWidth() {
-    var cw = document.getElementById("grid").width();
-    document.getElementById("grid").css({'height':cw+'px'});
+    //var cw = document.getElementById("grid").width();
+    //document.getElementById("grid").css({'height':cw+'px'});
   }
 
   _createBoard(n) {
