@@ -1,53 +1,34 @@
 {
     "entrypoint": "index.html",
-    "shell": "src/chess-defense.js",
-    "npm": true,
-    "moduleResolution": "node",
-    "license": "MIT",
-    "fragments": [
-      "src/board-square.js",
-      "src/chess-bishop.js",
-      "src/chess-king.js",
-      "src/chess-knight.js",
-      "src/chess-pawn.js",
-      "src/chess-queen.js",
-      "src/chess-rook.js",
-      "src/four-square.js",
-      "src/one-square.js",
-      "src/head-navigation.js",
-      "src/foot-controls.js"
-    ],
-  
-    "sources": [
-      "src/**"
-    ],
-  
-    "extraDependencies": [
-      "node_modules/@webcomponents/webcomponentsjs/*.js",
-      "!node_modules/@webcomponents/webcomponentsjs/gulpfile.js",
-      "manifest.json",
-      "package.json",
-      "sitemap.xml",
-      "robots.txt"
-    ],
 
-    "lint": {
-      "rules": [
-        "polymer-3"
+    "shell": "deploy/application-shell.js",
+      "html-minify": true,
+      "moduleResolution": "node",
+      "npm": true,
+      "license": "MIT",
+      "sources": [
+        "images/**/*"
+      ],
+      "extraDependencies": [
+        "TERMS.md",
+        "robots.txt",
+        "sitemap.xml",
+        "sw.js",
+        "manifest.json",
+        "node_modules/@webcomponents/webcomponentsjs/**",
+        "node_modules/@webcomponents/webcomponentsjs/bundles/**"
+      ],
+      "builds":
+      [
+        
+        {
+          "name":                 "es5-bundled",
+          "js":                   { "minify": true, "compile": true, "transformModulesToAmd": true },
+          "css":                  { "minify": true },
+          "html":                 { "minify": true },
+          "bundle":               { "inlineScripts": false },
+          "addServiceWorker":     true
+        }
+        
       ]
-    },
-
-  "builds": [
-    {
-      "name":                   "esm-bundled",
-      "browserCapabilities":    [ "es2015", "modules" ],
-      "js":                     { "minify": true },
-      "css":                    { "minify": true },
-      "html":                   { "minify": true },
-      "bundle":                 { "inlineScripts": false },
-      "addServiceWorker":       true
-    }
-  ]
-
-  }
-  
+}

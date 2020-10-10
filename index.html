@@ -4,28 +4,43 @@
   <meta charset="utf-8">
   <!-- TITLE -->
   <title>Chess Defense</title>
-  <!-- X-UA -->
-  <meta http-equiv="X-UA-Compatible"                      content="IE=edge">
   <!-- VIEWPORT -->
   <meta name="viewport"                                   content="width=device-width, initial-scale=1.0">
   <!-- MANIFEST -->
   <link rel="manifest"                                    href="manifest.json">
   <!-- DESCRIPTION -->
   <meta name="description"                                content="ChessDefense is a New Type of Game, a cross between Chess + Tower Defense!">
-  <!-- Disable tap highlight on IE -->
-  <meta name="msapplication-tap-highlight"                content="no">
-  <!-- Add to homescreen for Chrome on Android -->
-  <meta name="mobile-web-app-capable"                     content="yes">
-  <meta name="application-name"                           content="Chess Defense">
-  <meta name="theme-color"                                content="#303F9F">
-  <!-- Add to homescreen for Safari on iOS -->
-  <meta name="apple-mobile-web-app-capable"               content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style"      content="black-translucent">
-  <meta name="apple-mobile-web-app-title"                 content="Chess Defense">
-  <meta name="apple-mobile-web-app-status-bar-style"      content="#303F9F">
-  <!-- Tile icon for Win8 -->
-  <meta name="msapplication-TileColor"                    content="#3372DF">
-  <meta name="msapplication-navbutton-color"              content="#303F9F">
+
+        <!-- Redux assumes `process.env.NODE_ENV` exists in the ES module build. https://github.com/reactjs/redux/issues/2907 -->
+        <script async>
+          window.process = { env: { NODE_ENV: 'production' }, nav: {} };
+          console.log('process ',window.process);
+        </script>
+
+        <!-- Force Polyfills -->
+        <script
+          async
+          Set-Cookie: polyr=poly; SameSite=Lax>
+          // Force Polyfills
+          if (window.customElements) window.customElements.forcePolyfill = true;
+          ShadyDOM = { force: true };
+          ShadyCSS = { shimcssproperties: true};
+        </script>
+
+        <!-- Web Components -->
+        <script
+          async
+          src="node_modules/@webcomponents/webcomponentsjs/webcomponents-bundle.js"
+          Set-Cookie: second="second" SameSite="Lax"></script>
+
+        <!-- Global site tag (gtag.js) - Google Analytics -->
+        <script async src="https://www.googletagmanager.com/gtag/js?id=UA-73943527-8"></script>
+        <script>
+          window.dataLayer = window.dataLayer || [];
+          function gtag(){dataLayer.push(arguments);}
+          gtag('js', new Date());
+          gtag('config', 'UA-73943527-8');
+        </script>
 
   <style>
 
@@ -48,42 +63,64 @@
   </style>
 </head>
 
-<script src="../node_modules/@webcomponents/webcomponentsjs/webcomponents-loader.js" async></script> 
-
 <body>
-  <div class="site">
-    <head-navigation></head-navigation>
-    <main><chess-defense></chess-defense></main>
-    <foot-controls><foot-controls>
-  </div>
 
-  <script type="module" src="./src/chess-defense.js"></script>
-  <script type="module" src="./src/head-navigation.js"></script>
-  <script type="module" src="./src/foot-controls.js"></script>
+  <application-shell></application-shell>
 
-    <!--
+  <script
+    type="module"
+    src="./deploy/application-shell.js"></script>
 
-  <script src="https://www.gstatic.com/firebasejs/4.6.2/firebase.js"></script>
+ 
+  <!-- Firebase -->
+  <script
+    src="https://www.gstatic.com/firebasejs/7.22.0/firebase-app.js"
+    Set-Cookie: __Secure-ID=8; SameSite=None; Secure; Domain=gstatic.com ></script>
+  <script
+    src="https://www.gstatic.com/firebasejs/7.22.0/firebase-auth.js"
+    Set-Cookie: __Secure-ID=9; SameSite=None; Secure; Domain=gstatic.com ></script>
+  <script
+    src="https://www.gstatic.com/firebasejs/7.22.0/firebase-firestore.js" 
+    Set-Cookie: __Secure-ID=10; SameSite=None; Secure; Domain=gstatic.com ></script>
+  <script
+    src="https://www.gstatic.com/firebasejs/7.22.0/firebase-storage.js"
+    Set-Cookie: __Secure-ID=11; SameSite=None; Secure; Domain=gstatic.com ></script>
+  <script
+    src="https://www.gstatic.com/firebasejs/7.22.0/firebase-messaging.js"
+    Set-Cookie: __Secure-ID=12; SameSite=None; Secure; Domain=gstatic.com ></script>
+  <script
+    src="https://www.gstatic.com/firebasejs/7.22.0/firebase-analytics.js"
+    Set-Cookie: __Secure-ID=13; SameSite=None; Secure; Domain=gstatic.com ></script>
+
   <script>
   // Initialize Firebase
-  var config = {
-    apiKey: "AIzaSyAJfm5MahdHr4HzwRLWN7IBhVYXMjP65lQ",
-    authDomain: "inmostfire.firebaseapp.com",
-    databaseURL: "https://inmostfire.firebaseio.com",
-    projectId: "inmostfire",
-    storageBucket: "inmostfire.appspot.com",
-    messagingSenderId: "937289126032"
+  var admin = {
+    apiKey: "AIzaSyAWXOpxGc_GbTYckgNPpRhEWzOpeRxMAOg",
+    authDomain: "chess-defense.firebaseapp.com",
+    databaseURL: "https://chess-defense.firebaseio.com",
+    projectId: "chess-defense",
+    storageBucket: "chess-defense.appspot.com",
+    messagingSenderId: "1056334501744",
+    appId: "1:1056334501744:web:7d256ce8e20946d4e1a1b5"
   };
-  firebase.initializeApp(config);
+
+  const application           = firebase.initializeApp(admin);
+
+  firebase
+    .firestore()
+    .settings({ cacheSizeBytes: firebase.firestore.CACHE_SIZE_UNLIMITED })
+
+  const firestore             = firebase.firestore(application);
+  const usersCollection       = firestore.collection('users');
+  const contractors           = firestore.collection('contractors');
+
   </script>
 
-  -->
-
 </body>
+
 </html>
 
-
-    <!--
+<!--
 
   <script type="module" src="src/one-square.js" async></script>
   <script type="module" src="src/four-square.js" async></script>
@@ -96,4 +133,4 @@
   <script type="module" src="src/chess-pawn.js" async></script>
   <script type="module" src="src/box-block.js" async></script>
 
-    -->
+-->
