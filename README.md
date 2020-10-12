@@ -1,10 +1,8 @@
 
 [Chess Defense](https://www.chessdefense.com)
 
-
-
 # 1v1
-* Two Midevil Kings command an onslaught of villagers to brawl with magic and strategy to defend their own towns of Chess.
+* Two Medieval Kings command an onslaught of villagers to brawl with magic and strategy to defend their own towns of Chess.
 * Each Chess Tower spawns a unique villager to raid with different values of Strength, Life, Speed.
 * 6 Types of Towers: King, Queen = Magic upgrades , Rook, Bishop, Knight, Pawn = Peasant
 * 4 Types of villagers: Archer, Knight, iron canon, Peasant.
