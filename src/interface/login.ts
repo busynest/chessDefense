@@ -1,39 +1,64 @@
-var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
-    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
-    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
-    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
-    return c > 3 && r && Object.defineProperty(target, key, r), r;
-};
-import { LitElement, html, css } from 'lit-element';
-import { customElement, property } from "lit-element/lib/decorators.js";
+
+
+import { LitElement, html, css, CSSResult, TemplateResult } from 'lit-element';
+import { customElement, property } from "lit-element/lib/decorators.js"
 import { connect } from 'pwa-helpers/connect-mixin';
 import { store } from '../store';
-let CreateUser = class CreateUser extends connect(store)(LitElement) {
-    constructor() {
-        super();
-        this._method = false;
-        this._error = '';
-    }
-    _create() {
-        let email = this.shadowRoot.querySelector('.newEmail');
-        let password = this.shadowRoot.querySelector('.newSignal');
-        firebase
-            .auth()
-            .createUserWithEmailAndPassword(email.value, password.value)
-            .catch((error) => { this._error = error, console.log("error: ", error); });
-    }
-    _signIn() {
-        let email = this.shadowRoot.querySelector('.existingEmail');
-        let password = this.shadowRoot.querySelector('.existingSignal');
-        firebase
-            .auth()
-            .signInWithEmailAndPassword(email.value, password.value)
-            .catch((error) => { this._error = error, console.log("error: ", error); });
-    }
-    firstUpdated() {
-    }
-    static get styles() {
-        return css `
+
+@customElement('create-user')
+export class CreateUser extends connect(store)(LitElement) {
+
+  @property({type: Boolean}) private _method  = false;
+  @property({type: String})  private _error   = '';
+
+  constructor() {
+    super();
+  }
+
+
+  private _create() {
+    let email:any     = this.shadowRoot!.querySelector('.newEmail')!;
+    let password:any  = this.shadowRoot!.querySelector('.newSignal')!;
+    // @ts-ignore 
+    firebase
+      .auth()
+      .createUserWithEmailAndPassword(email.value, password.value)
+      // .then( this.gtag_report_conversion(window.location) );
+      .catch( (error:any) => { this._error = error, console.log( "error: ", error ); });
+  }
+
+  private _signIn() {
+    let email:any = this.shadowRoot!.querySelector('.existingEmail')!;
+    let password:any = this.shadowRoot!.querySelector('.existingSignal')!;
+    // @ts-ignore 
+    firebase
+      .auth()
+      .signInWithEmailAndPassword(email.value, password.value)
+      .catch( (error:any) => { this._error = error, console.log( "error: ", error ); });
+  }
+
+  /*
+  private gtag_report_conversion(url:any) {
+    var callback = function () {
+      if (typeof(url) != 'undefined') {
+        window.location = url;
+      }
+    };
+    // @ts-ignore
+    gtag('event', 'conversion', {
+      'send_to': 'AW-937270922/YDL4CKjKuNIBEIq99r4D',
+      'event_callback': callback
+    });
+    return false;
+  }
+*/
+
+  protected firstUpdated() {
+
+  }
+
+  static get styles():CSSResult {
+    return css`
 
         :host {
           display:                      grid;
@@ -58,41 +83,40 @@ let CreateUser = class CreateUser extends connect(store)(LitElement) {
           grid-gap: 8px;
         }
 
-            `;
-    }
-    render() {
-        return html `
+            `
+  }
 
-  ${this._method ? html ` 
+  protected render():TemplateResult {
+    return html`
+
+  ${ this._method ? html` 
       <form autocomplete="on">
 
         <p>Sign up to advertise your business with us.</p>
 
-        <mwc-textfield filled autocomplete="email"
+        <input filled autocomplete="email"
           type          = "email"
           class         = "newEmail"
-          label         = "New Email"
+          placeholder   = "New Email"
           iconTrailing  = "mail"
           style = "
             margin:   auto;
-            width:    100%;">
-        </mwc-textfield>
+            width:    100%;" />
 
-        <mwc-textfield filled autocomplete="password"
+        <input filled autocomplete="password"
           type          = "password"
           class         = "newSignal"
-          label         = "New Password"
+          placeholder         = "New Password"
           iconTrailing  = "lock"
           style = "
             margin:   auto;
-            width:    100%;">
-        </mwc-textfield>
+            width:    100%;" />
         <!-- /* this.gtag_report_conversion, */ -->
 
-        <mwc-button raised autocomplete
+        <button raised autocomplete
           label   = "Sign up"
           style   = "width: 100%;"
-          @click  = "${this._create}"></mwc-button>
+          @click  = "${ this._create }">Sign up</button>
 
         ${this._error}
 
@@ -104,7 +128,7 @@ let CreateUser = class CreateUser extends connect(store)(LitElement) {
           <a href="/terms">Terms of Service </a> & <a href="privacy">Privacy Policy</a>.
         </p>
       </form>
-  ` : html `
+  ` : html`
 
         <form autocomplete="on"
           style="
@@ -134,7 +158,7 @@ let CreateUser = class CreateUser extends connect(store)(LitElement) {
             <button raised
               label   = "login"
               style   = "width: 100%"
-              @click  ="${this._signIn}"></button>
+              @click  ="${ this._signIn }">Sign in</button>
 
             <p style="text-align:center;">${this._error}</p>
 
@@ -155,16 +179,6 @@ let CreateUser = class CreateUser extends connect(store)(LitElement) {
 
   `}
 
-    `;
-    }
-};
-__decorate([
-    property({ type: Boolean })
-], CreateUser.prototype, "_method", void 0);
-__decorate([
-    property({ type: String })
-], CreateUser.prototype, "_error", void 0);
-CreateUser = __decorate([
-    customElement('create-user')
-], CreateUser);
-export { CreateUser };
+    `
+  }
+}

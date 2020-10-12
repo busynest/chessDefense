@@ -1,30 +1,27 @@
-var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
-    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
-    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
-    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
-    return c > 3 && r && Object.defineProperty(target, key, r), r;
-};
-import { html, LitElement, css } from 'lit-element';
-import { customElement, property } from "lit-element/lib/decorators.js";
-import { connect } from 'pwa-helpers/connect-mixin';
-import { store } from '../store';
-import { closeDrawer } from './drawer_state';
-import { logOut, googleSignIn } from './functions';
+
+import { html, LitElement, css, TemplateResult, CSSResult } from 'lit-element';
+import { customElement, property }  from "lit-element/lib/decorators.js"
+import { connect }                  from 'pwa-helpers/connect-mixin';
+import { store, RootState }         from '../store';
+import { closeDrawer }              from './drawer_state';
+import { logOut, googleSignIn }     from './functions';
 import './login';
-let UserDrawer = class UserDrawer extends connect(store)(LitElement) {
-    constructor() {
-        super();
-        this._user = false;
-    }
-    stateChanged(state) {
-        this._user = state.profiles.currentUser;
-    }
-    firstUpdated() {
-        this.shadowRoot.querySelector('#close').addEventListener('click', () => { store.dispatch(closeDrawer(false)); });
-        this.shadowRoot.querySelector('.leave').addEventListener('click', () => { logOut(), store.dispatch(closeDrawer()); });
-    }
-    static get styles() {
-        return css `
+
+@customElement('user-drawer')
+export class UserDrawer extends connect(store)(LitElement) {
+
+  @property({type: Boolean})  private _user:any = false;
+
+  constructor() {
+    super();
+  }
+
+  stateChanged(state: RootState) {
+    this._user = state.settings!.currentUser;
+  }
+
+  static get styles():CSSResult {
+    return css`
 
         :host {
           display:              inline-grid;
@@ -72,14 +69,16 @@ let UserDrawer = class UserDrawer extends connect(store)(LitElement) {
         /*.divide       { border: 2px solid #606060; margin: 6px 0 0 0; border-radius: 50%; }*/
         @media (max-width: 460px) { .google { font-size: .8em; } }
 
-      `;
+      `
     }
-    render() {
-        return html `
+
+  protected render():TemplateResult {
+    return html`
 
 <!-- Toggle EXIT -->
 <button
-  id    ="close"
+  id      ="close"
+  @click  ="${store.dispatch( closeDrawer(false) )}"
   style ="
     position:         absolute;
     top:              0;
@@ -96,15 +95,15 @@ let UserDrawer = class UserDrawer extends connect(store)(LitElement) {
 
     <h2 ?active ="${!this._user}" style="text-align: center;">Welcome Back</h2>
 
-<!-- Logged OUT-->
-<create-user ?active="${!this._user}"></create-user>
+    <!-- Logged OUT-->
+    <create-user ?active="${!this._user}"></create-user>
 
 
    <!-- GOOGLE SIGN IN-->
    <button
       id      ="googleOne"
       class   ="google"
-      @click  ="${googleSignIn}"
+      @click  ="${ googleSignIn }"
       ?active ="${!this._user}"
       style   ="
       margin:                   auto auto 8px;;
@@ -139,10 +138,11 @@ let UserDrawer = class UserDrawer extends connect(store)(LitElement) {
     </button>
 
 <!-- Logged IN -->
-<div class="setLog" ?on="${this._user === true}">
+<div class="setLog" ?on="${ this._user === true }">
   <p
-    class="leave"
-    style="
+    class   = "leave"
+    @click  = "${logOut(), store.dispatch( closeDrawer() )}"
+    style = "
       cursor: pointer;
       margin: 12px;
       box-sizing: border-box;
@@ -157,11 +157,4 @@ let UserDrawer = class UserDrawer extends connect(store)(LitElement) {
 
       `;
     }
-};
-__decorate([
-    property({ type: Boolean })
-], UserDrawer.prototype, "_user", void 0);
-UserDrawer = __decorate([
-    customElement('user-drawer')
-], UserDrawer);
-export { UserDrawer };
+  }
