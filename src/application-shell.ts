@@ -12,6 +12,7 @@ import { navigate, updateOffline } from './application/application_state.js';
 import { firebaseConfigAttribute } from './firebase-config.js';
 import { connectStore, store, type RootState } from './store.js';
 import './application/offline.js';
+import './application/battlefield.js';
 
 const pageTitles: Record<string, string> = {
   home: 'Chess Defense',
@@ -64,18 +65,32 @@ export class ApplicationShell extends connect(connectStore)(LitElement) {
     return css`
       :host {
         display: block;
+        position: relative;
         box-sizing: border-box;
         max-width: 100%;
         min-height: 100vh;
-        color: #f5f5f5;
+        color: #f6efe2;
+        font-family: Spectral, Palatino, "Palatino Linotype", serif;
         --pwa_inset: 12px;
         --pwa_max_width: 420px;
-        --pwa_action_background_color: #4caf50;
-        --pwa_action_border_color: #2e7d32;
-        --pwa_icon_background_color: #4caf50;
-        --pwa_icon_hover_color: #2e7d32;
-        --pwa_background: #f7f4ea;
+        --pwa_background: #1c1612;
+        --pwa_input_background_color: #2a211c;
+        --pwa_drawer_text_color: #f3e6cf;
+        --pwa_label_text_color: #f3e6cf;
+        --pwa_header_color: #f6e7a8;
+        --pwa_line_color: #6b5344;
+        --pwa_input_border_color: #8d6b4a;
+        --pwa_action_background_color: #8c3a2a;
+        --pwa_action_border_color: #5c2418;
+        --pwa_action_text_color: #fff6e8;
+        --pwa_icon_background_color: #8c3a2a;
+        --pwa_icon_hover_color: #5c2418;
+        --pwa_focus: #f6e7a8;
       }
+
+      war-field { position: absolute; inset: 0; }
+
+      header, main, footer { position: relative; z-index: 1; }
 
       header {
         box-sizing: border-box;
@@ -84,8 +99,9 @@ export class ApplicationShell extends connect(connectStore)(LitElement) {
         align-items: center;
         gap: 12px;
         padding: 12px 16px;
-        background: #184a78;
-        box-shadow: 0 0 8px rgba(0, 0, 0, 0.6);
+        background: linear-gradient(180deg, #3a2418, #1a100c);
+        border-bottom: 1px solid #c4a574;
+        box-shadow: 0 8px 18px rgba(0, 0, 0, 0.45);
       }
 
       .logo {
@@ -137,7 +153,7 @@ export class ApplicationShell extends connect(connectStore)(LitElement) {
         gap: 8px;
         margin-top: 32px;
         padding: 32px 16px;
-        background: #184a78;
+        background: linear-gradient(180deg, transparent, rgba(12, 8, 6, 0.72));
         text-align: center;
       }
 
@@ -150,12 +166,32 @@ export class ApplicationShell extends connect(connectStore)(LitElement) {
         width: 72px;
         height: 72px;
       }
+
+      @media (max-width: 640px) {
+        header {
+          gap: 8px;
+          padding: 10px 12px;
+        }
+        .logo {
+          font-size: 0.95rem;
+          white-space: nowrap;
+        }
+        .logo img {
+          width: 36px;
+          height: 36px;
+        }
+        nav {
+          gap: 8px;
+          font-size: 0.9rem;
+        }
+      }
     `;
   }
 
   protected override render(): TemplateResult {
     const config = firebaseConfigAttribute;
     return html`
+      <war-field></war-field>
       <header>
         <a class="logo" href="/">
           <img src="/images/manifest/logo-192.png" alt="" />

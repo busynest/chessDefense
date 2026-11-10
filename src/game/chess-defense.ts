@@ -229,51 +229,62 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
 
   static override get styles(): CSSResultGroup {
     return css`
-      :host { display: block; color: #f5f5f5; }
-      h1 { margin: 0 0 8px; text-align: center; }
+      :host { display: block; color: #f6efe2; }
+      h1, h2 { font-family: Cinzel, Palatino, serif; letter-spacing: 0.04em; }
+      h1 { margin: 0; text-align: center; font-size: 2.4rem; color: #f6e7a8; text-shadow: 0 2px 0 #2a160c; }
+      .lede { text-align: center; margin: 6px 0 0; color: #e6d3b4; }
       .menu, .play { display: grid; gap: 14px; }
       .card, .hud, .end {
-        background: #243044;
-        border-radius: 12px;
+        background:
+          linear-gradient(180deg, rgba(62, 42, 28, 0.92), rgba(22, 14, 10, 0.92));
+        border: 1px solid #c4a574;
+        border-radius: 14px;
         padding: 14px;
+        box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35);
       }
       .choices, .spells, .row { display: flex; flex-wrap: wrap; gap: 8px; }
       button, .link {
         min-height: 44px;
         border-radius: 8px;
-        border: 0;
+        border: 1px solid #e6c98a;
         padding: 0 14px;
-        background: #4caf50;
-        color: white;
+        background: linear-gradient(#a24a36, #6d2c22);
+        color: #fff6e8;
+        font-family: Cinzel, Palatino, serif;
         font-weight: 700;
         cursor: pointer;
         text-decoration: none;
         display: inline-flex;
         align-items: center;
       }
-      button.quiet, .link { background: #184a78; }
+      button.quiet, .link { background: linear-gradient(#3d4e68, #243044); }
       button:disabled { opacity: 0.45; cursor: default; }
       label { display: grid; gap: 4px; font-size: 0.9rem; }
       select, input {
         min-height: 44px;
         border-radius: 8px;
-        border: 1px solid #8d8870;
+        border: 1px solid #8d6b4a;
         padding: 0 10px;
-        background: white;
-        color: #1c2430;
+        background: #2a211c;
+        color: #f6efe2;
       }
-      .note { min-height: 1.2em; color: #f6d56a; }
+      .note { min-height: 1.2em; color: #f6e7a8; }
       .play { align-items: start; }
       @media (min-width: 960px) {
-        .play { grid-template-columns: 240px minmax(0, 1fr); }
+        .play { grid-template-columns: 250px minmax(0, 1fr); }
       }
       .hud { display: grid; gap: 8px; }
       .gold { font-variant-numeric: tabular-nums; }
+      .wave {
+        font-family: Cinzel, Palatino, serif;
+        color: #f6e7a8;
+        font-size: 1.05rem;
+      }
       .end {
         margin-top: 12px;
         text-align: center;
       }
-      .banner { text-align: center; min-height: 1.2em; color: #f6d56a; }
+      .banner { text-align: center; min-height: 1.2em; color: #f6e7a8; font-family: Cinzel, Palatino, serif; }
     `;
   }
 
@@ -343,7 +354,7 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
           </button>
           <button type="button" class="quiet" @click=${() => store.dispatch(showMenu())}>Menu</button>
         </div>
-        <div class="gold">${waveLabel}</div>
+        <div class="wave">${waveLabel}</div>
         <div class="row">
           ${sides.map((side) => html`
             <button

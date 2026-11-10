@@ -89,6 +89,8 @@ These are the calls the brief left open.
 
 ## Develop
 
+Display type is [Cinzel](https://fonts.google.com/specimen/Cinzel) and body type is [Spectral](https://fonts.google.com/specimen/Spectral), both served by Google Fonts under the SIL Open Font License, with Palatino as the fallback. Every picture on the board is original SVG and CSS. No asset pack is used.
+
 The stack is Lit 3, Redux Toolkit 2, pwa-auth, and Firebase 12. TypeScript is compiled with `tsc`. Development uses `@web/dev-server`. Production uses Rollup. There is no Vite and no Polymer.
 
 ```bash

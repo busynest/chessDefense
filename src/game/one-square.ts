@@ -21,7 +21,9 @@ export class OneSquare extends LitElement {
   @property({ type: String }) side: Side | '' = '';
   @property({ type: Number }) hp = 0;
   @property({ type: Number }) maxHp = 1;
-  @property({ type: Array }) blocked: boolean[] = [false, false, false, false];
+  @property({ type: Array }) walls: number[] = [-1, -1, -1, -1];
+  @property({ type: Boolean, reflect: true }) etched = false;
+  @property({ type: Boolean, reflect: true }) portal = false;
   @property({ type: String }) label = '';
 
   static override get styles(): CSSResultGroup {
@@ -29,37 +31,58 @@ export class OneSquare extends LitElement {
       :host {
         position: relative;
         display: block;
-        background: #efd9b5;
         min-width: 0;
         aspect-ratio: 1;
+        background:
+          linear-gradient(145deg, rgba(255,255,255,0.22), transparent 42%),
+          repeating-linear-gradient(90deg, rgba(90,60,30,0.05) 0 1px, transparent 1px 3px),
+          #e4d3b4;
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.35), inset 0 -2px 0 rgba(40,24,8,0.28);
       }
-      :host([dark]) { background: #b58863; }
-      :host([hint='selected']) { box-shadow: inset 0 0 0 3px #f6d56a; }
+      :host([dark]) {
+        background:
+          linear-gradient(145deg, rgba(255,255,255,0.08), transparent 40%),
+          repeating-linear-gradient(90deg, rgba(0,0,0,0.08) 0 1px, transparent 1px 3px),
+          #8a6244;
+      }
+      :host([hint='selected']) {
+        box-shadow: inset 0 0 0 2px #f6e7a8, 0 0 14px rgba(246, 214, 120, 0.85);
+        z-index: 2;
+      }
+      :host([portal]) .piece { filter: drop-shadow(0 0 6px #f0c56a); }
       four-square { position: absolute; inset: 0; }
-      .piece { position: absolute; inset: 8% 6% 16%; }
+      .piece { position: absolute; inset: 4% 4% 14%; }
       .hp {
         position: absolute;
-        left: 8%;
-        right: 8%;
-        bottom: 6%;
-        height: 5px;
-        border-radius: 3px;
-        background: rgba(0, 0, 0, 0.35);
+        left: 12%;
+        right: 12%;
+        bottom: 5%;
+        height: 4px;
+        border-radius: 4px;
+        background: rgba(12, 8, 6, 0.72);
+        box-shadow: 0 0 0 1px rgba(232, 206, 150, 0.45);
         overflow: hidden;
+        z-index: 3;
       }
-      .hp span { display: block; height: 100%; background: #3dba5c; }
-      .hp.low span { background: #e04b3a; }
+      .hp span { display: block; height: 100%; background: linear-gradient(#d8f5c8, #3dba5c); }
+      .hp.low span { background: linear-gradient(#ffd0c4, #c0392b); }
       .mark {
         position: absolute;
-        width: 28%;
-        height: 28%;
-        left: 36%;
-        top: 36%;
+        width: 34%;
+        height: 34%;
+        left: 33%;
+        top: 33%;
         border-radius: 50%;
         z-index: 2;
       }
-      .mark.move { background: rgba(32, 130, 48, 0.72); }
-      .mark.capture { background: rgba(176, 32, 32, 0.78); box-shadow: inset 0 0 0 2px #ffd7d0; }
+      .mark.move {
+        background: radial-gradient(circle, rgba(190,255,210,0.95), rgba(40,160,80,0.15) 70%);
+        box-shadow: 0 0 10px #8dffc0;
+      }
+      .mark.capture {
+        background: radial-gradient(circle, rgba(255,180,160,0.95), rgba(160,30,20,0.2) 70%);
+        box-shadow: 0 0 10px #ff6a4a;
+      }
       button {
         position: absolute;
         inset: 0;
@@ -96,13 +119,13 @@ export class OneSquare extends LitElement {
     const showRank = this.file === 0;
     const showFile = this.rank === 0;
     return html`
-      <four-square .blocked=${this.blocked}></four-square>
-      ${this.kind === 'pawn' ? html`<chess-pawn class="piece" .side=${this.side || 'white'}></chess-pawn>` : ''}
-      ${this.kind === 'knight' ? html`<chess-knight class="piece" side=${this.side || 'white'}></chess-knight>` : ''}
-      ${this.kind === 'bishop' ? html`<chess-bishop class="piece" .side=${this.side || 'white'}></chess-bishop>` : ''}
-      ${this.kind === 'rook' ? html`<chess-rook class="piece" .side=${this.side || 'white'}></chess-rook>` : ''}
-      ${this.kind === 'queen' ? html`<chess-queen class="piece" .side=${this.side || 'white'}></chess-queen>` : ''}
-      ${this.kind === 'king' ? html`<chess-king class="piece" .side=${this.side || 'white'}></chess-king>` : ''}
+      <four-square .walls=${this.walls} ?etched=${this.etched}></four-square>
+      ${this.kind === 'pawn' ? html`<chess-pawn class="piece" .side=${this.side || 'white'} .hp=${this.hp} .maxHp=${this.maxHp}></chess-pawn>` : ''}
+      ${this.kind === 'knight' ? html`<chess-knight class="piece" side=${this.side || 'white'} .hp=${this.hp} .maxHp=${this.maxHp}></chess-knight>` : ''}
+      ${this.kind === 'bishop' ? html`<chess-bishop class="piece" .side=${this.side || 'white'} .hp=${this.hp} .maxHp=${this.maxHp}></chess-bishop>` : ''}
+      ${this.kind === 'rook' ? html`<chess-rook class="piece" .side=${this.side || 'white'} .hp=${this.hp} .maxHp=${this.maxHp}></chess-rook>` : ''}
+      ${this.kind === 'queen' ? html`<chess-queen class="piece" .side=${this.side || 'white'} .hp=${this.hp} .maxHp=${this.maxHp}></chess-queen>` : ''}
+      ${this.kind === 'king' ? html`<chess-king class="piece" .side=${this.side || 'white'} .hp=${this.hp} .maxHp=${this.maxHp}></chess-king>` : ''}
       ${this.kind ? html`<div class="hp ${ratio < 0.35 ? 'low' : ''}"><span style="width:${ratio * 100}%"></span></div>` : ''}
       ${this.hint === 'move' || this.hint === 'capture' ? html`<div class="mark ${this.hint}"></div>` : ''}
       ${showRank ? html`<span class="coord rank">${this.rank + 1}</span>` : ''}

@@ -7,6 +7,8 @@ import type { Side } from './types.js';
 @customElement('chess-pawn')
 export class ChessPawn extends LitElement {
   @property({ type: String }) side: Side = 'white';
+  @property({ type: Number }) hp = 1;
+  @property({ type: Number }) maxHp = 1;
 
   static override get styles(): CSSResultGroup {
     return css`
@@ -16,6 +18,6 @@ export class ChessPawn extends LitElement {
   }
 
   protected override render() {
-    return pieceSvg('pawn', this.side);
+    return pieceSvg('pawn', this.side, this.maxHp > 0 ? this.hp / this.maxHp : 1);
   }
 }

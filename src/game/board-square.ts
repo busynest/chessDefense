@@ -4,10 +4,13 @@ import { connect } from 'pwa-helpers/connect-mixin.js';
 
 import { blockProblem } from './commands.js';
 import { legalMoves, towerAt } from './chess.js';
+import { pieceSvg } from './glyphs.js';
 import { handleCell, handleSquare } from './input.js';
 import './one-square.js';
+import { soldierSvg } from './soldiers.js';
 import { connectStore, type RootState } from '../store.js';
-import type { GameState, Square } from './types.js';
+import type { GameState, PieceKind, Side, Square } from './types.js';
+import { WAVES } from './units.js';
 
 @customElement('board-square')
 export class BoardSquare extends connect(connectStore)(LitElement) {
@@ -15,25 +18,61 @@ export class BoardSquare extends connect(connectStore)(LitElement) {
   @state() private selected: Square | null = null;
   @state() private placing: 'white' | 'black' | null = null;
   @state() private ghost: SquareCell | null = null;
+  private ruins: Ruin[] = [];
+  private ashes: Ash[] = [];
+  private ruinTimer = 0;
 
   override stateChanged(state: RootState): void {
-    this.game = state.game.game;
+    const next = state.game.game;
+    if (this.game && next && this.game.status !== 'menu') {
+      const ids = new Set(next.towers.map((tower) => tower.id));
+      const soldiers = new Set(next.soldiers.map((soldier) => soldier.id));
+      const now = performance.now();
+      for (const tower of this.game.towers) {
+        if (!ids.has(tower.id)) {
+          this.ruins.push({ file: tower.file, rank: tower.rank, side: tower.side, kind: tower.kind, born: now });
+        }
+      }
+      for (const soldier of this.game.soldiers) {
+        if (!soldiers.has(soldier.id)) {
+          this.ashes.push({ x: soldier.x, y: soldier.y, side: soldier.side, born: now });
+        }
+      }
+      this.ruins = this.ruins.filter((ruin) => now - ruin.born < 1500);
+      this.ashes = this.ashes.filter((ash) => now - ash.born < 700);
+      if (this.ruins.length > 0 || this.ashes.length > 0) {
+        window.clearTimeout(this.ruinTimer);
+        this.ruinTimer = window.setTimeout(() => this.requestUpdate(), 1600);
+      }
+    }
+    this.game = next;
     this.selected = state.game.selected;
     this.placing = state.game.placing;
   }
 
   static override get styles(): CSSResultGroup {
     return css`
-      :host { display: block; width: min(100%, 720px); margin: 0 auto; }
+      :host {
+        display: block;
+        width: min(100%, 720px);
+        margin: 0 auto;
+        padding: 10px;
+        border-radius: 18px;
+        background:
+          linear-gradient(180deg, #5c4634, #2a1d14 40%, #1a120e);
+        box-shadow:
+          0 22px 30px rgba(0, 0, 0, 0.55),
+          inset 0 1px 0 rgba(255, 220, 170, 0.35);
+      }
       .frame {
         position: relative;
         display: grid;
         grid-template-columns: repeat(8, 1fr);
         width: 100%;
-        border: 3px solid #3a2a1c;
-        border-radius: 6px;
+        border: 6px solid #3a2c22;
+        border-radius: 8px;
         overflow: hidden;
-        box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35);
+        box-shadow: inset 0 0 0 2px #c4a574, 0 0 22px rgba(255, 160, 70, 0.16);
       }
       .actors, .maze {
         position: absolute;
@@ -43,43 +82,85 @@ export class BoardSquare extends connect(connectStore)(LitElement) {
       .actors { pointer-events: none; }
       .maze { touch-action: none; }
       .half { position: absolute; left: 0; right: 0; height: 50%; pointer-events: none; }
-      .half.top { top: 0; background: rgba(180, 60, 60, 0.18); }
-      .half.bottom { bottom: 0; background: rgba(40, 90, 180, 0.18); }
-      .half.own { background: rgba(70, 170, 90, 0.38); }
+      .half.top { top: 0; background: rgba(160, 40, 30, 0.2); }
+      .half.bottom { bottom: 0; background: rgba(40, 80, 150, 0.2); }
+      .half.own.top { background: rgba(210, 70, 40, 0.38); box-shadow: inset 0 0 36px rgba(255, 120, 60, 0.35); }
+      .half.own.bottom { background: rgba(70, 140, 210, 0.38); box-shadow: inset 0 0 36px rgba(140, 190, 255, 0.4); }
       .ghost { position: absolute; box-sizing: border-box; }
-      .ghost.ok { background: rgba(40, 160, 70, 0.55); }
-      .ghost.bad { background: rgba(200, 40, 40, 0.5); }
-      .token, .shot, .pulse {
+      .ghost.ok { background: rgba(140, 230, 180, 0.45); box-shadow: 0 0 14px #8dffc0, inset 0 0 0 2px #f3fff8; }
+      .ghost.bad { background: rgba(220, 50, 40, 0.5); box-shadow: 0 0 14px #ff6a4a, inset 0 0 0 2px #ffe0d8; }
+      .unit, .shot, .pulse, .ruin {
         position: absolute;
         transform: translate(-50%, -50%);
       }
-      .token {
-        width: 4.2%;
-        height: 4.2%;
-        border-radius: 50%;
-        display: grid;
-        place-items: end center;
+      .unit {
+        width: 5.4%;
+        height: 6.6%;
+        transform: translate(-50%, -72%);
+        animation: march 0.42s ease-in-out infinite;
       }
-      .token.white { background: #d7ecff; box-shadow: 0 0 0 1px #16324a; }
-      .token.black { background: #ffb4b4; box-shadow: 0 0 0 1px #4a1616; }
-      .token.knight { border-radius: 2px; transform: translate(-50%, -50%) rotate(45deg); }
-      .token.archer { clip-path: polygon(50% 0, 100% 100%, 0 100%); border-radius: 0; }
-      .token.cannon { border-radius: 2px; }
-      .token.mage { clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%); }
-      .token.buff { outline: 2px solid #f6d56a; }
-      .bar { width: 140%; height: 2px; background: rgba(0,0,0,.4); }
-      .bar span { display: block; height: 100%; background: #3dba5c; }
-      .shot { width: 1.6%; height: 1.6%; border-radius: 50%; background: #f4e27a; }
-      .shot.shell { width: 2.2%; height: 2.2%; background: #e7e2d6; }
-      .shot.arrow { background: #d7ecff; }
-      .pulse {
+      .unit.buff { filter: drop-shadow(0 0 4px #f6e27a); }
+      .unit.strike { filter: brightness(1.7) drop-shadow(0 0 4px #fff1c4); }
+      .unit svg { width: 100%; height: 100%; }
+      .shot { width: 2.6%; height: 0.9%; border-radius: 2px; background: #f4e7b0; box-shadow: 0 0 6px #fff1c0; }
+      .shot.shell { width: 3%; height: 3%; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #fff, #8d8a84 55%, #2a2a28); box-shadow: 0 0 8px #ffb060; }
+      .shot.arrow { width: 3.6%; height: 0.7%; background: linear-gradient(90deg, transparent, #f7f1e1 30%, #f7f1e1); }
+      .shot.magic { width: 2.8%; height: 2.8%; border-radius: 50%; background: radial-gradient(circle, #fff6c8, #c47bff 70%); box-shadow: 0 0 10px #e4b0ff; }
+      .pulse { border-radius: 50%; }
+      .pulse i, .pulse b {
+        position: absolute;
         border-radius: 50%;
-        border: 3px solid transparent;
-        opacity: 0.85;
+        border: 3px solid currentColor;
+        box-shadow: 0 0 16px currentColor, inset 0 0 12px currentColor;
+        animation: ring 1.15s ease-out infinite;
       }
-      .pulse.blessing { border-color: #f6d56a; background: rgba(246, 213, 106, 0.18); }
-      .pulse.heal { border-color: #7ddea0; background: rgba(80, 180, 110, 0.16); }
-      .pulse.blast { border-color: #ff8a4a; background: rgba(255, 90, 40, 0.22); }
+      .pulse i { inset: 4%; }
+      .pulse b { inset: 22%; animation-delay: 0.4s; }
+      .pulse::before {
+        content: "";
+        position: absolute;
+        inset: 12%;
+        background:
+          radial-gradient(circle at 18% 28%, currentColor 0 4px, transparent 5px),
+          radial-gradient(circle at 72% 22%, currentColor 0 3px, transparent 4px),
+          radial-gradient(circle at 36% 74%, currentColor 0 4px, transparent 5px),
+          radial-gradient(circle at 80% 68%, currentColor 0 3px, transparent 4px);
+      }
+      .pulse.blessing { color: #ffe38a; background: radial-gradient(circle, rgba(255, 214, 90, 0.62), rgba(255, 190, 60, 0.16) 58%, transparent 74%); }
+      .pulse.heal { color: #9dffc4; background: radial-gradient(circle, rgba(120, 230, 160, 0.58), rgba(80, 200, 140, 0.14) 60%, transparent 74%); }
+      .pulse.blast { color: #ffb088; background: radial-gradient(circle, rgba(255, 90, 40, 0.62), rgba(255, 60, 20, 0.18) 55%, transparent 72%); }
+      .ruin { width: 12%; height: 15%; animation: crumble 1.4s ease-in forwards; filter: drop-shadow(0 0 8px #ffb060); }
+      .ruin svg { width: 100%; height: 100%; }
+      .ruin::after {
+        content: "";
+        position: absolute;
+        left: 8%;
+        right: 8%;
+        bottom: -6%;
+        height: 36%;
+        background:
+          radial-gradient(circle at 22% 40%, #f0e2c8 0 5px, transparent 6px),
+          radial-gradient(circle at 48% 70%, #8a6a48 0 6px, transparent 7px),
+          radial-gradient(circle at 74% 36%, #efe6d4 0 4px, transparent 5px);
+      }
+      .ash {
+        width: 3.2%;
+        height: 3.2%;
+        border-radius: 50%;
+        background: radial-gradient(circle, rgba(255, 220, 160, 0.9), rgba(80, 40, 20, 0.2) 70%, transparent);
+        animation: puff 0.65s ease-out forwards;
+      }
+      @keyframes march { 50% { transform: translate(-50%, -80%); } }
+      @keyframes ring { to { transform: scale(1.28); opacity: 0; } }
+      @keyframes crumble {
+        0% { transform: translate(-50%, -62%) rotate(-16deg) scale(1.08); opacity: 1; filter: brightness(1.7) drop-shadow(0 0 10px #ffb060); }
+        18% { transform: translate(-40%, -28%) rotate(18deg) scale(0.82); opacity: 1; }
+        100% { transform: translate(-50%, 28%) rotate(32deg) scale(0.18); opacity: 0; filter: grayscale(1); }
+      }
+      @keyframes puff { to { transform: translate(-50%, -80%) scale(1.8); opacity: 0; } }
+      @media (prefers-reduced-motion: reduce) {
+        .unit, .pulse i, .pulse b, .ruin, .ash { animation: none; }
+      }
     `;
   }
 
@@ -88,7 +169,7 @@ export class BoardSquare extends connect(connectStore)(LitElement) {
     if (!game || game.status === 'menu') return html``;
     const selectedTower = this.selected ? towerAt(game, this.selected.file, this.selected.rank) : undefined;
     const moves = selectedTower ? legalMoves(game, selectedTower) : [];
-    const blocks = new Set(game.blocks.map((block) => block.y * 16 + block.x));
+    const fresh = game.wave > 0 && game.nextWaveTick - game.tick > WAVES.gapTicks - 10;
     const squares = [];
     for (let rank = 7; rank >= 0; rank -= 1) {
       for (let file = 0; file < 8; file += 1) {
@@ -99,11 +180,11 @@ export class BoardSquare extends connect(connectStore)(LitElement) {
           : move
             ? (tower ? 'capture' : 'move')
             : '';
-        const blocked = [
-          blocks.has((rank * 2 + 1) * 16 + file * 2),
-          blocks.has((rank * 2 + 1) * 16 + file * 2 + 1),
-          blocks.has((rank * 2) * 16 + file * 2),
-          blocks.has((rank * 2) * 16 + file * 2 + 1),
+        const walls = [
+          wallRatio(game, file * 2, rank * 2 + 1),
+          wallRatio(game, file * 2 + 1, rank * 2 + 1),
+          wallRatio(game, file * 2, rank * 2),
+          wallRatio(game, file * 2 + 1, rank * 2),
         ];
         squares.push(html`
           <one-square
@@ -115,7 +196,9 @@ export class BoardSquare extends connect(connectStore)(LitElement) {
             .side=${tower?.side ?? ''}
             .hp=${tower?.hp ?? 0}
             .maxHp=${tower?.maxHp ?? 1}
-            .blocked=${blocked}
+            .walls=${walls}
+            .etched=${this.placing !== null}
+            ?portal=${fresh && !!tower}
             .label=${tower ? `${tower.side} ${tower.kind}` : 'empty square'}
             @square-click=${(event: CustomEvent<{ file: number; rank: number }>) => handleSquare(event.detail.file, event.detail.rank)}
           ></one-square>
@@ -130,25 +213,29 @@ export class BoardSquare extends connect(connectStore)(LitElement) {
             const size = effect.spell === 'heal' ? effect.radius * 2 / 8 * 100 : effect.radius * 2 / 16 * 100;
             const left = (effect.file + 0.5) / 8 * 100;
             const top = (7 - effect.rank + 0.5) / 8 * 100;
-            return html`<div class="pulse ${effect.spell}" style="left:${left}%; top:${top}%; width:${size}%; height:${size}%"></div>`;
+            return html`<div class="pulse ${effect.spell}" style="left:${left}%; top:${top}%; width:${size}%; height:${size}%"><i></i><b></b></div>`;
           })}
-          ${game.soldiers.map((soldier) => html`
-            <div
-              class="token ${soldier.side} ${soldier.kind} ${soldier.buffUntil >= game.tick ? 'buff' : ''}"
-              style="left:${(soldier.x + 0.5) / 16 * 100}%; top:${(15 - soldier.y + 0.5) / 16 * 100}%">
-              <div class="bar"><span style="width:${Math.max(0, soldier.hp / soldier.maxHp) * 100}%"></span></div>
+          ${this.ruins.map((ruin) => html`
+            <div class="ruin" style="left:${(ruin.file + 0.5) / 8 * 100}%; top:${(7 - ruin.rank + 0.5) / 8 * 100}%">
+              ${pieceSvg(ruin.kind, ruin.side, 0.2)}
             </div>
           `)}
-          ${game.blocks.filter((block) => block.hp > 0).map((block) => html`
-            <div class="token" style="left:${(block.x + 0.5) / 16 * 100}%; top:${(15 - block.y + 0.5) / 16 * 100}%; width:5%; height:5%; background:transparent; box-shadow:none;">
-              <div class="bar"><span style="width:${Math.max(0, block.hp / block.maxHp) * 100}%"></span></div>
+          ${game.soldiers.map((soldier) => html`
+            <div
+              class="unit ${soldier.side} ${soldier.buffUntil >= game.tick ? 'buff' : ''} ${soldier.attackReadyTick - game.tick >= 6 ? 'strike' : ''}"
+              style="left:${(soldier.x + 0.5) / 16 * 100}%; top:${(15 - soldier.y + 0.5) / 16 * 100}%">
+              ${soldierSvg(soldier.kind, soldier.side)}
             </div>
+          `)}
+          ${this.ashes.map((ash) => html`
+            <div class="ash ${ash.side}" style="left:${(ash.x + 0.5) / 16 * 100}%; top:${(15 - ash.y + 0.5) / 16 * 100}%"></div>
           `)}
           ${game.projectiles.map((shot) => {
             const t = Math.min(1, (game.tick - shot.born) / Math.max(1, shot.life));
             const x = shot.x + (shot.tx - shot.x) * t;
             const y = shot.y + (shot.ty - shot.y) * t;
-            return html`<div class="shot ${shot.kind}" style="left:${(x + 0.5) / 16 * 100}%; top:${(15 - y + 0.5) / 16 * 100}%"></div>`;
+            const angle = Math.atan2(shot.y - shot.ty, shot.tx - shot.x) * 180 / Math.PI;
+            return html`<div class="shot ${shot.kind === 'shot' ? 'magic' : shot.kind}" style="left:${(x + 0.5) / 16 * 100}%; top:${(15 - y + 0.5) / 16 * 100}%; transform: translate(-50%, -50%) rotate(${angle}deg)"></div>`;
           })}
         </div>
         ${this.placing ? this.maze(game) : ''}
@@ -197,4 +284,24 @@ export class BoardSquare extends connect(connectStore)(LitElement) {
 interface SquareCell {
   x: number;
   y: number;
+}
+
+interface Ruin {
+  file: number;
+  rank: number;
+  side: Side;
+  kind: PieceKind;
+  born: number;
+}
+
+interface Ash {
+  x: number;
+  y: number;
+  side: Side;
+  born: number;
+}
+
+function wallRatio(game: GameState, x: number, y: number): number {
+  const block = game.blocks.find((item) => item.x === x && item.y === y && item.hp > 0);
+  return block ? block.hp / block.maxHp : -1;
 }
