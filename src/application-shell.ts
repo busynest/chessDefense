@@ -16,6 +16,7 @@ import './application/offline.js';
 const pageTitles: Record<string, string> = {
   home: 'Chess Defense',
   feedback: 'Feedback',
+  'how-to': 'How to play',
   settings: 'Settings',
   profile: 'Profile',
   reset: 'Reset password',
@@ -116,7 +117,7 @@ export class ApplicationShell extends connect(connectStore)(LitElement) {
       main {
         box-sizing: border-box;
         width: 100%;
-        max-width: 1000px;
+        max-width: 1100px;
         min-height: 50vh;
         margin: 16px auto;
         padding: 0 14px;
@@ -168,13 +169,15 @@ export class ApplicationShell extends connect(connectStore)(LitElement) {
       </header>
 
       <user-drawer firebase-config=${config} url="/settings">
-        <a slot="before" href="/feedback">Feedback</a>
+        <a slot="before" href="/how-to">How to play</a>
+        <a href="/feedback">Feedback</a>
         <a href="/privacy">Privacy</a>
         <a href="/reset">Reset password</a>
       </user-drawer>
 
       <main>
         <home-page class="page" ?active=${this.page === 'home'}></home-page>
+        <how-to-page class="page" ?active=${this.page === 'how-to'}></how-to-page>
         <contractors-questions class="page" ?active=${this.page === 'feedback'}></contractors-questions>
         <account-page class="page" ?active=${this.page === 'settings' || this.page === 'profile'}></account-page>
         <reset-page class="page" ?active=${this.page === 'reset'}></reset-page>
@@ -187,7 +190,7 @@ export class ApplicationShell extends connect(connectStore)(LitElement) {
           <img src="/images/manifest/logo-192.png" alt="" />
         </a>
         <p>© Modern Projects</p>
-        <p><a href="/feedback">Feedback</a> · <a href="/privacy">Privacy</a></p>
+        <p><a href="/how-to">How to play</a> · <a href="/feedback">Feedback</a> · <a href="/privacy">Privacy</a></p>
       </footer>
 
       <snack-bar ?active=${this.offlineNote}>
