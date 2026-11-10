@@ -13,7 +13,8 @@
     "typecheck": "tsc --noEmit",
     "test": "tsc && node --test out/game/rules.test.js",
     "dev:emulators": "concurrently -k -n emu,app \"firebase emulators:start --only database,auth,firestore --project contractors-centre\" \"npm start\"",
-    "test:online": "tsc && firebase emulators:exec --only database,auth,firestore --project contractors-centre \"node scripts/online-match.mjs\""
+    "test:online": "tsc && firebase emulators:exec --only database,auth,firestore --project contractors-centre \"node scripts/online-match.mjs\"",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@reduxjs/toolkit": "^2.12.0",
@@ -27,6 +28,7 @@
   "devDependencies": {
     "@rollup/plugin-node-resolve": "^16.0.0",
     "@rollup/plugin-replace": "^6.0.2",
+    "@playwright/test": "^1.56.0",
     "@web/dev-server": "^0.4.6",
     "concurrently": "^9.2.0",
     "firebase-tools": "^14.22.0",

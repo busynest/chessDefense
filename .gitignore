@@ -6,3 +6,5 @@
 /depreciated/
 *-debug.log
 firestore-debug.log
+/test-results/
+/playwright-report/

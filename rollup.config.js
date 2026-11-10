@@ -14,6 +14,7 @@ function copySite() {
       );
       await copyFile('manifest.json', 'dist/manifest.json');
       await copyFile('boot.js', 'dist/boot.js');
+      await copyFile('sw.js', 'dist/sw.js');
       await cp('config', 'dist/config', { recursive: true });
       await copyFile('robots.txt', 'dist/robots.txt');
       await copyFile('sitemap.xml', 'dist/sitemap.xml');

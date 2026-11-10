@@ -22,6 +22,7 @@ const pageTitles: Record<string, string> = {
   profile: 'Profile',
   reset: 'Reset password',
   privacy: 'Privacy',
+  about: 'About',
   oops: 'Not found',
 };
 
@@ -59,6 +60,9 @@ export class ApplicationShell extends connect(connectStore)(LitElement) {
     installOfflineWatcher((offline) => {
       store.dispatch(updateOffline(offline));
     });
+    if ('serviceWorker' in navigator) {
+      void navigator.serviceWorker.register('/sw.js').catch(() => undefined);
+    }
   }
 
   static override get styles(): CSSResultGroup {
@@ -206,6 +210,7 @@ export class ApplicationShell extends connect(connectStore)(LitElement) {
 
       <user-drawer firebase-config=${config} url="/settings">
         <a slot="before" href="/how-to">How to play</a>
+        <a href="/about">About</a>
         <a href="/feedback">Feedback</a>
         <a href="/privacy">Privacy</a>
         <a href="/reset">Reset password</a>
@@ -214,6 +219,7 @@ export class ApplicationShell extends connect(connectStore)(LitElement) {
       <main>
         <home-page class="page" ?active=${this.page === 'home'}></home-page>
         <how-to-page class="page" ?active=${this.page === 'how-to'}></how-to-page>
+        <about-page class="page" ?active=${this.page === 'about'}></about-page>
         <contractors-questions class="page" ?active=${this.page === 'feedback'}></contractors-questions>
         <account-page class="page" ?active=${this.page === 'settings' || this.page === 'profile'}></account-page>
         <reset-page class="page" ?active=${this.page === 'reset'}></reset-page>
@@ -226,7 +232,7 @@ export class ApplicationShell extends connect(connectStore)(LitElement) {
           <img src="/images/manifest/logo-192.png" alt="" />
         </a>
         <p>© Modern Projects</p>
-        <p><a href="/how-to">How to play</a> · <a href="/feedback">Feedback</a> · <a href="/privacy">Privacy</a></p>
+        <p><a href="/how-to">How to play</a> · <a href="/about">About</a> · <a href="/feedback">Feedback</a> · <a href="/privacy">Privacy</a></p>
       </footer>
 
       <snack-bar ?active=${this.offlineNote}>

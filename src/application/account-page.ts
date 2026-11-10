@@ -3,6 +3,7 @@ import { customElement } from 'lit/decorators.js';
 
 import { firebaseConfigAttribute } from '../firebase-config.js';
 import { PageViewElement } from '../lazy-loader.js';
+import '../prefs/game-settings.js';
 
 @customElement('account-page')
 export class AccountPage extends PageViewElement {
@@ -22,6 +23,7 @@ export class AccountPage extends PageViewElement {
   protected override render(): TemplateResult {
     return html`
       <h2>Account</h2>
+      <game-settings></game-settings>
       <user-settings firebase-config=${firebaseConfigAttribute}></user-settings>
     `;
   }

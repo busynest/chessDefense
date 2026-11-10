@@ -25,10 +25,13 @@ import {
   type GameSliceState,
 } from './game_state.js';
 import { handleOvercharge, handleRepair, handleSpell, handleUpgrade } from './input.js';
-import { createMatchDoc, joinMatchDoc, matchCode, publishSnapshot, readMatch, signedInUid, watchInputs, watchMatch } from './online.js';
+import { rememberMatch, recentMatches } from './history.js';
+import { closeMatch, createMatchDoc, joinMatchDoc, matchCode, publishSnapshot, readMatch, signedInUid, watchInputs, watchMatch } from './online.js';
 import { shouldPublish } from './publish.js';
 import { loadCareer, recordResult } from './record.js';
+import { playTap, playVictory, playWave } from './sound.js';
 import './board-square.js';
+import { markTutorial, setDifficulty, setMuted } from '../prefs/prefs_state.js';
 import { connectStore, store, type RootState } from '../store.js';
 import type { Difficulty, GameState, PlayerCommand, Side, SpellId } from './types.js';
 import { PIECES, SPELLS, combatOf, overchargeCost, overcharged, repairCost, squareName, upgradeCost } from './units.js';
@@ -53,9 +56,23 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
   private lastPublish = -1;
   private saving = false;
   private careerUid = '';
+  private heardWave = -1;
+  private heardEnd = false;
+  @state() private tutorial = -1;
+  @state() private muted = false;
+
+  private readonly steps = [
+    'Tap one of your pawns. The ring is its range. Towers never move.',
+    'Upgrade spends gold. Level 3 is as high as a tower goes.',
+    'White walls shades your half. A green cell can take a block. Tap your own block to sell it.',
+    'When the build timer ends, every living tower sends its soldier at once.',
+    'Spell buttons belong to the Queen. Pause freezes the clock. Menu leaves the match.',
+  ];
 
   override stateChanged(state: RootState): void {
     this.slice = state.game;
+    this.difficulty = state.prefs.difficulty;
+    this.muted = state.prefs.muted;
     this.signedIn = state.user.current !== null;
     const uid = state.user.current?.uid ?? '';
     if (uid !== this.careerUid) {
@@ -65,16 +82,95 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
     }
   }
 
+  protected override firstUpdated(): void {
+    window.addEventListener('keydown', this.onKey);
+    window.addEventListener('pagehide', this.abandonIfHost);
+  }
+
   protected override updated(changed: PropertyValues): void {
     this.syncLoop();
     this.syncOnline();
+    this.syncSound();
     if (changed.has('slice') || changed.has('active')) void this.persist();
   }
 
   override disconnectedCallback(): void {
+    window.removeEventListener('keydown', this.onKey);
+    window.removeEventListener('pagehide', this.abandonIfHost);
     super.disconnectedCallback();
     this.stopLoop();
     this.teardown();
+  }
+
+  private onKey = (event: KeyboardEvent): void => {
+    const target = event.target;
+    if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement) return;
+    const slice = store.getState().game;
+    if (slice.game.status === 'menu') return;
+    const key = event.key.toLowerCase();
+    if (key === 'p' || event.key === ' ') {
+      event.preventDefault();
+      if (slice.game.status === 'playing' || slice.game.status === 'paused') store.dispatch(togglePause());
+      return;
+    }
+    if (key === 'escape') {
+      if (slice.placing) store.dispatch(setPlacing(null));
+      else if (slice.game.status === 'playing' || slice.game.status === 'paused') store.dispatch(togglePause());
+      return;
+    }
+    if (key === 'm') {
+      this.leave();
+      return;
+    }
+    if (slice.game.status !== 'playing') return;
+    const side = playerSide(slice);
+    if (!side) return;
+    const selected = slice.selected;
+    if (key === 'w') {
+      store.dispatch(setPlacing(slice.placing === side ? null : side));
+    } else if (selected && key === 'u') {
+      handleUpgrade(side, selected.file, selected.rank);
+    } else if (selected && key === 'r') {
+      handleRepair(side, selected.file, selected.rank);
+    } else if (selected && key === 'o') {
+      handleOvercharge(side, selected.file, selected.rank);
+    } else if (key === 'b') {
+      handleSpell(side, 'blessing');
+    } else if (key === 'h') {
+      handleSpell(side, 'heal');
+    } else if (key === 'l') {
+      handleSpell(side, 'blast');
+    }
+  };
+
+  private abandonIfHost = (): void => {
+    const slice = store.getState().game;
+    if (slice.role !== 'host' || !slice.onlineCode) return;
+    if (slice.game.status === 'victory' || slice.game.status === 'menu') return;
+    void closeMatch(slice.onlineCode).catch(() => undefined);
+  };
+
+  private leave(): void {
+    this.abandonIfHost();
+    this.tutorial = -1;
+    store.dispatch(showMenu());
+  }
+
+  private syncSound(): void {
+    const game = this.slice?.game;
+    if (!game || game.status === 'menu') {
+      this.heardWave = -1;
+      this.heardEnd = false;
+      return;
+    }
+    if (game.wave > 0 && game.wave !== this.heardWave) {
+      this.heardWave = game.wave;
+      playWave();
+    }
+    if (game.status === 'victory' && !this.heardEnd) {
+      this.heardEnd = true;
+      playVictory();
+    }
   }
 
   private syncLoop(): void {
@@ -137,7 +233,7 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
     this.stopInputs = null;
   }
 
-  private onMatch(data: { guestId: string | null; snapshot?: GameState }): void {
+  private onMatch(data: { guestId: string | null; status?: string; snapshot?: GameState }): void {
     const slice = store.getState().game;
     if (slice.role === 'host' && data.guestId && slice.game.status === 'lobby') {
       store.dispatch(openOnline());
@@ -146,12 +242,17 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
         store.dispatch(setOnlineNote(error instanceof Error ? error.message : 'Could not open the match.'));
       });
     }
+    if (slice.role === 'guest' && data.status === 'abandoned') {
+      store.dispatch(setOnlineNote('The host left the match.'));
+    }
     if (slice.role === 'guest' && data.snapshot) {
       store.dispatch(applySnapshot(data.snapshot));
-      const status = data.snapshot.status;
-      const note = status === 'victory'
-        ? (data.snapshot.winner === 'black' ? 'Black won.' : data.snapshot.winner === 'white' ? 'White won.' : 'Draw.')
-        : status === 'playing' ? 'Match live.' : '';
+      const status = data.status === 'abandoned' ? 'abandoned' : data.snapshot.status;
+      const note = status === 'abandoned'
+        ? 'The host left the match.'
+        : status === 'victory'
+          ? (data.snapshot.winner === 'black' ? 'Black won.' : data.snapshot.winner === 'white' ? 'White won.' : 'Draw.')
+          : status === 'playing' ? 'Match live.' : '';
       if (note) store.dispatch(setOnlineNote(note));
     }
   }
@@ -178,6 +279,13 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
   private async persist(): Promise<void> {
     const slice = store.getState().game;
     if (!this.active || slice.game.status !== 'victory' || slice.record !== 'idle' || this.saving) return;
+    rememberMatch({
+      mode: slice.game.mode,
+      winner: slice.game.winner ?? 'draw',
+      wave: slice.game.wave,
+      seconds: Math.round(slice.game.tick / 10),
+      at: Date.now(),
+    });
     if (slice.game.mode === 'local') {
       store.dispatch(markRecord('skipped'));
       return;
@@ -203,7 +311,21 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
 
   private start(mode: 'ai' | 'local'): void {
     const seed = (Date.now() ^ Math.floor(Math.random() * 1_000_000_000)) >>> 0 || 1;
+    const seen = store.getState().prefs.seenTutorial;
     store.dispatch(startLocal({ mode, difficulty: this.difficulty, seed }));
+    this.tutorial = mode === 'ai' && !seen ? 0 : -1;
+    this.heardWave = -1;
+    this.heardEnd = false;
+    playTap();
+  }
+
+  private advanceTutorial(skip: boolean): void {
+    if (skip || this.tutorial >= this.steps.length - 1) {
+      this.tutorial = -1;
+      store.dispatch(markTutorial());
+      return;
+    }
+    this.tutorial += 1;
   }
 
   private async host(): Promise<void> {
@@ -231,6 +353,7 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
     const code = this.joinValue.trim().toUpperCase();
     try {
       const data = await readMatch(code);
+      if (data.status === 'abandoned' || data.status === 'victory') throw new Error('That match is already over.');
       if (data.hostId === uid) throw new Error('Open your own match from this browser, or share the code.');
       if (data.guestId && data.guestId !== uid) throw new Error('That match already has two players.');
       if (!data.guestId) await joinMatchDoc(code, uid);
@@ -342,9 +465,9 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
         <div class="card">
           <div class="choices">
             <label>AI
-              <select .value=${this.difficulty} @change=${(event: Event) => { this.difficulty = (event.target as HTMLSelectElement).value as Difficulty; }}>
+              <select .value=${this.difficulty} @change=${(event: Event) => store.dispatch(setDifficulty((event.target as HTMLSelectElement).value as Difficulty))}>
                 <option value="easy">Easy</option>
-                <option value="normal" selected>Normal</option>
+                <option value="normal">Normal</option>
                 <option value="hard">Hard</option>
               </select>
             </label>
@@ -362,7 +485,10 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
             <button type="button" class="quiet" @click=${() => this.join()}>Join</button>
           </div>
           <p class="note">${slice.onlineNote}</p>
-          <p>${this.signedIn ? `Record ${this.career || '…'}` : 'Sign in with the Login button to save wins and losses.'}</p>
+          <p>${this.signedIn ? `Record ${this.career || '…'}` : 'Sign in with the Login button to save wins and losses. Local and versus-AI matches do not need an account.'}</p>
+          ${recentMatches().length ? html`
+            <p>Recent on this browser: ${recentMatches().map((row) => `${row.winner} in ${row.seconds}s`).join(' · ')}</p>
+          ` : ''}
         </div>
       </section>
     `;
@@ -382,7 +508,8 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
           <button type="button" class="quiet" @click=${() => store.dispatch(togglePause())} ?disabled=${game.status === 'lobby' || game.status === 'victory'}>
             ${game.status === 'paused' ? 'Resume' : 'Pause'}
           </button>
-          <button type="button" class="quiet" @click=${() => store.dispatch(showMenu())}>Menu</button>
+          <button type="button" class="quiet" @click=${() => this.leave()}>Menu</button>
+          <button type="button" class="quiet" @click=${() => store.dispatch(setMuted(!this.muted))}>${this.muted ? 'Unmute' : 'Mute'}</button>
         </div>
         <div class="wave">${waveLabel}</div>
         <div class="row">
@@ -400,7 +527,13 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
         ${(['white', 'black'] as const).map((side) => html`
           <div class="gold">${side === 'white' ? 'White' : 'Black'} ${Math.floor(game.gold[side])} gold · ${Math.floor(game.mana[side])} mana</div>
         `)}
-        ${game.wave === 0 ? html`<p class="coach">Towers stay on their squares. Tap one for its range, Upgrade, or Repair. The wall button shades your half: green can be built, red cannot.</p>` : ''}
+        ${this.tutorial >= 0 ? html`
+          <p class="coach">Step ${this.tutorial + 1} of ${this.steps.length}. ${this.steps[this.tutorial]}</p>
+          <div class="row">
+            <button type="button" @click=${() => this.advanceTutorial(false)}>Next</button>
+            <button type="button" class="quiet" @click=${() => this.advanceTutorial(true)}>Skip tutorial</button>
+          </div>
+        ` : game.wave === 0 ? html`<p class="coach">Towers stay on their squares. Tap one for its range, Upgrade, or Repair. The wall button shades your half: green can be built, red cannot. Keys: P pause, W walls, U upgrade, R repair, O overcharge, B H L spells.</p>` : ''}
         ${selected ? this.inspect(selected) : html`<div>Tap one of your towers to upgrade it.</div>`}
         ${sides.map((side) => this.spells(slice, side))}
       </aside>
@@ -488,17 +621,21 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
   }
 
   private victory(slice: GameSliceState): TemplateResult {
-    const winner = slice.game.winner;
+    const game = slice.game;
+    const winner = game.winner;
     const text = winner === 'draw' ? 'Draw' : winner === 'white' ? 'White wins' : 'Black wins';
-    const saved = slice.record === 'saved' ? 'Record saved.' : slice.record === 'error' ? 'Could not save the record.' : '';
+    const saved = slice.record === 'saved' ? 'Record saved.' : slice.record === 'error' ? 'Could not save the record.' : slice.record === 'skipped' ? 'Played on this browser.' : '';
+    const whiteLeft = game.towers.filter((tower) => tower.side === 'white' && tower.hp > 0).length;
+    const blackLeft = game.towers.filter((tower) => tower.side === 'black' && tower.hp > 0).length;
+    const seconds = Math.round(game.tick / 10);
     return html`
       <div class="end">
         <h2>${text}</h2>
-        <p>${winner === 'draw' ? 'Both King towers fell together.' : 'The enemy King tower has fallen.'} Wave ${slice.game.wave}. ${saved}</p>
+        <p>${winner === 'draw' ? 'Both King towers fell together.' : 'The enemy King tower has fallen.'}</p>
+        <p>Wave ${game.wave} · ${seconds}s · White towers ${whiteLeft} · Black towers ${blackLeft}. ${saved}</p>
         <div class="row" style="justify-content:center;">
-          ${slice.game.mode === 'online'
-            ? html`<button type="button" @click=${() => store.dispatch(showMenu())}>Back to menu</button>`
-            : html`<button type="button" @click=${() => this.start(slice.game.mode === 'local' ? 'local' : 'ai')}>Rematch</button>`}
+          ${game.mode === 'online' ? '' : html`<button type="button" @click=${() => this.start(game.mode === 'local' ? 'local' : 'ai')}>Rematch</button>`}
+          <button type="button" @click=${() => this.leave()}>Back to menu</button>
         </div>
       </div>
     `;

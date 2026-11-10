@@ -3,6 +3,7 @@ import type { AnyAction, Store } from 'redux';
 
 import { appReducer } from './application/application_state.js';
 import { gameReducer } from './game/game_state.js';
+import { prefsReducer, savePrefs } from './prefs/prefs_state.js';
 import { userReducer } from './user/user_state.js';
 
 export const store = configureStore({
@@ -10,7 +11,12 @@ export const store = configureStore({
     app: appReducer,
     user: userReducer,
     game: gameReducer,
+    prefs: prefsReducer,
   },
+});
+
+store.subscribe(() => {
+  savePrefs(store.getState().prefs);
 });
 
 export type RootState = ReturnType<typeof store.getState>;

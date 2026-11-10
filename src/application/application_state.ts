@@ -70,6 +70,9 @@ const loadPage = (page: string): AppThunk => async (dispatch) => {
     case 'how-to':
       await import('./how-to.js');
       break;
+    case 'about':
+      await import('./about.js');
+      break;
     default:
       resolved = 'oops';
       await import('./wrong-page.js');

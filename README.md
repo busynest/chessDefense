@@ -100,20 +100,33 @@ These are the calls the brief left open.
 
 ## Develop
 
-Display type is [Cinzel](https://fonts.google.com/specimen/Cinzel) and body type is [Spectral](https://fonts.google.com/specimen/Spectral), both served by Google Fonts under the SIL Open Font License, with Palatino as the fallback. Every picture on the board is original SVG and CSS. No asset pack is used.
+Display type is [Cinzel](https://fonts.google.com/specimen/Cinzel) and body type is [Spectral](https://fonts.google.com/specimen/Spectral), both served by Google Fonts under the SIL Open Font License, with Palatino as the fallback. Every picture on the board is original SVG and CSS. No asset pack is used. The tones are original oscillators, credited here, not a sound library.
 
 The stack is Lit 3, Redux Toolkit 2, pwa-auth, and Firebase 12. TypeScript is compiled with `tsc`. Development uses `@web/dev-server`. Production uses Rollup. There is no Vite and no Polymer.
 
+Sound is original synthesis in the browser (oscillators only). No sampled recordings are shipped. Volume and mute are saved in this browser with the last difficulty and whether the first-match tutorial has been seen.
+
+To play on this machine, emulators and the dev server together:
+
 ```bash
 npm install
+npm run dev:emulators
+```
+
+Open http://127.0.0.1:8080 . That host selects the development Firebase config. Sign in from the Login button with any email and password if you want a saved record or an online match. Versus AI and local 2 player work signed out. The first versus-AI match shows a short tutorial. Pause is P or Space. Menu is M.
+
+```bash
 npm test
-npm start
+npm run test:online
+npm run test:e2e
 npm run build
 ```
 
-`npm test` compiles and runs the rule tests with Node's test runner. They cover chess moves, captures, spawning, pathing around a wall, melee, the King falling, Blessing, Overcharge pricing, deterministic replays, and a scripted win against the easy AI.
+`npm test` compiles and runs the rule tests with Node's test runner. They cover upgrades, repair, Overcharge pricing, Easy spending a full bank on pawns, pathing, the King falling, spells, deterministic replays, and a scripted win against the easy AI.
 
-`npm start` serves http://localhost:8080 and keeps `tsc --watch` running. The page loads `out/application-shell.js`.
+`npm run test:e2e` plays a versus-AI match in Chrome from the title screen through the results and back to the menu. It needs the dev server, and reuses one that is already on port 8080.
+
+`npm start` serves http://127.0.0.1:8080 and keeps `tsc --watch` running, without starting the emulators. Sign-in and online matches need `npm run dev:emulators` instead.
 
 ### Local online matches
 

@@ -26,10 +26,22 @@ export async function createMatchDoc(code: string, hostId: string, seed: number)
   });
 }
 
-export async function readMatch(code: string): Promise<{ hostId: string; guestId: string | null; seed: number }> {
+export interface MatchDoc {
+  hostId: string;
+  guestId: string | null;
+  seed: number;
+  status?: string;
+  snapshot?: GameState;
+}
+
+export async function readMatch(code: string): Promise<MatchDoc> {
   const snap = await getDoc(doc(db, 'matches', code));
   if (!snap.exists()) throw new Error('That match code does not exist.');
-  return snap.data() as { hostId: string; guestId: string | null; seed: number };
+  return snap.data() as MatchDoc;
+}
+
+export async function closeMatch(code: string): Promise<void> {
+  await updateDoc(doc(db, 'matches', code), { status: 'abandoned' });
 }
 
 export async function joinMatchDoc(code: string, guestId: string): Promise<void> {
@@ -38,7 +50,7 @@ export async function joinMatchDoc(code: string, guestId: string): Promise<void>
 
 export function watchMatch(
   code: string,
-  onData: (data: { hostId: string; guestId: string | null; seed: number; snapshot?: GameState }) => void,
+  onData: (data: MatchDoc) => void,
   onError: (message: string) => void,
 ): Unsubscribe {
   return onSnapshot(doc(db, 'matches', code), (snap) => {
@@ -46,7 +58,7 @@ export function watchMatch(
       onError('That match code does not exist.');
       return;
     }
-    onData(snap.data() as { hostId: string; guestId: string | null; seed: number; snapshot?: GameState });
+    onData(snap.data() as MatchDoc);
   }, (error) => onError(error.message));
 }
 

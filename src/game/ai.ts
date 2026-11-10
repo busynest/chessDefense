@@ -13,6 +13,8 @@ export function aiAct(state: GameState): void {
   const period = AI_PERIOD[state.difficulty];
   if (state.tick % period !== 0) return;
   const side: Side = state.humanSide === 'white' ? 'black' : 'white';
+  if (state.difficulty === 'easy' && state.gold[side] >= 64 && improve(state, side, 1)) return;
+  if (state.difficulty === 'easy' && state.gold[side] >= 96 && layBlock(state, side)) return;
   if (state.difficulty === 'easy' && roll(state, side) < 0.5) return;
   const building = state.nextWaveTick - state.tick > 30;
   const buys = state.difficulty === 'hard' ? 2 : 1;
@@ -50,7 +52,7 @@ function improve(state: GameState, side: Side, buys: number): boolean {
       return score(b) - score(a);
     });
     const pick = state.difficulty === 'easy'
-      ? ranked.find((tower) => tower.kind === 'pawn' || tower.kind === 'knight') ?? null
+      ? ranked.find((tower) => tower.kind === 'pawn') ?? null
       : ranked[0];
     if (!pick) break;
     const raised = tryUpgrade(state, side, pick.file, pick.rank);
@@ -124,7 +126,7 @@ function surge(state: GameState, side: Side): boolean {
 }
 
 function layBlock(state: GameState, side: Side): boolean {
-  const budget = state.difficulty === 'easy' ? 2 : state.difficulty === 'normal' ? 4 : 5;
+  const budget = state.difficulty === 'easy' ? 4 : state.difficulty === 'normal' ? 4 : 5;
   const owned = state.blocks.filter((block) => block.side === side && block.hp > 0).length;
   if (owned >= budget || state.gold[side] < BLOCKS.cost) return false;
   const gap = 3 + Math.floor(roll(state, side) * 10);

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
+import { aiAct } from './ai.js';
 import { towerAt } from './chess.js';
 import { tryOvercharge, tryPlaceBlock, tryRemoveBlock, tryRepair, trySpell, tryUpgrade } from './commands.js';
 import { pathToward } from './pathing.js';
@@ -130,6 +131,20 @@ test('overcharge spends gold on a level 3 tower and then waits', () => {
   const normalHit = step(quiet).soldiers.find((soldier) => soldier.id === 'target')!.hp;
   const boostedHit = step(boosted).soldiers.find((soldier) => soldier.id === 'boosted')!.hp;
   assert.ok(boostedHit < normalHit);
+});
+
+test('easy spends gold on a pawn once the bank is high', () => {
+  const state = playing();
+  state.mode = 'ai';
+  state.difficulty = 'easy';
+  state.humanSide = 'white';
+  state.gold.black = 90;
+  state.tick = 50;
+  const before = state.towers.filter((tower) => tower.side === 'black' && tower.kind === 'pawn' && tower.level === 1).length;
+  aiAct(state);
+  const after = state.towers.filter((tower) => tower.side === 'black' && tower.kind === 'pawn' && tower.level === 1).length;
+  assert.ok(after < before);
+  assert.ok(state.gold.black < 90);
 });
 
 test('the host publishes the tick the King falls', () => {

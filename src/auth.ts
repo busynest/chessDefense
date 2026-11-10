@@ -9,6 +9,7 @@ import {
   type PwaUser,
 } from 'pwa-auth';
 
+import { ensureUser } from './game/record.js';
 import { store } from './store.js';
 import { setUser } from './user/user_state.js';
 
@@ -27,6 +28,7 @@ initialize({
 
 function publish(user: PwaUser | null): void {
   store.dispatch(setUser(user));
+  if (user?.uid) void ensureUser(user.uid).catch(() => undefined);
 }
 
 onUserChanged(publish);

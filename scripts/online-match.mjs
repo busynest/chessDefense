@@ -14,6 +14,7 @@ import {
   collection,
   connectFirestoreEmulator,
   doc,
+  getDoc,
   getFirestore,
   onSnapshot,
   serverTimestamp,
@@ -250,6 +251,12 @@ const ending = await returned.until((data) => data.status === 'victory');
 assert.equal(ending.winner, 'white');
 assert.equal(ending.snapshot.status, 'victory');
 assert.equal(ending.snapshot.winner, 'white');
+
+const missing = await getDoc(doc(host.db, 'matches', 'ZZZZ'));
+assert.equal(missing.exists(), false);
+await updateDoc(doc(host.db, 'matches', code), { status: 'abandoned' });
+const left = await returned.until((data) => data.status === 'abandoned');
+assert.equal(left.status, 'abandoned');
 
 inputs.stop();
 returned.stop();

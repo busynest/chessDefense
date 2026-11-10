@@ -18,6 +18,12 @@ export async function loadCareer(uid: string): Promise<Career> {
   };
 }
 
+/** Creates the player document the first time this account is seen. */
+export async function ensureUser(uid: string): Promise<void> {
+  if (!db) return;
+  await setDoc(doc(db, 'users', uid), { createdAt: serverTimestamp() }, { merge: true });
+}
+
 /** Each signed-in player writes only their own record. Local hot-seat is not recorded. */
 export async function recordResult(uid: string, result: 'win' | 'loss' | 'draw', mode: string, wave: number): Promise<void> {
   await setDoc(doc(db, 'users', uid), {
