@@ -1,4 +1,5 @@
-import type { Side } from './types.js';
+import type { Ledger, Side } from './types.js';
+import { addHarm } from './ledger.js';
 
 /** One point of damage, for playtest accounting. A null sink changes nothing. */
 export interface Harm {
@@ -17,8 +18,9 @@ export function listenHarm(sink: ((harm: Harm) => void) | null): void {
   harmSink = sink;
 }
 
-export function reportHarm(harm: Harm): void {
+export function reportHarm(harm: Harm, ledger?: Ledger): void {
   harmSink?.(harm);
+  if (ledger) addHarm(ledger, harm);
 }
 
 export interface Mend {

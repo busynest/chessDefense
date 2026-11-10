@@ -32,6 +32,7 @@ import { handleAim, handleOvercharge, handleRepair, handleSpell, handleUpgrade }
 import { rememberMatch, recentMatches } from './history.js';
 import { clearRematch, closeMatch, claimForfeit, createMatchDoc, joinMatchDoc, matchCode, noteApplied, offerRematch, publishSnapshot, pulseMatch, readMatch, rematchAgreed, signedInUid, watchInputs, watchMatch, type MatchDoc } from './online.js';
 import { forfeitState, Presence, RECONNECT_MS, secondsLeft } from './link.js';
+import { rememberPose } from './film.js';
 import { createMatch } from './setup.js';
 import { shouldPublish } from './publish.js';
 import { loadCareer, recordResult } from './record.js';
@@ -39,8 +40,8 @@ import { playTap, playVictory, playWave } from './sound.js';
 import './board-square.js';
 import { markTutorial, setDifficulty, setMuted } from '../prefs/prefs_state.js';
 import { connectStore, store, type RootState } from '../store.js';
-import type { Difficulty, GameState, PlayerCommand, Side, SpellId } from './types.js';
-import { BLOCKS, PIECES, SPELLS, SUDDEN, combatOf, overchargeCost, overcharged, repairCost, squareName, upgradeCost } from './units.js';
+import type { Difficulty, GameState, PieceKind, PlayerCommand, Side, SoldierKind, SpellId } from './types.js';
+import { BLOCKS, PIECES, SOLDIERS, SPELLS, SUDDEN, combatOf, overchargeCost, overcharged, repairCost, squareName, upgradeCost } from './units.js';
 import type { Unsubscribe } from 'firebase/firestore';
 
 @customElement('chess-defense')
@@ -83,6 +84,11 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
   private sawPeer = false;
   private relisten = 0;
   private forfeited = false;
+  private film: GameState[] = [];
+  @state() private replay = -1;
+  @state() private replayPlaying = false;
+  @state() private replaySpeed = 1;
+  private replayTimer = 0;
 
   override stateChanged(state: RootState): void {
     this.slice = state.game;
@@ -108,6 +114,7 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
     super.disconnectedCallback();
     this.stopLoop();
     this.teardown();
+    this.stopReplay();
   }
 
   private onTour = (): void => {
@@ -199,6 +206,7 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
     }
     if (game.status === 'victory' && !this.heardEnd) {
       this.heardEnd = true;
+      rememberPose(this.film, game);
       playVictory();
     }
   }
@@ -232,6 +240,7 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
       this.acc -= 100;
       store.dispatch(tick());
     }
+    rememberPose(this.film, store.getState().game.game);
   };
 
   private syncOnline(): void {
@@ -389,6 +398,7 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
       store.dispatch(setOnlineNote('The host wants a rematch.'));
     }
     if (slice.role === 'guest' && data.snapshot) {
+      rememberPose(this.film, data.snapshot);
       store.dispatch(applySnapshot(data.snapshot));
       if (store.getState().game.link === 'reconnecting') {
         this.reviewLink();
@@ -468,6 +478,10 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
     this.tutorial = mode === 'ai' && !seen ? 0 : -1;
     this.heardWave = -1;
     this.heardEnd = false;
+    this.film = [];
+    this.replay = -1;
+    this.replayPlaying = false;
+    this.stopReplay();
     playTap();
   }
 
@@ -592,6 +606,9 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
       h1 { margin: 0; text-align: center; font-size: 2.4rem; color: #f6e7a8; text-shadow: 0 2px 0 #2a160c; }
       .lede { text-align: center; margin: 6px 0 0; color: #e6d3b4; }
       .menu, .play { display: grid; gap: 14px; }
+      .recap { width: 100%; border-collapse: collapse; font-size: 0.88rem; margin: 8px 0; }
+      .recap td { padding: 2px 8px 2px 0; }
+      .replay { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
       .reconnect {
         margin: 0;
         padding: 10px 12px;
@@ -714,6 +731,7 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
           ${slice.link === 'reconnecting' ? html`<p class="reconnect" role="status">Reconnecting…</p>` : ''}
           <p class="banner">${slice.game.banner?.text ?? ''}</p>
           <board-square
+            .pose=${this.replay >= 0 ? (this.film[this.replay] ?? null) : null}
             .coachFile=${this.coachCell().file}
             .coachRank=${this.coachCell().rank}
           ></board-square>
@@ -936,6 +954,13 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
         <p>Wave ${game.wave} · ${seconds}s${game.tick >= SUDDEN.tick ? ' · kings exposed' : ''}</p>
         <p>Towers left: White ${whiteLeft}, Black ${blackLeft}. Walls left: White ${livingWalls(game, 'white')}, Black ${livingWalls(game, 'black')}.</p>
         <p>Gold left: White ${Math.floor(game.gold.white)}, Black ${Math.floor(game.gold.black)}. ${saved}</p>
+        ${this.recap(game)}
+        <div class="replay">
+          <button type="button" @click=${() => this.toggleReplay()}>${this.replayPlaying ? 'Pause' : 'Play last 30s'}</button>
+          <button type="button" class="quiet" @click=${() => this.setReplaySpeed(1)}>1×</button>
+          <button type="button" class="quiet" @click=${() => this.setReplaySpeed(2)}>2×</button>
+          <button type="button" class="quiet" @click=${() => this.setReplaySpeed(4)}>4×</button>
+        </div>
         <div class="row" style="justify-content:center;">
           ${game.mode === 'online'
             ? html`<button type="button" @click=${() => this.askRematch()}>Rematch</button>`
@@ -944,6 +969,64 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
         </div>
       </div>
     `;
+  }
+
+  private recap(game: GameState): TemplateResult {
+    const ledger = game.ledger;
+    const towers = (Object.keys(PIECES) as PieceKind[])
+      .map((kind) => ({ kind, amount: Math.round(ledger?.tower[kind] ?? 0) }))
+      .filter((row) => row.amount > 0);
+    const soldiers = (Object.keys(SOLDIERS) as SoldierKind[])
+      .map((kind) => ({ kind, amount: Math.round(ledger?.soldier[kind] ?? 0) }))
+      .filter((row) => row.amount > 0);
+    const spells = (['white', 'black'] as const).map((side) => {
+      const book = ledger?.spells[side];
+      const cast = book ? book.blessing + book.heal + book.blast : 0;
+      return `${side === 'white' ? 'White' : 'Black'} ${cast}`;
+    }).join(', ');
+    return html`
+      <table class="recap">
+        <tbody>
+          ${towers.map((row) => html`<tr><td>${PIECES[row.kind].label}</td><td>${row.amount} tower damage</td></tr>`)}
+          ${soldiers.map((row) => html`<tr><td>${SOLDIERS[row.kind].label}</td><td>${row.amount} soldier damage</td></tr>`)}
+          <tr><td>Walls built</td><td>White ${ledger?.walls.white ?? 0}, Black ${ledger?.walls.black ?? 0}</td></tr>
+          <tr><td>Spells cast</td><td>${spells}</td></tr>
+        </tbody>
+      </table>
+    `;
+  }
+
+  private toggleReplay(): void {
+    if (this.film.length === 0) return;
+    if (this.replay < 0 || this.replay >= this.film.length - 1) this.replay = 0;
+    this.replayPlaying = !this.replayPlaying;
+    this.pumpReplay();
+  }
+
+  private setReplaySpeed(speed: number): void {
+    this.replaySpeed = speed;
+    if (this.replay < 0) this.replay = 0;
+    this.replayPlaying = true;
+    this.pumpReplay();
+  }
+
+  private pumpReplay(): void {
+    this.stopReplay();
+    if (!this.replayPlaying) return;
+    const ms = Math.max(40, Math.round(500 / this.replaySpeed));
+    this.replayTimer = window.setInterval(() => {
+      if (this.replay >= this.film.length - 1) {
+        this.replayPlaying = false;
+        this.stopReplay();
+        return;
+      }
+      this.replay += 1;
+    }, ms);
+  }
+
+  private stopReplay(): void {
+    if (this.replayTimer) window.clearInterval(this.replayTimer);
+    this.replayTimer = 0;
   }
 }
 

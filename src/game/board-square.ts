@@ -1,4 +1,4 @@
-import { LitElement, css, html, type CSSResultGroup, type TemplateResult } from 'lit';
+import { LitElement, css, html, type CSSResultGroup, type PropertyValues, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { connect } from 'pwa-helpers/connect-mixin.js';
 
@@ -25,6 +25,8 @@ export class BoardSquare extends connect(connectStore)(LitElement) {
   @state() private bright = false;
   @property({ type: Number }) coachFile = -1;
   @property({ type: Number }) coachRank = -1;
+  /** When set, the board draws this pose instead of the live match. Replay uses it. */
+  @property({ attribute: false }) pose: GameState | null = null;
   private ruins: Ruin[] = [];
   private ashes: Ash[] = [];
   private hits: Hit[] = [];
@@ -38,6 +40,12 @@ export class BoardSquare extends connect(connectStore)(LitElement) {
 
   override stateChanged(state: RootState): void {
     this.bright = state.prefs.palette === 'bright';
+    this.selected = state.game.selected;
+    this.placing = state.game.placing;
+    if (this.pose) {
+      this.game = this.pose;
+      return;
+    }
     const next = state.game.game;
     if (this.game && next && this.game.status !== 'menu') {
       const ids = new Set(next.towers.map((tower) => tower.id));
@@ -97,11 +105,10 @@ export class BoardSquare extends connect(connectStore)(LitElement) {
     }
     if (this.seenShots.size > 80) this.seenShots.clear();
     this.game = next;
-    this.selected = state.game.selected;
-    this.placing = state.game.placing;
   }
 
-  protected override updated(): void {
+  protected override updated(changed: PropertyValues): void {
+    if (changed.has('pose') && this.pose) this.game = this.pose;
     this.paintSoldiers();
   }
 

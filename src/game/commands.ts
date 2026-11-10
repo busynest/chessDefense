@@ -1,6 +1,7 @@
 import { towerAt } from './chess.js';
 import { chebyshev, mazeVerdict, placementSeals, towerCells } from './pathing.js';
 import type { GameState, PlayerCommand, Side, SpellId } from './types.js';
+import { noteSpell, noteWall } from './ledger.js';
 import { reportHarm } from './telemetry.js';
 import { BLOCKS, ECONOMY, OVERCHARGE, PIECES, REPAIR, SOLDIERS, SPELLS, combatOf, inBuildZone, isCenterRow, overchargeCost, repairCost, squareName, upgradeCost } from './units.js';
 import { reportOvercharge, reportRepair } from './telemetry.js';
@@ -104,6 +105,7 @@ export function trySpell(input: GameState, side: Side, spell: SpellId): MoveResu
   const state = fresh(input);
   const caster = state.towers.find((tower) => tower.side === side && tower.kind === 'queen' && tower.hp > 0)!;
   state.mana[side] -= def.mana;
+  noteSpell(state, side, spell);
   const cx = caster.file * 2 + 0.5;
   const cy = caster.rank * 2 + 0.5;
   if (spell === 'blessing') {
@@ -136,7 +138,7 @@ export function trySpell(input: GameState, side: Side, spell: SpellId): MoveResu
         targetKind: soldier.kind,
         amount: def.damage,
         lethal: soldier.hp <= 0,
-      });
+      }, state.ledger);
     }
     for (const tower of state.towers) {
       if (tower.side === side || tower.hp <= 0) continue;
@@ -152,7 +154,7 @@ export function trySpell(input: GameState, side: Side, spell: SpellId): MoveResu
         targetKind: tower.kind,
         amount: def.towerDamage,
         lethal: tower.hp <= 0,
-      });
+      }, state.ledger);
     }
   }
   state.effects.push({
@@ -275,6 +277,7 @@ export function tryPlaceBlock(input: GameState, side: Side, x: number, y: number
   const state = fresh(input);
   state.gold[side] -= BLOCKS.cost;
   state.blocks.push({ x, y, side, hp: BLOCKS.hp, maxHp: BLOCKS.hp, hurtBy: null });
+  noteWall(state, side);
   banner(state, `${label(side)} places a block.`);
   return { state, ok: true, reason: '' };
 }

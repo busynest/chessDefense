@@ -105,6 +105,14 @@ export interface Banner {
   until: number;
 }
 
+/** Damage dealt, walls placed, and spells cast. Carried on the match so a guest sees the same recap. */
+export interface Ledger {
+  tower: Partial<Record<PieceKind, number>>;
+  soldier: Partial<Record<SoldierKind, number>>;
+  walls: Record<Side, number>;
+  spells: Record<Side, Record<SpellId, number>>;
+}
+
 export interface GameState {
   tick: number;
   status: MatchStatus;
@@ -132,6 +140,10 @@ export interface GameState {
   waveTarget: Record<Side, Square | null>;
   navHash: number;
   navStamp: number;
+  /** Running totals for the end-of-match recap. */
+  ledger: Ledger;
+  /** While true, a versus-AI match does not take a computer turn. The tour uses this. */
+  holdAi?: boolean;
 }
 
 export interface UpgradeCommand {

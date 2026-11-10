@@ -1,4 +1,5 @@
 import type { Difficulty, GameState, Mode, PieceKind, Side, Tower } from './types.js';
+import { emptyLedger } from './ledger.js';
 import { ECONOMY, PIECES, WAVES } from './units.js';
 
 const BACK: PieceKind[] = ['rook', 'knight', 'bishop', 'queen', 'king', 'bishop', 'knight', 'rook'];
@@ -58,6 +59,7 @@ export function createMatch(options: { mode: Mode; difficulty: Difficulty; seed:
     waveTarget: { white: null, black: null },
     navHash: 0,
     navStamp: 0,
+    ledger: emptyLedger(),
   };
 }
 

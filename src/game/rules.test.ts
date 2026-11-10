@@ -8,6 +8,7 @@ import { fallbackAim, longestRoute, pathToTower, pathToward } from './pathing.js
 import { createMatch } from './setup.js';
 import { step } from './simulate.js';
 import type { GameState, Soldier, Tower } from './types.js';
+import { rememberPose } from './film.js';
 import { forfeitState, linkPhase, RECONNECT_MS, STALE_MS, transit, unseenIds } from './link.js';
 import { shouldPublish } from './publish.js';
 import { BLOCKS, ECONOMY, KING_LEAK, OVERCHARGE, PIECES, SOLDIERS, SUDDEN, WAVES, buildableRows, overchargeCost, repairCost, upgradeCost } from './units.js';
@@ -198,6 +199,31 @@ test('a command id is replayed once', () => {
   const known = new Set(['a']);
   assert.deepEqual(unseenIds(known, ['a', 'b', 'b', 'c']), ['b', 'c']);
   assert.deepEqual(unseenIds(new Set(['a', 'b', 'c']), ['a', 'b']), []);
+});
+
+test('a wall and a spell are written into the ledger', () => {
+  const state = playing();
+  state.gold.white = 100;
+  state.mana.white = 100;
+  const walled = tryPlaceBlock(state, 'white', 3, 4);
+  assert.equal(walled.ok, true);
+  assert.equal(walled.state.ledger.walls.white, 1);
+  const cast = trySpell(walled.state, 'white', 'blessing');
+  assert.equal(cast.ok, true);
+  assert.equal(cast.state.ledger.spells.white.blessing, 1);
+});
+
+test('the film keeps the last thirty seconds', () => {
+  const film: GameState[] = [];
+  const state = playing();
+  state.tick = 1000;
+  rememberPose(film, state);
+  state.tick = 1020;
+  rememberPose(film, state);
+  state.tick = 1400;
+  rememberPose(film, state);
+  assert.deepEqual(film.map((pose) => pose.tick), [1400]);
+  assert.equal(film[0]!.soldiers.every((soldier) => soldier.path.length === 0), true);
 });
 
 test('a forfeit names who left and does not damage towers', () => {

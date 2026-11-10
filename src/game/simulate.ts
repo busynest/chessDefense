@@ -5,6 +5,7 @@ import type { GameState, Projectile, Side, Soldier, Tower } from './types.js';
 import { reportHarm } from './telemetry.js';
 import { ECONOMY, OVERCHARGE, PIECES, SOLDIERS, SUDDEN, TICK_SECONDS, WAVES, combatOf, leakDamage, overcharged } from './units.js';
 import { aiAct } from './ai.js';
+import { ensureLedger } from './ledger.js';
 
 interface Strike {
   x: number;
@@ -19,6 +20,7 @@ interface Strike {
 export function step(input: GameState): GameState {
   if (input.status !== 'playing') return input;
   const state = structuredClone(input);
+  ensureLedger(state);
   state.tick += 1;
   if (state.tick === SUDDEN.tick) {
     state.banner = { text: 'The kings are exposed. Hits land harder.', until: state.tick + 50 };
@@ -52,7 +54,7 @@ export function step(input: GameState): GameState {
   if (state.banner && state.banner.until < state.tick) state.banner = null;
   bury(state);
   resolveKings(state);
-  if (state.status === 'playing' && state.mode === 'ai') aiAct(state);
+  if (state.status === 'playing' && state.mode === 'ai' && !state.holdAi) aiAct(state);
   return state;
 }
 
@@ -246,7 +248,7 @@ function strikeSoldier(state: GameState, tower: Tower, foe: Soldier, amount: num
     targetKind: foe.kind,
     amount,
     lethal: foe.hp <= 0,
-  });
+  }, state.ledger);
 }
 
 function bolt(tower: Tower, foe: Soldier, kind: Projectile['kind']): Strike {
@@ -367,7 +369,7 @@ function soldiersAct(state: GameState, shots: Strike[]): void {
         targetKind: foe.soldier.kind,
         amount: stats.strength,
         lethal: foe.soldier.hp <= 0,
-      });
+      }, state.ledger);
     } else if (foe?.tower) {
       const dealt = towerHit(foe.tower.kind, stats.strength, state.tick);
       foe.tower.hp -= dealt;
@@ -380,7 +382,7 @@ function soldiersAct(state: GameState, shots: Strike[]): void {
         targetKind: foe.tower.kind,
         amount: dealt,
         lethal: foe.tower.hp <= 0,
-      });
+      }, state.ledger);
     } else if (wall) {
       wall.hp -= stats.strength;
       wall.hurtBy = soldier.side;
@@ -392,7 +394,7 @@ function soldiersAct(state: GameState, shots: Strike[]): void {
         targetKind: 'block',
         amount: stats.strength,
         lethal: wall.hp <= 0,
-      });
+      }, state.ledger);
     }
     soldier.attackReadyTick = state.tick + stats.attackTicks;
     const target = foe ?? wall;
