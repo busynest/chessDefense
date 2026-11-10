@@ -6,7 +6,7 @@ Two medieval kings defend their towns on one board. The chess pieces are towers.
 
 There are two layers.
 
-**Towers, the 8×8.** Chess pieces are tower-defense buildings in that piece's silhouette. They begin in the standard starting position, White along the bottom, and they stay there for the whole match. There is no movement, no capture, no castling, and no promotion. Each tower shoots in its own way and, every wave, sends its soldier. Destroying the enemy King tower wins the match.
+**Towers, the 8×8.** Chess pieces are tower-defense buildings in that piece's silhouette. They begin in the standard starting position, White along the bottom, and they stay there for the whole match. They never move and never capture. Each tower shoots in its own way and, every wave, sends its soldier. Destroying the enemy King tower wins the match.
 
 | Tower | Role | Level 1 shot | Upgrade |
 | --- | --- | --- | --- |
@@ -19,13 +19,13 @@ There are two layers.
 
 A level adds a quarter more damage, a little range, more life, and slightly stronger soldiers. Level 3 is the top. The King's aura adds 12% damage to friendly towers within two chess squares, and more after an upgrade. Corner rooks stand outside that aura.
 
-**Armies, the 16×16.** Every chess square is split into four cells. Soldiers do not spawn in a trickle. After an 18 second build, every living tower releases its soldier at once: pawns send peasants, knights send cavalry, bishops send archers, rooks send iron cannons, the Queen sends a mage, and the King sends a royal guard. The next wave is 15 seconds later. Wave 1 and 2 send one soldier per tower. Waves 3 and 4 send two. Wave 5 and after send three, and each wave adds 15% life and strength. A side can have 40 soldiers on the board. Anyone past that cap waits for the next launch.
+**Armies, the 16×16.** Every chess square is split into four cells. Soldiers do not spawn in a trickle. After an 18 second build, every living tower releases its soldier at once: pawns send peasants, knights send knights, bishops send archers, rooks send iron cannons, the Queen sends a mage, and the King sends a royal guard. The next wave is 15 seconds later. Wave 1 and 2 send one soldier per tower. Waves 3 and 4 send two. Wave 5 and after send three, and each wave adds 15% life and strength. A side can have 40 soldiers on the board. Anyone past that cap waits for the next launch.
 
 Soldiers march toward the enemy King, route around towers and blocks, fight enemy soldiers in range, and attack towers. A tower at zero life is destroyed and leaves the 8×8. Its four cells open up, and it stops sending waves. Towers also shoot soldiers that walk into their range.
 
 **Blocks.** Each player spends 12 gold to place a wall on the 16×16 grid, only on their own half. White's half is the bottom eight rows (screen rows 8–15). Black's half is the top eight (screen rows 0–7). A wall has 28 life. Soldiers walk through a gap and only break a wall when it blocks every route, so a maze stalls and a sealed rank gets chewed open. Picking up your own wall refunds 6 gold. A placement that would wall off every route between the two home ranks is rejected. Walls cannot sit on a tower cell or on another wall. A wall in front of a tower does not silence that tower: the soldier deploys on the nearest open cell ahead.
 
-**Economy.** Both towns earn 3 gold and 3 mana each second, starting from 36 gold and 14 mana. Gold pays for walls and tower upgrades. Mana pays for Queen spells. Gold caps at 120 and mana at 100.
+**Economy.** Both towns earn 3 gold and 3 mana each second, starting from 36 gold and 14 mana. Gold pays for walls, tower upgrades, repair, and Overcharge. Mana pays for Queen spells. Gold caps at 120 and mana at 100.
 
 **Queen magic.** Only a living Queen can cast, and every spell is centered on her.
 
@@ -37,7 +37,7 @@ Soldiers march toward the enemy King, route around towers and blocks, fight enem
 
 **Overcharge.** A level 3 tower can spend gold to hit 50% harder and faster for 8 seconds. Soldiers it launches in that window are stronger. The first charge on a tower costs 36. The next one on that same tower costs 28 more, then 28 more again. It cannot be bought again for 30 seconds. The button shows the price for that tower. The tower glows gold while the boost lasts.
 
-**Win.** Destroy the enemy King tower, with soldiers or with a chess capture. If both King towers fall on the same step, the match is a draw.
+**Win.** Soldiers and Queen spells are the only way a tower falls. Destroy the enemy King tower and you win. If both King towers fall on the same step, the match is a draw.
 
 ### Units
 
@@ -69,9 +69,9 @@ Projectiles show the shot. The damage lands when the attack fires, not when the 
 
 Open the site and choose a mode.
 
-- **Versus AI.** You are White. Easy hesitates and mostly heals. Normal takes captures and casts. Hard acts often and walks pieces forward.
-- **Local 2 player.** Both colors are live at once on one screen. White and Black can each select their own towers while the armies keep moving. This is split control, not a turn-based hot-seat, because the match is real time.
-- **Online 1v1.** Sign in, host a four-letter code, and send it to the other player. The host is White and runs the simulation. The guest is Black and sends moves and spells to the host. The host publishes the position about twice a second. The guest is looking at that snapshot, so orders arrive a short moment later. If the host closes the tab, the match stops.
+- **Versus AI.** You are White. Easy hesitates, repairs, and spends spare gold on pawn upgrades and a few walls. Normal upgrades its best towers, places walls, repairs, casts, and overcharges when a fight or a launch is close. Hard does the same more often and spends on the strongest towers first.
+- **Local 2 player.** Both colors are live at once on one screen. White and Black can each upgrade, repair, overcharge, place walls, and cast while the armies keep marching. This is split control, not a turn-based hot-seat, because the match is real time.
+- **Online 1v1.** Sign in, host a four-letter code, and send it to the other player. The host is White and runs the simulation. The guest is Black and sends upgrades, repairs, Overcharge, walls, and spells to the host. A guest cannot command White's towers. The host publishes the position about twice a second. The guest is looking at that snapshot, so orders arrive a short moment later. If the host closes the tab, the match stops.
 
 Tap one of your towers. A ring shows its range, and Upgrade spends gold. The wall button opens block placement: your half of the board is shaded, a green cell is legal, and a red cell is not. Tap a cell to build. Tap your own wall to sell it. Spell buttons sit in the side panel, or above the board on a phone. Pause freezes the armies. The page also pauses while the tab is hidden. Menu leaves the match. Rematch starts the same mode with a new layout seed.
 
@@ -82,19 +82,18 @@ Sign in to save a win, loss, or draw from versus-AI and online matches. Local ga
 These are the calls the brief left open.
 
 - White sits on rank 1. The human is White against the AI.
-- Towers capture each other by chess moves. Soldiers also damage towers, including the King.
-- No castling, en passant, or promotion. Those rules fight the real-time layer more than they help it.
-- Soldiers attack in waves, not a stream. Twelve seconds of building, then a launch, then fifteen seconds until the next one.
+- Towers never move and never capture. Soldiers and Queen spells damage towers, including the King. Destroying the enemy King tower wins.
+- Soldiers attack in waves, not a stream. Eighteen seconds of building, then a launch, then fifteen seconds until the next one.
 - Soldiers do not occupy cells. A lane can stack. Towers occupy their four cells, and player blocks occupy one.
 - Pathing is breadth-first search to the closest reachable cell to the enemy King. A block that cuts every route from one home rank to the other is rejected. Soldiers can also break a block they are standing against, so a maze is not permanent.
 - Each side is capped at 40 soldiers so a late wave cannot flood the board.
 - The opening has no neutral stones. The maze is whatever the players, or the AI, pay for.
 - The clock is a fixed 100ms step, drawn from `requestAnimationFrame`. The simulation never reads the frame delta except to decide how many steps are due. A long hitch applies at most 200ms.
-- Gold and mana are separate. Moves spend gold. Spells spend mana.
+- Gold and mana are separate. Walls, upgrades, repair, and Overcharge spend gold. Queen spells spend mana.
 - Queen spells are self-centered so a phone can cast without a second targeting gesture.
-- The King builds a royal guard instead of a second spell, and still moves one square.
+- The King sends a royal guard. The King tower does not move.
 - Local play is simultaneous. A hot-seat turn would freeze one town while its armies were still the thing that loses.
-- Online play is host-authoritative rather than lockstep. Firestore latency is a poor shared clock, and one simulator cannot drift from itself. Guest commands are checked against that side's pieces, so a guest cannot move White. The host publishes the position every half second, and once more when the match ends, so the guest sees the same King fall. A listener that starts again does not replay commands it already had, so a reconnect does not spend the gold twice.
+- Online play is host-authoritative rather than lockstep. Firestore latency is a poor shared clock, and one simulator cannot drift from itself. Guest commands are checked against that side's towers, so a guest cannot command White. The host publishes the position every half second, and once more when the match ends, so the guest sees the same King fall. A listener that starts again does not replay commands it already had, so a reconnect does not spend the gold twice.
 - Match history is per signed-in user. Versus AI and online write `users/{uid}` and `users/{uid}/history`. Local matches do not.
 - The same seed and the same commands replay the same match. The AI reads a stored random state, not `Math.random`.
 
@@ -152,7 +151,7 @@ Deploy the rules with the site. Until those rules are published, online matches 
 
 ### Layout
 
-`src/game/units.ts` holds every stat. `src/game/simulate.ts` is the pure step function. `src/game/chess.ts` is movement. `src/game/pathing.ts` is the 16×16 search. `src/game/ai.ts` chooses one action for the computer. `src/game/game_state.ts` is the Redux slice. The board components (`board-square`, `one-square`, `four-square`, `square-space`, `box-block`, and the six piece elements) only draw. `chess-defense` owns the menu, the clock, and the online listeners.
+`src/game/units.ts` holds every stat. `src/game/simulate.ts` is the pure step function. `src/game/chess.ts` looks up which tower stands on a square. `src/game/pathing.ts` is the 16×16 search. `src/game/ai.ts` chooses one action for the computer. `src/game/game_state.ts` is the Redux slice. The board components (`board-square`, `one-square`, `four-square`, `square-space`, `box-block`, and the six piece elements) only draw. `chess-defense` owns the menu, the clock, and the online listeners.
 
 ### Firebase
 

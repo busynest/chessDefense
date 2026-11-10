@@ -30,7 +30,7 @@ export class HowToPage extends PageViewElement {
       </section>
       <section>
         <h2>Towers</h2>
-        <p>Towers stand on the chess starting squares for the whole match. They do not move, capture, or promote. Gold upgrades a tower to level 3, which hits harder and sends stronger soldiers. Every tower can be destroyed. Destroy the enemy King tower and you win.</p>
+        <p>Towers stand on the chess starting squares for the whole match. They never move and never capture. Gold upgrades a tower to level 3, which hits harder and sends stronger soldiers. Every tower can be destroyed. Soldiers and Queen spells are what bring one down. Destroy the enemy King tower and you win. If both King towers fall on the same step, the match is a draw.</p>
         <table>
           <tr><th>Tower</th><th>Role</th><th>Life</th><th>Shot</th><th>Upgrade</th></tr>
           ${pieces.map((kind) => {
@@ -77,7 +77,8 @@ export class HowToPage extends PageViewElement {
           <li>The wall button shades your half. Tap an empty cell to build. A green ghost is legal and a red ghost is not. Tap your own wall to sell it.</li>
           <li>Spell buttons sit in the panel. They stay quiet until you can afford them.</li>
           <li>Pause freezes the armies. Menu leaves the match.</li>
-          <li>Versus AI, you are White. Local play is simultaneous: both colors can be moved on this screen while the clock runs. Online, the host is White and runs the match; the guest is Black and sends orders to the host.</li>
+          <li>Versus AI, you are White. Easy spends spare gold on pawn upgrades and a few walls, and it repairs. Normal and Hard upgrade, place walls, repair, cast, and overcharge. Hard does it more often and prefers the strongest towers.</li>
+          <li>Local play is simultaneous: both colors can upgrade, repair, overcharge, place walls, and cast on this screen while the armies march. Online, the host is White and runs the match. The guest is Black and sends those same orders. A guest cannot command White's towers.</li>
         </ul>
       </section>
     `;

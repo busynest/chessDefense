@@ -396,6 +396,8 @@ test('white cannot wall the top half, and a sealed rank is rejected', () => {
   state.gold.black = 500;
   const wrongHalf = tryPlaceBlock(state, 'white', 3, 8);
   assert.equal(wrongHalf.ok, false);
+  const blackOnWhite = tryPlaceBlock(state, 'black', 3, 7);
+  assert.equal(blackOnWhite.ok, false);
   const topHalf = tryPlaceBlock(state, 'black', 3, 8);
   assert.equal(topHalf.ok, true);
   const bottom = tryPlaceBlock(state, 'white', 3, 7);

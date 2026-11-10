@@ -1,5 +1,5 @@
 import type { Difficulty, GameState, Mode, PieceKind, Side, Tower } from './types.js';
-import { PIECES, WAVES } from './units.js';
+import { ECONOMY, PIECES, WAVES } from './units.js';
 
 const BACK: PieceKind[] = ['rook', 'knight', 'bishop', 'queen', 'king', 'bishop', 'knight', 'rook'];
 
@@ -47,8 +47,8 @@ export function createMatch(options: { mode: Mode; difficulty: Difficulty; seed:
     nextId,
     wave: 0,
     nextWaveTick: WAVES.firstWaveTick,
-    gold: { white: 48, black: 48 },
-    mana: { white: 18, black: 18 },
+    gold: { white: ECONOMY.startingGold, black: ECONOMY.startingGold },
+    mana: { white: ECONOMY.startingMana, black: ECONOMY.startingMana },
     towers,
     soldiers: [],
     projectiles: [],

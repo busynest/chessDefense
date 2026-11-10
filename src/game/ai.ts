@@ -5,8 +5,9 @@ import { AI_PERIOD, BLOCKS, SPELLS, combatOf, overchargeCost, repairCost, upgrad
 
 /**
  * One decision for the computer side. Towers do not move.
- * Easy stalls and heals. Normal upgrades and walls. Hard spends on the
- * strongest towers first and casts whenever a spell is worth it.
+ * Easy stalls, repairs, and spends spare gold on pawns and a few walls.
+ * Normal upgrades, walls, repairs, spells, and Overcharge. Hard does the
+ * same more often and prefers the strongest towers.
  * The rng state on the match advances so the same seed replays the same game.
  */
 export function aiAct(state: GameState): void {

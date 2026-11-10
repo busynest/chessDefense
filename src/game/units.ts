@@ -305,7 +305,7 @@ export const SPELLS: Record<SpellId, SpellDef> = {
     heal: 0,
     damage: 16,
     towerDamage: 10,
-    summary: 'Deals 16 damage to enemy soldiers within 4 cells, and 10 to enemy towers within 2 squares.',
+    summary: 'Deals 16 damage to enemy soldiers within 6 cells, and 10 to enemy towers within 2 squares.',
   },
 };
 
@@ -358,7 +358,7 @@ export function ownsHalf(side: Side, y: number): boolean {
   return side === 'white' ? y >= 0 && y <= 7 : y >= 8 && y <= 15;
 }
 
-/** How often the AI considers a move or a spell, in ticks. */
+/** How often the AI considers an upgrade, a wall, a repair, or a spell, in ticks. */
 export const AI_PERIOD: Record<'easy' | 'normal' | 'hard', number> = {
   easy: 50,
   normal: 25,

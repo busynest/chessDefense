@@ -91,23 +91,6 @@ export class OneSquare extends LitElement {
       }
       .hp span { display: block; height: 100%; background: linear-gradient(#d8f5c8, #3dba5c); }
       .hp.low span { background: linear-gradient(#ffd0c4, #c0392b); }
-      .mark {
-        position: absolute;
-        width: 34%;
-        height: 34%;
-        left: 33%;
-        top: 33%;
-        border-radius: 50%;
-        z-index: 2;
-      }
-      .mark.move {
-        background: radial-gradient(circle, rgba(190,255,210,0.95), rgba(40,160,80,0.15) 70%);
-        box-shadow: 0 0 10px #8dffc0;
-      }
-      .mark.capture {
-        background: radial-gradient(circle, rgba(255,180,160,0.95), rgba(160,30,20,0.2) 70%);
-        box-shadow: 0 0 10px #ff6a4a;
-      }
       button {
         position: absolute;
         inset: 0;
@@ -160,7 +143,6 @@ export class OneSquare extends LitElement {
       ${this.kind === 'queen' ? html`<chess-queen class="piece" .side=${this.side || 'white'} .hp=${this.hp} .maxHp=${this.maxHp} .level=${this.level}></chess-queen>` : ''}
       ${this.kind === 'king' ? html`<chess-king class="piece" .side=${this.side || 'white'} .hp=${this.hp} .maxHp=${this.maxHp} .level=${this.level}></chess-king>` : ''}
       ${this.kind ? html`<div class="hp ${ratio < 0.35 ? 'low' : ''}"><span style="width:${ratio * 100}%"></span></div>` : ''}
-      ${this.hint === 'move' || this.hint === 'capture' ? html`<div class="mark ${this.hint}"></div>` : ''}
       ${showRank ? html`<span class="coord rank">${this.rank + 1}</span>` : ''}
       ${showFile ? html`<span class="coord file">${'abcdefgh'[this.file]}</span>` : ''}
       <button
