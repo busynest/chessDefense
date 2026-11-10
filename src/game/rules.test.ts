@@ -9,7 +9,7 @@ import { createMatch } from './setup.js';
 import { step } from './simulate.js';
 import type { GameState, Soldier, Tower } from './types.js';
 import { shouldPublish } from './publish.js';
-import { BLOCKS, KING_LEAK, OVERCHARGE, PIECES, SOLDIERS, WAVES, overchargeCost, repairCost, upgradeCost } from './units.js';
+import { BLOCKS, KING_LEAK, OVERCHARGE, PIECES, SOLDIERS, WAVES, buildableRows, overchargeCost, repairCost, upgradeCost } from './units.js';
 
 function playing(): GameState {
   return createMatch({ mode: 'local', difficulty: 'normal', seed: 7 });
@@ -390,29 +390,49 @@ test('a scripted attack can defeat the easy AI king', () => {
   assert.ok(state.winner === 'white' || state.winner === 'black');
 });
 
-test('white cannot wall the top half, and a sealed rank is rejected', () => {
+test('walls stay in the two front ranks, off the center, and leave a gap', () => {
   const state = bare();
   state.gold.white = 500;
   state.gold.black = 500;
-  const wrongHalf = tryPlaceBlock(state, 'white', 3, 8);
-  assert.equal(wrongHalf.ok, false);
-  const blackOnWhite = tryPlaceBlock(state, 'black', 3, 7);
-  assert.equal(blackOnWhite.ok, false);
-  const topHalf = tryPlaceBlock(state, 'black', 3, 8);
-  assert.equal(topHalf.ok, true);
-  const bottom = tryPlaceBlock(state, 'white', 3, 7);
-  assert.equal(bottom.ok, true);
+  assert.equal(tryPlaceBlock(state, 'white', 3, 2).reason, 'Build only in your two front ranks');
+  assert.equal(tryPlaceBlock(state, 'white', 3, 9).reason, 'Build only in your two front ranks');
+  assert.equal(tryPlaceBlock(state, 'white', 3, 7).reason, 'The center crossing must stay open');
+  assert.equal(tryPlaceBlock(state, 'white', 3, 8).reason, 'The center crossing must stay open');
+  assert.equal(tryPlaceBlock(state, 'black', 3, 8).reason, 'The center crossing must stay open');
+  assert.equal(tryPlaceBlock(state, 'black', 3, 4).reason, 'Build only in your two front ranks');
+  assert.equal(tryPlaceBlock(state, 'black', 3, 12).reason, 'Build only in your two front ranks');
+  assert.equal(tryPlaceBlock(state, 'white', 3, 4).ok, true);
+  assert.equal(tryPlaceBlock(state, 'white', 3, 6).ok, true);
+  assert.equal(tryPlaceBlock(state, 'black', 3, 9).ok, true);
+  assert.equal(tryPlaceBlock(state, 'black', 3, 11).ok, true);
 
-  let walled = bare();
-  walled.gold.white = 500;
+  let row = bare();
+  row.gold.white = 500;
   for (let x = 0; x < 15; x += 1) {
-    const placed = tryPlaceBlock(walled, 'white', x, 7);
+    const placed = tryPlaceBlock(row, 'white', x, 5);
     assert.equal(placed.ok, true, `gap remains at ${x}`);
-    walled = placed.state;
+    row = placed.state;
   }
-  const sealed = tryPlaceBlock(walled, 'white', 15, 7);
-  assert.equal(sealed.ok, false);
-  assert.match(sealed.reason, /seal/);
+  const closed = tryPlaceBlock(row, 'white', 15, 5);
+  assert.equal(closed.ok, false);
+  assert.equal(closed.reason, 'Each row must keep a gap');
+});
+
+test('the AI places a wall inside its front ranks', () => {
+  const state = playing();
+  state.mode = 'ai';
+  state.difficulty = 'easy';
+  state.humanSide = 'white';
+  state.tick = 50;
+  state.gold.black = 96;
+  for (const tower of state.towers) {
+    if (tower.side === 'black' && tower.kind === 'pawn') tower.level = 3;
+  }
+  aiAct(state);
+  const wall = state.blocks.find((block) => block.side === 'black' && block.hp > 0);
+  assert.ok(wall);
+  assert.ok(buildableRows('black').includes(wall!.y));
+  assert.equal(BLOCKS.centerRows.includes(wall!.y), false);
 });
 
 test('a tower at zero life is removed and no longer blocks its cells', () => {

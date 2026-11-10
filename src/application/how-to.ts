@@ -47,7 +47,7 @@ export class HowToPage extends PageViewElement {
       </section>
       <section>
         <h2>Soldiers</h2>
-        <p>Waves leave every living tower at once. The first march is ${WAVES.firstWaveTick / 10} seconds in, then every ${WAVES.gapTicks / 10} seconds. Later waves send more soldiers, with more life and strength. They walk the 16×16 grid toward the enemy King tower. Strength is the damage of one hit. Speed is cells per second. Walls cost ${BLOCKS.cost} gold, have ${BLOCKS.hp} life, and refund ${BLOCKS.refund}. White builds on the bottom half. Black builds on the top half.</p>
+        <p>Waves leave every living tower at once. The first march is ${WAVES.firstWaveTick / 10} seconds in, then every ${WAVES.gapTicks / 10} seconds. Later waves send more soldiers, with more life and strength. They walk the 16×16 grid toward the enemy King tower. Strength is the damage of one hit. Speed is cells per second. Walls cost ${BLOCKS.cost} gold, have ${BLOCKS.hp} life, and refund ${BLOCKS.refund}. White builds on the two ranks in front of the white pawns (army rows ${BLOCKS.zoneRows.white.join(', ')}). Black builds on the two ranks in front of the black pawns (army rows ${BLOCKS.zoneRows.black.join(', ')}). The center rows ${BLOCKS.centerRows.join(' and ')} never take a wall. Every row keeps at least one open cell, and a wall that seals every route is still rejected.</p>
         <table>
           <tr><th>Soldier</th><th>Strength</th><th>Life</th><th>Speed</th><th>Range</th></tr>
           ${soldiers.map((kind) => {
@@ -74,7 +74,7 @@ export class HowToPage extends PageViewElement {
         <ul>
           <li>Tap a tower to see its range and stats. Upgrade spends gold and stops at level 3. Repair spends gold to restore missing life, then waits 8 seconds. Overcharge, on a level 3 tower, costs 36 gold the first time and 28 more each time that same tower buys it again. The boost lasts 8 seconds and then waits 30.</li>
           <li>Keys: P or Space pauses, Escape pauses or cancels a wall, M returns to the menu, W toggles walls, U upgrades the selected tower, R repairs it, O overcharges it, and B, H, and L cast Blessing, Heal, and Blast.</li>
-          <li>The wall button shades your half. Tap an empty cell to build. A green ghost is legal and a red ghost is not. Tap your own wall to sell it.</li>
+          <li>The wall button shades the two ranks in front of your towers. The gold strip across the middle is reserved. A green ghost is legal and a red ghost is not. Each row must keep a gap. Tap your own wall to sell it.</li>
           <li>Spell buttons sit in the panel. They stay quiet until you can afford them.</li>
           <li>Pause freezes the armies. Menu leaves the match.</li>
           <li>Versus AI, you are White. Easy spends spare gold on pawn upgrades and a few walls, and it repairs. Normal and Hard upgrade, place walls, repair, cast, and overcharge. Hard does it more often and prefers the strongest towers.</li>

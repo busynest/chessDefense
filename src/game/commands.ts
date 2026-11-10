@@ -2,7 +2,7 @@ import { towerAt } from './chess.js';
 import { chebyshev, placementSeals, towerCells } from './pathing.js';
 import type { GameState, Side, SpellId } from './types.js';
 import { reportHarm } from './telemetry.js';
-import { BLOCKS, ECONOMY, OVERCHARGE, PIECES, REPAIR, SOLDIERS, SPELLS, combatOf, overchargeCost, ownsHalf, repairCost, squareName, upgradeCost } from './units.js';
+import { BLOCKS, ECONOMY, OVERCHARGE, PIECES, REPAIR, SOLDIERS, SPELLS, combatOf, inBuildZone, isCenterRow, overchargeCost, repairCost, squareName, upgradeCost } from './units.js';
 import { reportOvercharge, reportRepair } from './telemetry.js';
 
 export interface MoveResult {
@@ -204,14 +204,27 @@ export function finish(state: GameState, winner: Side | 'draw'): void {
   };
 }
 
+function rowWouldClose(input: GameState, x: number, y: number): boolean {
+  let open = 0;
+  for (let file = 0; file < 16; file += 1) {
+    if (file === x) continue;
+    const wall = input.blocks.some((block) => block.x === file && block.y === y && block.hp > 0);
+    const tower = input.towers.some((piece) => piece.hp > 0 && towerCells(piece).some((cell) => cell.x === file && cell.y === y));
+    if (!wall && !tower) open += 1;
+  }
+  return open === 0;
+}
+
 export function blockProblem(input: GameState, side: Side, x: number, y: number): string {
   if (input.status !== 'playing') return 'The match is not running.';
   if (x < 0 || y < 0 || x > 15 || y > 15) return 'That cell is off the board.';
-  if (!ownsHalf(side, y)) return 'Blocks stay on your half of the board.';
+  if (isCenterRow(y)) return 'The center crossing must stay open';
+  if (!inBuildZone(side, y)) return 'Build only in your two front ranks';
   if (input.gold[side] < BLOCKS.cost) return 'Not enough gold for a block.';
   if (input.blocks.some((block) => block.x === x && block.y === y && block.hp > 0)) return 'A block is already there.';
   const occupied = input.towers.some((tower) => tower.hp > 0 && towerCells(tower).some((cell) => cell.x === x && cell.y === y));
   if (occupied) return 'A tower stands on that cell.';
+  if (rowWouldClose(input, x, y)) return 'Each row must keep a gap';
   if (placementSeals(input.blocks, x, y)) return 'That would seal every path to a King.';
   return '';
 }

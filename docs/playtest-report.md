@@ -28,3 +28,18 @@ Time at the 120 gold cap is **35%** of side-ticks, down from **40%** before the 
 
 - Easy is still Easy. It spends on pawns and a few walls, and it loses every game to Normal and Hard.
 - A further sink for a level-3 pawn town would have to be something other than a stronger piece, or Easy stops being the short match.
+
+## Wall zone
+
+108 more games after walls moved to the two ranks in front of each army, with the center rows closed to blocks and one gap kept in every row. This run also starts from the economy config, 36 gold and 14 mana.
+
+| Matchup | Wins | Mean length | Gold at cap |
+| --- | --- | --- | --- |
+| Easy vs Easy | White 8, Black 4 | 184s, wave 11.6 | 67% |
+| Normal vs Normal | White 7, Black 5 | 218s, wave 13.8 | 35% |
+| Hard vs Hard | White 5, Black 7 | 228s, wave 14.5 | 30% |
+| Normal vs Easy, both seats | Normal 24, Easy 0 | 102–108s | 29–30% |
+| Hard vs Easy, both seats | Hard 24, Easy 0 | 96–100s | 20–21% |
+| Hard vs Normal, both seats | Hard 23, Normal 1 | 183–193s | 30–31% |
+
+Ordering holds. Means stay inside the previous band. Cap time is 34% and Overcharge is 9.8 per game. One Normal mirror, seed 6, ran 355 seconds. Nothing else reached five minutes, and nothing was left unfinished. No retune.

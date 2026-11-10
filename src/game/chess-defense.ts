@@ -64,7 +64,7 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
   private readonly steps = [
     'Tap one of your pawns. The ring is its range. Towers never move.',
     'Upgrade spends gold. Level 3 is as high as a tower goes.',
-    'White walls shades your half. A green cell can take a block. Tap your own block to sell it.',
+    'White walls shades the two ranks in front of your towers. The gold strip in the middle stays open. A green cell can take a block, and a red cell cannot. Each row keeps a gap.',
     'When the build timer ends, every living tower sends its soldier at once.',
     'Spell buttons belong to the Queen. Pause freezes the clock. Menu leaves the match.',
   ];
@@ -533,7 +533,7 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
             <button type="button" @click=${() => this.advanceTutorial(false)}>Next</button>
             <button type="button" class="quiet" @click=${() => this.advanceTutorial(true)}>Skip tutorial</button>
           </div>
-        ` : game.wave === 0 ? html`<p class="coach">Towers stay on their squares. Tap one for its range, Upgrade, or Repair. The wall button shades your half: green can be built, red cannot. Keys: P pause, W walls, U upgrade, R repair, O overcharge, B H L spells.</p>` : ''}
+        ` : game.wave === 0 ? html`<p class="coach">Towers stay on their squares. Tap one for its range, Upgrade, or Repair. Walls go on the two ranks in front of your towers. The center strip stays open, and each row keeps a gap. Keys: P pause, W walls, U upgrade, R repair, O overcharge, B H L spells.</p>` : ''}
         ${selected ? this.inspect(selected) : html`<div>Tap one of your towers to upgrade it.</div>`}
         ${sides.map((side) => this.spells(slice, side))}
       </aside>

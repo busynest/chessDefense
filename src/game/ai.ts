@@ -1,7 +1,7 @@
 import { tryOvercharge, tryPlaceBlock, tryRepair, trySpell, tryUpgrade } from './commands.js';
 import { chebyshev } from './pathing.js';
 import type { GameState, PieceKind, Side, Tower } from './types.js';
-import { AI_PERIOD, BLOCKS, SPELLS, combatOf, overchargeCost, repairCost, upgradeCost } from './units.js';
+import { AI_PERIOD, BLOCKS, SPELLS, buildableRows, combatOf, overchargeCost, repairCost, upgradeCost } from './units.js';
 
 /**
  * One decision for the computer side. Towers do not move.
@@ -131,7 +131,7 @@ function layBlock(state: GameState, side: Side): boolean {
   const owned = state.blocks.filter((block) => block.side === side && block.hp > 0).length;
   if (owned >= budget || state.gold[side] < BLOCKS.cost) return false;
   const gap = 3 + Math.floor(roll(state, side) * 10);
-  const rows = side === 'white' ? [6, 7, 5, 4] : [9, 8, 10, 11];
+  const rows = buildableRows(side).sort((a, b) => side === 'white' ? b - a : a - b);
   for (const y of rows) {
     for (let x = 0; x < 16; x += 1) {
       if (Math.abs(x - gap) <= 1) continue;

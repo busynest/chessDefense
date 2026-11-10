@@ -183,7 +183,7 @@ const ignored = applyGuest(state, rejected);
 assert.equal(ignored.ok, false);
 assert.equal(tower(state, 'white', 'pawn').level, 1);
 
-await send(guest.db, guestUser.uid, { type: 'block', side: 'black', x: 4, y: 8 });
+await send(guest.db, guestUser.uid, { type: 'block', side: 'black', x: 4, y: 9 });
 const wall = await inputs.next();
 const walled = applyGuest(state, wall);
 assert.equal(walled.ok, true);

@@ -10,7 +10,7 @@ import './one-square.js';
 import { soldierSvg } from './soldiers.js';
 import { connectStore, type RootState } from '../store.js';
 import type { GameState, PieceKind, Side, Square } from './types.js';
-import { WAVES, combatOf, overcharged } from './units.js';
+import { BLOCKS, WAVES, buildableRows, combatOf, overcharged } from './units.js';
 
 @customElement('board-square')
 export class BoardSquare extends connect(connectStore)(LitElement) {
@@ -82,11 +82,15 @@ export class BoardSquare extends connect(connectStore)(LitElement) {
       }
       .actors { pointer-events: none; }
       .maze { touch-action: none; }
-      .half { position: absolute; left: 0; right: 0; height: 50%; pointer-events: none; }
-      .half.top { top: 0; background: rgba(160, 40, 30, 0.2); }
-      .half.bottom { bottom: 0; background: rgba(40, 80, 150, 0.2); }
-      .half.own.top { background: rgba(210, 70, 40, 0.38); box-shadow: inset 0 0 36px rgba(255, 120, 60, 0.35); }
-      .half.own.bottom { background: rgba(70, 140, 210, 0.38); box-shadow: inset 0 0 36px rgba(140, 190, 255, 0.4); }
+      .band { position: absolute; left: 0; right: 0; height: 6.25%; pointer-events: none; }
+      .band.allowed { background: rgba(70, 160, 210, 0.34); box-shadow: inset 0 0 18px rgba(140, 210, 255, 0.35); }
+      .band.reserved {
+        background: repeating-linear-gradient(
+          90deg,
+          rgba(246, 214, 120, 0.42) 0 8px,
+          rgba(90, 60, 24, 0.28) 8px 16px
+        );
+      }
       .ghost { position: absolute; box-sizing: border-box; }
       .ghost.ok { background: rgba(140, 230, 180, 0.45); box-shadow: 0 0 14px #8dffc0, inset 0 0 0 2px #f3fff8; }
       .ghost.bad { background: rgba(220, 50, 40, 0.5); box-shadow: 0 0 14px #ff6a4a, inset 0 0 0 2px #ffe0d8; }
@@ -277,6 +281,7 @@ export class BoardSquare extends connect(connectStore)(LitElement) {
 
   private maze(game: GameState): TemplateResult {
     const side = this.placing;
+    if (!side) return html``;
     const ghost = this.ghost;
     const own = ghost ? game.blocks.some((block) => block.x === ghost.x && block.y === ghost.y && block.hp > 0 && block.side === side) : false;
     const problem = ghost && side && !own ? blockProblem(game, side, ghost.x, ghost.y) : '';
@@ -286,8 +291,8 @@ export class BoardSquare extends connect(connectStore)(LitElement) {
         @pointermove=${(event: PointerEvent) => this.track(event)}
         @pointerdown=${(event: PointerEvent) => this.track(event)}
         @pointerup=${(event: PointerEvent) => this.drop(event)}>
-        <div class="half top ${side === 'black' ? 'own' : ''}"></div>
-        <div class="half bottom ${side === 'white' ? 'own' : ''}"></div>
+        ${buildableRows(side).map((y) => html`<div class="band allowed" style="top:${(15 - y) / 16 * 100}%"></div>`)}
+        ${BLOCKS.centerRows.map((y) => html`<div class="band reserved" style="top:${(15 - y) / 16 * 100}%"></div>`)}
         ${ghost ? html`<div class="ghost ${own || problem === '' ? 'ok' : 'bad'}" style="left:${ghost.x / 16 * 100}%; top:${(15 - ghost.y) / 16 * 100}%; width:${100 / 16}%; height:${100 / 16}%"></div>` : ''}
       </div>
     `;

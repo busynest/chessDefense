@@ -344,7 +344,9 @@ export const WAVES = {
 
 /**
  * Player walls. y 0 is White's back rank, drawn at the bottom.
- * White may build on y 0–7 (screen rows 8–15). Black may build on y 8–15 (screen rows 0–7).
+ * Each side builds on the two chess ranks in front of its towers.
+ * The army row on each side of the midline stays empty, and every
+ * other build row keeps at least one open cell.
  * Soldiers can break a wall, so a maze only stalls.
  */
 export const BLOCKS = {
@@ -352,10 +354,30 @@ export const BLOCKS = {
   hp: 28,
   /** Gold returned when the owner picks the wall back up. */
   refund: 6,
+  /**
+   * Army rows of the two front ranks. White ranks 3–4 are y 4–7.
+   * Black ranks 5–6 are y 8–11. The center rows below are inside
+   * this span and are not buildable.
+   */
+  zoneRows: {
+    white: [4, 5, 6, 7],
+    black: [8, 9, 10, 11],
+  } as Record<Side, readonly number[]>,
+  /** One 16-cell row on each side of the midline. Never a wall. */
+  centerRows: [7, 8] as readonly number[],
 };
 
-export function ownsHalf(side: Side, y: number): boolean {
-  return side === 'white' ? y >= 0 && y <= 7 : y >= 8 && y <= 15;
+export function isCenterRow(y: number): boolean {
+  return BLOCKS.centerRows.includes(y);
+}
+
+/** Rows a side may actually place on: its two front ranks, minus the center. */
+export function buildableRows(side: Side): number[] {
+  return BLOCKS.zoneRows[side].filter((y) => !isCenterRow(y));
+}
+
+export function inBuildZone(side: Side, y: number): boolean {
+  return BLOCKS.zoneRows[side].includes(y);
 }
 
 /** How often the AI considers an upgrade, a wall, a repair, or a spell, in ticks. */
