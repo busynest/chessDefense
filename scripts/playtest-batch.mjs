@@ -16,30 +16,25 @@ const MIRROR_SEEDS = Array.from({ length: 24 }, (_, index) => index + 1);
 const KINDS = ['pawn', 'knight', 'bishop', 'rook', 'queen', 'king'];
 const SOLDIERS = ['peasant', 'knight', 'archer', 'cannon', 'mage', 'guard'];
 
-const MATCHUPS = [
-  ['easy', 'easy'],
-  ['normal', 'normal'],
-  ['hard', 'hard'],
-  ['easy', 'normal'],
-  ['normal', 'easy'],
-  ['easy', 'hard'],
-  ['hard', 'easy'],
-  ['normal', 'hard'],
-  ['hard', 'normal'],
-];
-
 function blankSide() {
   return { gained: 0, spent: 0, capGold: 0, capMana: 0, manaGained: 0, manaSpent: 0 };
 }
 
-function act(state, side, difficulty) {
-  const saved = { humanSide: state.humanSide, difficulty: state.difficulty, mode: state.mode };
+function act(state, side, difficulty, personality) {
+  const saved = {
+    humanSide: state.humanSide,
+    difficulty: state.difficulty,
+    personality: state.personality,
+    mode: state.mode,
+  };
   state.humanSide = side === 'white' ? 'black' : 'white';
   state.difficulty = difficulty;
+  state.personality = personality;
   state.mode = 'ai';
   aiAct(state);
   state.humanSide = saved.humanSide;
   state.difficulty = saved.difficulty;
+  state.personality = saved.personality;
   state.mode = saved.mode;
 }
 
@@ -55,7 +50,7 @@ function fingerprint(state) {
   return `${state.status}|${state.winner}|${state.tick}|${state.wave}|${state.gold.white}|${state.gold.black}|${state.rng}|${towers}`;
 }
 
-function play(seed, whiteDiff, blackDiff) {
+function play(seed, whiteStyle, whiteDiff, blackStyle, blackDiff) {
   let state = createMatch({ mode: 'local', difficulty: 'normal', seed, humanSide: 'white' });
   const economy = { white: blankSide(), black: blankSide() };
   const harm = [];
@@ -91,7 +86,7 @@ function play(seed, whiteDiff, blackDiff) {
         const beforeGold = state.gold[side];
         const beforeMana = state.mana[side];
         const beforeBlocks = new Set(state.blocks.filter((block) => block.side === side).map(blockKey));
-        act(state, side, side === 'white' ? whiteDiff : blackDiff);
+        act(state, side, side === 'white' ? whiteDiff : blackDiff, side === 'white' ? whiteStyle : blackStyle);
         const spent = beforeGold - state.gold[side];
         const manaSpent = beforeMana - state.mana[side];
         if (spent > 0) economy[side].spent += spent;
@@ -129,8 +124,10 @@ function play(seed, whiteDiff, blackDiff) {
   for (const tower of state.towers) towersLeft[tower.side] += 1;
   return {
     seed,
-    white: whiteDiff,
-    black: blackDiff,
+    white: whiteStyle,
+    black: blackStyle,
+    whiteDiff,
+    blackDiff,
     status: state.status,
     winner: state.winner,
     tick: state.tick,
@@ -187,7 +184,7 @@ function summarize(games) {
   let overcharges = 0;
   const spells = { blessing: 0, heal: 0, blast: 0 };
   for (const game of games) {
-    const key = `${game.white}-vs-${game.black}`;
+    const key = `${game.white}/${game.whiteDiff}-vs-${game.black}/${game.blackDiff}`;
     const row = byMatchup[key] ?? { games: 0, white: 0, black: 0, draw: 0, unfinished: 0, waves: [], seconds: [], whiteTowers: [], blackTowers: [] };
     row.games += 1;
     if (game.error) errors += 1;
@@ -266,20 +263,40 @@ function summarize(games) {
   };
 }
 
+const STYLES = ['rusher', 'fortress', 'tactician'];
 const games = [];
-for (const [white, black] of MATCHUPS) {
-  const seeds = white === black ? MIRROR_SEEDS : SEEDS;
+const queue = [];
+for (const style of STYLES) queue.push([style, 'normal', style, 'normal', MIRROR_SEEDS]);
+for (const [white, black] of [
+  ['rusher', 'tactician'],
+  ['tactician', 'rusher'],
+  ['fortress', 'rusher'],
+  ['rusher', 'fortress'],
+  ['tactician', 'fortress'],
+  ['fortress', 'tactician'],
+]) queue.push([white, 'normal', black, 'normal', SEEDS]);
+for (const style of STYLES) {
+  for (const [whiteDiff, blackDiff] of [
+    ['hard', 'normal'],
+    ['normal', 'hard'],
+    ['normal', 'easy'],
+    ['easy', 'normal'],
+    ['hard', 'easy'],
+    ['easy', 'hard'],
+  ]) queue.push([style, whiteDiff, style, blackDiff, SEEDS]);
+}
+for (const [whiteStyle, whiteDiff, blackStyle, blackDiff, seeds] of queue) {
   for (const seed of seeds) {
-    const game = play(seed, white, black);
+    const game = play(seed, whiteStyle, whiteDiff, blackStyle, blackDiff);
     games.push(game);
-    process.stderr.write(`${white} vs ${black} seed ${seed}: ${game.winner ?? 'unfinished'} wave ${game.wave} ${game.seconds}s\n`);
+    process.stderr.write(`${whiteStyle}/${whiteDiff} vs ${blackStyle}/${blackDiff} seed ${seed}: ${game.winner ?? 'unfinished'} wave ${game.wave} ${game.seconds}s\n`);
   }
 }
 
-const mirrors = games.filter((game) => game.white === game.black && game.white === 'normal' && game.seed <= 3);
+const mirrors = games.filter((game) => game.white === game.black && game.whiteDiff === 'normal' && game.blackDiff === 'normal' && game.seed === 1);
 const desyncs = [];
 for (const game of mirrors) {
-  const again = play(game.seed, game.white, game.black);
+  const again = play(game.seed, game.white, game.whiteDiff, game.black, game.blackDiff);
   if (again.fingerprint !== game.fingerprint) {
     desyncs.push({ seed: game.seed, first: game.fingerprint, second: again.fingerprint });
   }
@@ -289,7 +306,7 @@ const report = {
   maxTicks: MAX_TICKS,
   tickSeconds: TICK_SECONDS,
   seeds: SEEDS,
-  note: 'Both sides are AI. Who spends first alternates each tick. Damage in a step is chosen before it is applied. Even seeds give White the direct paths and odd seeds give them to Black. Mirror matchups use 24 seeds. A match still playing at the tick cap is unfinished.',
+  note: 'Personality and difficulty are separate. Mirrors are the same style at Normal, 24 seeds. Cross games are the six style pairs at Normal, 12 seeds. The ladder keeps the style equal and changes Easy, Normal, and Hard. Who spends first alternates each tick. Even seeds give White the direct paths and odd seeds give them to Black. A match still playing at the tick cap is unfinished.',
   mirrorSeeds: MIRROR_SEEDS,
   crossSeeds: SEEDS,
   summary: summarize(games),

@@ -39,9 +39,9 @@ import { shouldPublish } from './publish.js';
 import { loadCareer, recordResult } from './record.js';
 import { armAudio, playTap, playVictory, playWave } from './sound.js';
 import './board-square.js';
-import { markTutorial, setDifficulty, setMuted } from '../prefs/prefs_state.js';
+import { markTutorial, setDifficulty, setMuted, setOpponent } from '../prefs/prefs_state.js';
 import { connectStore, store, type RootState } from '../store.js';
-import type { Difficulty, GameState, PieceKind, PlayerCommand, Side, SoldierKind, SpellId } from './types.js';
+import type { Difficulty, GameState, Personality, PieceKind, PlayerCommand, Side, SoldierKind, SpellId } from './types.js';
 import { BLOCKS, PIECES, SOLDIERS, SPELLS, SUDDEN, combatOf, overchargeCost, overcharged, repairCost, squareName, upgradeCost } from './units.js';
 import type { Unsubscribe } from 'firebase/firestore';
 
@@ -52,6 +52,7 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
   @state() private signedIn = false;
   @state() private career = '';
   @state() private difficulty: Difficulty = 'normal';
+  @state() private opponent: Personality = 'fortress';
   @state() private joinValue = '';
 
   private raf = 0;
@@ -96,6 +97,7 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
   override stateChanged(state: RootState): void {
     this.slice = state.game;
     this.difficulty = state.prefs.difficulty;
+    this.opponent = state.prefs.opponent;
     this.muted = state.prefs.muted;
     this.signedIn = state.user.current !== null;
     const uid = state.user.current?.uid ?? '';
@@ -487,7 +489,7 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
   private start(mode: 'ai' | 'local'): void {
     const seed = (Date.now() ^ Math.floor(Math.random() * 1_000_000_000)) >>> 0 || 1;
     const seen = store.getState().prefs.seenTutorial;
-    store.dispatch(startLocal({ mode, difficulty: this.difficulty, seed }));
+    store.dispatch(startLocal({ mode, difficulty: this.difficulty, seed, personality: mode === 'ai' ? this.opponent : undefined }));
     if (mode === 'ai') store.dispatch(selectSquare({ file: 3, rank: 1 }));
     this.tutorial = mode === 'ai' && !seen ? 0 : -1;
     if (this.tutorial === 0) store.dispatch(setHoldAi(true));
@@ -660,6 +662,8 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
         box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35);
       }
       .choices, .spells, .row { display: flex; flex-wrap: wrap; gap: 8px; }
+      .choices label { display: flex; flex-direction: column; gap: 4px; font-size: 0.85rem; }
+      .choices select { min-height: 40px; min-width: 9.5rem; font: inherit; }
       button, .link {
         min-height: 44px;
         border-radius: 8px;
@@ -782,11 +786,18 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
         <p style="text-align:center; margin:0;">Two kings. One board. The towers never move. Their soldiers do.</p>
         <div class="card">
           <div class="choices">
-            <label>AI
+            <label>Difficulty
               <select .value=${this.difficulty} @change=${(event: Event) => store.dispatch(setDifficulty((event.target as HTMLSelectElement).value as Difficulty))}>
-                <option value="easy">Easy · Rusher</option>
-                <option value="normal">Normal · Fortress</option>
-                <option value="hard">Hard · Tactician</option>
+                <option value="easy">Easy</option>
+                <option value="normal">Normal</option>
+                <option value="hard">Hard</option>
+              </select>
+            </label>
+            <label>Opponent
+              <select .value=${this.opponent} @change=${(event: Event) => store.dispatch(setOpponent((event.target as HTMLSelectElement).value as Personality))}>
+                <option value="rusher">Rusher</option>
+                <option value="fortress">Fortress</option>
+                <option value="tactician">Tactician</option>
               </select>
             </label>
             <button type="button" @click=${() => this.start('ai')}>Play vs AI</button>

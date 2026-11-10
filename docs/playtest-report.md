@@ -119,3 +119,31 @@ Equal steps now prefer the step that moves toward the target. A point halfway be
 | Tactician vs Fortress | 12 | 12–0 | 100% | 131s |
 
 Every mirror is inside 40–60%. Tactician still beats Fortress and Rusher in all 24 cross games. Slowing Tactician's think from 1.2 seconds to 1.6 made the hard mirrors lopsided again, so the think rate stayed. Tactician now buys one upgrade at a time and blesses a shorter window before the launch.
+
+## Personalities apart from difficulty
+
+Difficulty and personality are separate. Easy thinks every 5 seconds, skips about half of the follow-up decisions, and holds 36 extra gold. Normal thinks every 2.5 seconds, skips about a fifth, and holds 20. Hard thinks every 1.2 seconds, does not skip, and spends as soon as the price is covered. The think rates are unchanged. Rusher banks gold on pawns, then knights, and aims a wounded pawn unless the opponent has walled the camp or raised the queen. Fortress fills seven walls and repairs before it upgrades the front. Tactician finishes the queen before anything else, blesses the launch, and switches the mark onto a wounded tower. Against a walled camp it switches onto the front line. Hard Tactician also buys a longer back line.
+
+360 games. Nothing unfinished, no draws, no desyncs. Longest game 402 seconds. Mirrors are 24 seeds at Normal. Cross pairs are 12 seeds each way, also at Normal. The ladder keeps the personality the same.
+
+| Matchup | Games | Wins (White–Black) | White share | Mean |
+| --- | --- | --- | --- | --- |
+| Rusher vs Rusher | 24 | 14–10 | 58% | 231s |
+| Fortress vs Fortress | 24 | 10–14 | 42% | 268s |
+| Tactician vs Tactician | 24 | 12–12 | 50% | 173s |
+| Rusher vs Tactician | 12 | 8–4 | 67% | 207s |
+| Tactician vs Rusher | 12 | 3–9 | 25% | 224s |
+| Fortress vs Rusher | 12 | 8–4 | 67% | 248s |
+| Rusher vs Fortress | 12 | 4–8 | 33% | 244s |
+| Tactician vs Fortress | 12 | 7–5 | 58% | 185s |
+| Fortress vs Tactician | 12 | 4–8 | 33% | 183s |
+
+Across both directions, Rusher beats Tactician 17–7 (71%), Fortress beats Rusher 16–8 (67%), and Tactician beats Fortress 15–9 (62%). Each mirror is inside 40–60%.
+
+| Ladder, same personality | Hard vs Normal | Normal vs Easy | Hard vs Easy |
+| --- | --- | --- | --- |
+| Rusher | 17–7 | 24–0 | 23–1 |
+| Fortress | 18–6 | 23–1 | 24–0 |
+| Tactician | 22–2 | 24–0 | 24–0 |
+
+Hard beats Normal, and Normal beats Easy, for every personality. The counts add both directions, 24 games each.

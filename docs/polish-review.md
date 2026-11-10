@@ -130,9 +130,19 @@ The simulation did not change, so the 108-game batch matches the hunt numbers ab
 
 108 games with the three personalities. Nothing unfinished, no draws. Longest game 386 seconds. Rusher vs Rusher is Black 12–0, mean 194s. Fortress vs Fortress is White 9–3, mean 306s. Tactician vs Tactician is White 4–8, mean 302s. Tactician beats Fortress 24–0 and Rusher 24–0. Fortress beats Rusher in 18 of 24. Eighteen games pass five minutes. Overcharge is 7.7 per game.
 
+## Personality and sprite pass
+
+| Category | Was | Now | What changed |
+| --- | --- | --- | --- |
+| AI / difficulty curve | 8 | 9 | Personality is chosen per opponent. Rusher, Fortress, and Tactician counter each other, and Easy, Normal, and Hard stay in that order when the personality matches. |
+| Visual polish | 8 | 8 | Soldiers use the same upper-left light as the towers: cloth folds, horse muscle, cannon sheen, a mage glow, and plate shading. They are still simpler than the tower plates. |
+| Performance | 7 | 7 | The atlas is still one sheet, 432×576. At 4× CPU and wave 12, idle frames were 16.7–19.1ms and a step plus paint was 17.6–20.2ms. The previous band was 17.9–18.1 idle and 18.7–19.0 stressed. |
+
+**Overall now: 9.** A player can pick who they are fighting, and that choice changes the game. It is still not a 10.
+
 ## Still left for a 10
 
-- Tactician still beats Fortress and Rusher in every cross game. Slowing its think made the hard mirrors lopsided, so the 1.2 second think stayed.
-- The soldier atlas is still flatter than the tower illustrations.
+- Rusher beats Tactician in 17 of 24 games (71%), just past the 30–70 band. Fortress beats Rusher 16–8, and Tactician beats Fortress 15–9.
+- The soldier drawings are shaded, and they are still simpler than the tower plates.
 - Online rematch has no ready check, and the 30-second resume has not been sat through in two browsers on a real network.
 - A phone can install the app after one visit. The service worker caches the shell and then every same-origin file it fetches. A cold offline install, before that first visit, still has nothing to show.

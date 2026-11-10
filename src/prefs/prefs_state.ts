@@ -1,11 +1,13 @@
 import { createSlice, type PayloadAction } from '@reduxjs/toolkit';
 
-import type { Difficulty } from '../game/types.js';
+import type { Difficulty, Personality } from '../game/types.js';
 
 export type TeamPalette = 'classic' | 'bright';
 
 export interface PrefsState {
   difficulty: Difficulty;
+  /** Computer style. Separate from Easy, Normal, and Hard. */
+  opponent: Personality;
   muted: boolean;
   /** 0 to 1. */
   volume: number;
@@ -20,6 +22,7 @@ const KEY = 'chessdefense-prefs';
 
 const defaults: PrefsState = {
   difficulty: 'normal',
+  opponent: 'fortress',
   muted: false,
   volume: 0.5,
   seenTutorial: false,
@@ -35,9 +38,13 @@ function load(): PrefsState {
     const difficulty = parsed.difficulty === 'easy' || parsed.difficulty === 'hard' || parsed.difficulty === 'normal'
       ? parsed.difficulty
       : defaults.difficulty;
+    const opponent = parsed.opponent === 'rusher' || parsed.opponent === 'fortress' || parsed.opponent === 'tactician'
+      ? parsed.opponent
+      : defaults.opponent;
     const volume = typeof parsed.volume === 'number' ? Math.min(1, Math.max(0, parsed.volume)) : defaults.volume;
     return {
       difficulty,
+      opponent,
       muted: parsed.muted === true,
       volume,
       seenTutorial: parsed.seenTutorial === true,
@@ -64,6 +71,9 @@ const prefsSlice = createSlice({
     setDifficulty(state, action: PayloadAction<Difficulty>) {
       state.difficulty = action.payload;
     },
+    setOpponent(state, action: PayloadAction<Personality>) {
+      state.opponent = action.payload;
+    },
     setMuted(state, action: PayloadAction<boolean>) {
       state.muted = action.payload;
     },
@@ -82,5 +92,5 @@ const prefsSlice = createSlice({
   },
 });
 
-export const { setDifficulty, setMuted, setVolume, markTutorial, setPalette, setMusic } = prefsSlice.actions;
+export const { setDifficulty, setOpponent, setMuted, setVolume, markTutorial, setPalette, setMusic } = prefsSlice.actions;
 export const prefsReducer = prefsSlice.reducer;

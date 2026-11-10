@@ -1,66 +1,127 @@
 import { tryAim, tryOvercharge, tryPlaceBlock, tryRepair, trySpell, tryUpgrade } from './commands.js';
 import { chebyshev } from './pathing.js';
-import type { GameState, PieceKind, Side, Tower } from './types.js';
+import type { Difficulty, GameState, Personality, PieceKind, Side, Tower } from './types.js';
 import { AI_PERIOD, BLOCKS, SPELLS, buildableRows, combatOf, overchargeCost, repairCost, upgradeCost } from './units.js';
 
-export type Personality = 'rusher' | 'fortress' | 'tactician';
+export type { Personality };
 
-/** Easy rushes cheap pieces. Normal walls the camp and saves mana. Hard aims and times the burst. */
-export function personalityOf(difficulty: GameState['difficulty']): Personality {
+/**
+ * Reaction time, how often a decision is fumbled, and gold held back.
+ * These sit on top of any personality, so Hard still outspends Easy
+ * when both play the same style.
+ */
+export const KNACK: Record<Difficulty, { period: number; slip: number; thrift: number }> = {
+  easy: { period: AI_PERIOD.easy, slip: 0.45, thrift: 36 },
+  normal: { period: AI_PERIOD.normal, slip: 0.22, thrift: 20 },
+  hard: { period: AI_PERIOD.hard, slip: 0, thrift: 0 },
+};
+
+/** The style a difficulty uses when the player has not picked one. */
+export function personalityOf(difficulty: Difficulty): Personality {
   if (difficulty === 'easy') return 'rusher';
   if (difficulty === 'hard') return 'tactician';
   return 'fortress';
 }
 
+export function styleOf(state: GameState): Personality {
+  return state.personality ?? personalityOf(state.difficulty);
+}
+
 /**
  * One decision for the computer side. Towers do not move.
- * The difficulty picks a personality. The rng on the match advances so the
- * same seed replays the same game.
+ * The rng on the match advances so the same seed replays the same game.
  */
 export function aiAct(state: GameState): void {
-  const period = AI_PERIOD[state.difficulty];
-  if (state.tick % period !== 0) return;
+  const knack = KNACK[state.difficulty];
+  if (state.tick % knack.period !== 0) return;
   const side: Side = state.humanSide === 'white' ? 'black' : 'white';
-  const style = personalityOf(state.difficulty);
+  const style = styleOf(state);
   if (style === 'rusher') rush(state, side);
   else if (style === 'fortress') fortify(state, side);
   else tactician(state, side);
 }
 
-/** Early gold goes to pawns and knights, then a short wall. */
+/** Bank every coin for pawns, then knights. A wall only appears once the line is finished. */
 function rush(state: GameState, side: Side): void {
   chooseAim(state, side);
-  if (state.gold[side] >= 48 && improve(state, side, 1)) return;
-  if (state.gold[side] >= 48 && layBlock(state, side)) return;
-  if (state.gold[side] >= 70 && improveKnight(state, side)) return;
-  if (state.gold[side] < 100 && roll(state, side) < 0.5) return;
+  if (pawnsOpen(state, side)) {
+    if (afford(state, side, 18)) improve(state, side, 1);
+    return;
+  }
+  if (afford(state, side, BLOCKS.cost) && layBlock(state, side)) return;
+  if (slip(state, side)) return;
+  if (afford(state, side, 26) && improveKnight(state, side)) return;
   if (mend(state, side, true)) return;
-  if (surge(state, side)) return;
 }
 
-/** Fill the legal lanes, repair what is bleeding, and hold mana for Heal and Blast. */
+/** Fill the lanes and repair them. Gold left over stays on the front line. */
 function fortify(state: GameState, side: Side): void {
   chooseAim(state, side);
   if (mendTown(state, side)) return;
   if (layBlock(state, side)) return;
-  if (state.gold[side] >= 72 && improve(state, side, 1)) return;
+  if (slip(state, side)) return;
+  if (afford(state, side, 18) && improve(state, side, 1)) return;
   if (holdMana(state, side)) return;
-  if (state.gold[side] >= 90) surge(state, side);
 }
 
-/** Switch the mark onto a weak tower and spend the buff on the wave that is about to leave. */
+/**
+ * The queen is finished before any other tower. Early waves stay thin,
+ * which is what a pawn rush punishes. After that the mark moves to
+ * whatever the opponent left at level 1.
+ */
 function tactician(state: GameState, side: Side): void {
   chooseAim(state, side);
+  if (raiseQueen(state, side)) return;
   if (prepareWave(state, side)) return;
   if (defendTown(state, side)) return;
-  const building = state.nextWaveTick - state.tick > 30;
+  const queenReady = livingQueen(state, side);
+  const other = side === 'white' ? 'black' : 'white';
+  const front = rankSteps(state, other, 'pawn') + rankSteps(state, other, 'knight');
+  const walls = state.blocks.filter((block) => block.side === other && block.hp > 0).length;
+  const rushed = front >= 4 && walls * 2 < front;
+  const back = rankSteps(state, side, 'rook') + rankSteps(state, side, 'bishop');
+  const backCap = rushed ? 1 : state.difficulty === 'hard' ? 4 : state.difficulty === 'normal' ? 2 : 1;
+  if (back < backCap && queenReady && queenReady.level >= 3 && state.gold[side] >= 90 + KNACK[state.difficulty].thrift && improve(state, side, 1)) return;
   if (blastNow(state, side)) return;
   if (mend(state, side, true)) return;
-  if (roll(state, side) >= 0.25 && improve(state, side, 1)) return;
-  if (mend(state, side, false)) return;
   if (surge(state, side)) return;
-  if (building && layBlock(state, side)) return;
+  const queen = livingQueen(state, side);
+  if (queen && queen.level >= 3 && layBlock(state, side)) return;
   cast(state, side);
+}
+
+function pawnsOpen(state: GameState, side: Side): boolean {
+  return state.towers.some((tower) => tower.side === side && tower.kind === 'pawn' && tower.hp > 0 && tower.level < 3);
+}
+
+function rankSteps(state: GameState, side: Side, kind: PieceKind): number {
+  return state.towers.reduce((sum, tower) => (
+    tower.side === side && tower.kind === kind && tower.hp > 0 ? sum + tower.level - 1 : sum
+  ), 0);
+}
+
+function livingQueen(state: GameState, side: Side): Tower | undefined {
+  return state.towers.find((tower) => tower.side === side && tower.kind === 'queen' && tower.hp > 0);
+}
+
+function raiseQueen(state: GameState, side: Side): boolean {
+  const queen = livingQueen(state, side);
+  if (!queen || queen.level >= 3) return false;
+  const patience = state.difficulty === 'hard' ? 0 : 36;
+  if (!afford(state, side, upgradeCost(queen.kind, queen.level) + patience)) return false;
+  const raised = tryUpgrade(state, side, queen.file, queen.rank);
+  if (!raised.ok) return false;
+  apply(state, raised.state);
+  return true;
+}
+
+function slip(state: GameState, side: Side): boolean {
+  const rate = KNACK[state.difficulty].slip;
+  return rate > 0 && roll(state, side) < rate;
+}
+
+function afford(state: GameState, side: Side, cost: number): boolean {
+  return state.gold[side] >= cost + KNACK[state.difficulty].thrift;
 }
 
 const VALUE: Record<PieceKind, number> = {
@@ -85,9 +146,12 @@ function improve(state: GameState, side: Side, buys: number): boolean {
       const score = (tower: typeof a) => VALUE[tower.kind] * (4 - tower.level) + hurt(tower);
       return score(b) - score(a);
     });
-    const pick = state.difficulty === 'easy'
+    const style = styleOf(state);
+    const pick = style === 'rusher'
       ? ranked.find((tower) => tower.kind === 'pawn') ?? null
-      : ranked[0];
+      : style === 'tactician'
+        ? ranked.find((tower) => tower.kind === 'queen' || tower.kind === 'rook' || tower.kind === 'bishop') ?? null
+        : ranked.find((tower) => tower.kind === 'pawn' || tower.kind === 'knight') ?? null;
     if (!pick) break;
     const raised = tryUpgrade(state, side, pick.file, pick.rank);
     if (!raised.ok) break;
@@ -162,38 +226,67 @@ function surge(state: GameState, side: Side): boolean {
 function chooseAim(state: GameState, side: Side): void {
   const foes = state.towers.filter((tower) => tower.side !== side && tower.hp > 0);
   if (foes.length === 0) return;
-  if (state.difficulty === 'easy') {
+  const style = styleOf(state);
+  if (style === 'rusher') {
+    const other: Side = side === 'white' ? 'black' : 'white';
+    const theirPawns = rankSteps(state, other, 'pawn');
+    const queen = foes.find((tower) => tower.kind === 'queen');
+    const walled = state.blocks.filter((block) => block.side === other && block.hp > 0).length >= 4;
+    const greedy = Boolean(queen && queen.level >= 2 && theirPawns < queen.level);
     const pawns = foes.filter((tower) => tower.kind === 'pawn');
-    if (pawns.length === 0) {
-      if (state.waveTarget[side]) {
-        const cleared = tryAim(state, side, -1, -1);
-        if (cleared.ok) apply(state, cleared.state);
-      }
+    const pawn = [...(pawns.length > 0 ? pawns : foes)].sort((a, b) => (
+      a.hp / a.maxHp - b.hp / b.maxHp || Math.abs(a.file - 3.5) - Math.abs(b.file - 3.5) || a.file - b.file
+    ))[0];
+    const focused = (walled || greedy) && queen ? queen : pawn;
+    if (!focused) return;
+    if (state.difficulty === 'easy' && roll(state, side) < 0.5) {
+      const sloppy = foes[Math.floor(roll(state, side) * foes.length)] ?? focused;
+      mark(state, side, sloppy);
       return;
     }
+    mark(state, side, focused);
+    return;
   }
   const exposed = (tower: Tower) => (side === 'white' ? tower.rank : 7 - tower.rank);
   const deployed = (tower: Tower) => state.soldiers.filter((soldier) => soldier.hp > 0 && soldier.originId === tower.id).length;
-  const pool = state.difficulty === 'easy' ? foes.filter((tower) => tower.kind === 'pawn') : foes;
+  const pool = foes;
   const weakest = [...pool].sort((a, b) => (
-    (a.hp / a.maxHp - deployed(a) * 0.25) - (b.hp / b.maxHp - deployed(b) * 0.25)
+    (style === 'tactician' ? a.level - b.level : 0)
+    || (a.hp / a.maxHp - deployed(a) * 0.25) - (b.hp / b.maxHp - deployed(b) * 0.25)
     || exposed(a) - exposed(b)
+    || Math.abs(a.file - 3.5) - Math.abs(b.file - 3.5)
     || a.file - b.file
   ))[0]!;
   let pick = weakest;
-  if (state.difficulty === 'hard') {
-    const crowded = [...foes].filter((tower) => tower.kind !== 'king' && deployed(tower) >= 3)
-      .sort((a, b) => deployed(b) - deployed(a) || a.file - b.file)[0];
-    const queen = foes.find((tower) => tower.kind === 'queen' && tower.hp / tower.maxHp > 0.25);
-    const rook = foes.filter((tower) => tower.kind === 'rook' && tower.hp > 0).sort((a, b) => b.hp - a.hp)[0];
-    pick = crowded ?? queen ?? rook ?? weakest;
+  if (style === 'tactician') {
+    const hurt = [...foes].filter((tower) => tower.kind !== 'king' && tower.hp / tower.maxHp < 0.85)
+      .sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp || Math.abs(a.file - 3.5) - Math.abs(b.file - 3.5) || a.file - b.file)[0];
+    const queen = foes.find((tower) => tower.kind === 'queen');
+    const enemyWalls = state.blocks.filter((block) => block.side !== side && block.hp > 0).length;
+    const ownWalls = state.blocks.filter((block) => block.side === side && block.hp > 0).length;
+    const front = [...foes].filter((tower) => tower.kind === 'pawn').sort((a, b) => (
+      a.hp / a.maxHp - b.hp / b.maxHp || exposed(a) - exposed(b) || a.file - b.file
+    ))[0];
+    const behindWalls = enemyWalls >= 4 && enemyWalls > ownWalls + 2;
+    pick = behindWalls ? (hurt ?? front ?? queen ?? weakest) : (hurt ?? queen ?? weakest);
+    if (state.difficulty === 'easy' && roll(state, side) < 0.55) {
+      const king = foes.find((tower) => tower.kind === 'king');
+      if (king) pick = king;
+    }
+  } else if (state.difficulty === 'easy' && roll(state, side) < 0.45) {
+    const king = foes.find((tower) => tower.kind === 'king');
+    if (king) pick = king;
   } else if (pick.kind === 'king') {
     const other = foes.find((tower) => tower.kind !== 'king');
     if (other) pick = other;
   }
+  mark(state, side, pick);
+}
+
+function mark(state: GameState, side: Side, pick: Tower): void {
   const current = state.waveTarget[side];
   if (current && current.file === pick.file && current.rank === pick.rank) return;
-  if (pick.kind === 'king' && !current) return;
+  if (pick.kind === 'king' && !current && state.difficulty !== 'easy') return;
   const aimed = tryAim(state, side, pick.file, pick.rank);
   if (aimed.ok) apply(state, aimed.state);
 }
@@ -211,9 +304,10 @@ function improveKnight(state: GameState, side: Side): boolean {
 }
 
 function layBlock(state: GameState, side: Side): boolean {
-  const budget = Math.min(BLOCKS.max, state.difficulty === 'easy' ? 6 : state.difficulty === 'hard' ? 14 : BLOCKS.max);
+  const style = styleOf(state);
+  const budget = Math.min(BLOCKS.max, style === 'rusher' ? 3 : style === 'tactician' ? 4 : 7);
   const owned = state.blocks.filter((block) => block.side === side && block.hp > 0).length;
-  if (owned >= budget || state.gold[side] < BLOCKS.cost) return false;
+  if (owned >= budget || !afford(state, side, BLOCKS.cost)) return false;
   const gap = 4 + (state.seed % 7);
   const rows = buildableRows(side).sort((a, b) => side === 'white' ? b - a : a - b);
   for (const y of rows) {
@@ -235,8 +329,9 @@ function mendTown(state: GameState, side: Side): boolean {
     if (state.tick < tower.repairReadyTick) return false;
     if (state.gold[side] < repairCost(tower.maxHp - tower.hp)) return false;
     const ratio = tower.hp / tower.maxHp;
-    if (tower.kind === 'king') return ratio < 0.5;
-    return ratio < 0.72;
+    if (tower.kind === 'king') return ratio < (state.difficulty === 'easy' ? 0.35 : 0.5);
+    const cut = state.difficulty === 'hard' ? 0.78 : state.difficulty === 'normal' ? 0.64 : 0.38;
+    return ratio < cut;
   });
   if (wounded.length === 0) return false;
   const pick = [...wounded].sort((a, b) => woundScore(a) - woundScore(b))[0]!;

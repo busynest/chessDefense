@@ -4,6 +4,7 @@ export type SoldierKind = 'peasant' | 'knight' | 'archer' | 'cannon' | 'mage' | 
 export type SpellId = 'blessing' | 'heal' | 'blast';
 export type Mode = 'ai' | 'local' | 'online';
 export type Difficulty = 'easy' | 'normal' | 'hard';
+export type Personality = 'rusher' | 'fortress' | 'tactician';
 export type MatchStatus = 'menu' | 'lobby' | 'playing' | 'paused' | 'victory';
 
 export interface Square {
@@ -118,6 +119,8 @@ export interface GameState {
   status: MatchStatus;
   mode: Mode;
   difficulty: Difficulty;
+  /** How the computer spends, when set. Otherwise the difficulty's usual style. */
+  personality?: Personality;
   /** The side played by the human in a vs-AI match. Online host is white. */
   humanSide: Side;
   winner: Side | 'draw' | null;

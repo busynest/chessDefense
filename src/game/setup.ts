@@ -1,10 +1,10 @@
-import type { Difficulty, GameState, Mode, PieceKind, Side, Tower } from './types.js';
+import type { Difficulty, GameState, Mode, Personality, PieceKind, Side, Tower } from './types.js';
 import { emptyLedger } from './ledger.js';
 import { ECONOMY, PIECES, WAVES } from './units.js';
 
 const BACK: PieceKind[] = ['rook', 'knight', 'bishop', 'queen', 'king', 'bishop', 'knight', 'rook'];
 
-export function createMatch(options: { mode: Mode; difficulty: Difficulty; seed: number; humanSide?: Side }): GameState {
+export function createMatch(options: { mode: Mode; difficulty: Difficulty; seed: number; humanSide?: Side; personality?: Personality }): GameState {
   const seed = options.seed >>> 0 || 1;
   const towers: Tower[] = [];
   let nextId = 1;
@@ -40,6 +40,7 @@ export function createMatch(options: { mode: Mode; difficulty: Difficulty; seed:
     status: 'playing',
     mode: options.mode,
     difficulty: options.difficulty,
+    ...(options.personality ? { personality: options.personality } : {}),
     humanSide: options.humanSide ?? 'white',
     winner: null,
     seed,

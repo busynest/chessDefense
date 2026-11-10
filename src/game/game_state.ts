@@ -3,7 +3,7 @@ import { createSlice, current, type PayloadAction } from '@reduxjs/toolkit';
 import { tryAim, tryOvercharge, tryPlaceBlock, tryRemoveBlock, tryRepair, trySpell, tryUpgrade } from './commands.js';
 import { createMatch, createMenu } from './setup.js';
 import { step } from './simulate.js';
-import type { Difficulty, GameState, Side, SpellId, Square } from './types.js';
+import type { Difficulty, GameState, Personality, Side, SpellId, Square } from './types.js';
 import type { LinkPhase } from './link.js';
 
 export interface GameSliceState {
@@ -43,12 +43,13 @@ const gameSlice = createSlice({
       state.record = 'idle';
       state.link = 'live';
     },
-    startLocal(state, action: PayloadAction<{ mode: 'ai' | 'local'; difficulty: Difficulty; seed: number }>) {
+    startLocal(state, action: PayloadAction<{ mode: 'ai' | 'local'; difficulty: Difficulty; seed: number; personality?: Personality }>) {
       state.game = createMatch({
         mode: action.payload.mode,
         difficulty: action.payload.difficulty,
         seed: action.payload.seed,
         humanSide: 'white',
+        personality: action.payload.mode === 'ai' ? action.payload.personality : undefined,
       });
       state.selected = null;
       state.placing = null;

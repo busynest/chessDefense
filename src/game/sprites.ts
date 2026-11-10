@@ -20,19 +20,35 @@ interface Ink {
   dark: string;
   skin: string;
   wood: string;
+  hi: string;
+  shade: string;
 }
 
 function ink(side: Side, bright: boolean): Ink {
-  if (bright && side === 'white') {
-    return { cloth: '#d7eeff', metal: '#f4fbff', trim: '#1d6fbf', dark: '#10283d', skin: '#f6d2b0', wood: '#8a5a32' };
-  }
-  if (bright && side === 'black') {
-    return { cloth: '#2a1812', metal: '#1a100c', trim: '#ff9a3c', dark: '#0c0806', skin: '#c4896a', wood: '#6b3a22' };
-  }
-  if (side === 'white') {
-    return { cloth: '#e6eef6', metal: '#f3f6fa', trim: '#2c6ea5', dark: '#1d3348', skin: '#f0d0b0', wood: '#8d623c' };
-  }
-  return { cloth: '#2a221c', metal: '#3a322c', trim: '#c45a3a', dark: '#100c0a', skin: '#a87858', wood: '#5c3a24' };
+  const base = bright && side === 'white'
+    ? { cloth: '#d7eeff', metal: '#f4fbff', trim: '#1d6fbf', dark: '#10283d', skin: '#f6d2b0', wood: '#8a5a32' }
+    : bright && side === 'black'
+      ? { cloth: '#2a1812', metal: '#1a100c', trim: '#ff9a3c', dark: '#0c0806', skin: '#c4896a', wood: '#6b3a22' }
+      : side === 'white'
+        ? { cloth: '#e6eef6', metal: '#f3f6fa', trim: '#2c6ea5', dark: '#1d3348', skin: '#f0d0b0', wood: '#8d623c' }
+        : { cloth: '#2a221c', metal: '#3a322c', trim: '#c45a3a', dark: '#100c0a', skin: '#a87858', wood: '#5c3a24' };
+  return { ...base, hi: mix(base.metal, '#ffffff', 0.55), shade: mix(base.cloth, '#000000', 0.38) };
+}
+
+/** Upper-left light, matching the tower stone gradient. */
+function lit(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, color: string): CanvasGradient {
+  const gradient = ctx.createLinearGradient(x, y, x + w, y + h);
+  gradient.addColorStop(0, mix(color, '#ffffff', 0.42));
+  gradient.addColorStop(0.42, color);
+  gradient.addColorStop(1, mix(color, '#000000', 0.4));
+  return gradient;
+}
+
+function mix(hex: string, toward: string, t: number): string {
+  const read = (value: string) => [1, 3, 5].map((index) => Number.parseInt(value.slice(index, index + 2), 16));
+  const from = read(hex);
+  const to = read(toward);
+  return `#${from.map((channel, index) => Math.round(channel + (to[index] - channel) * t).toString(16).padStart(2, '0')).join('')}`;
 }
 
 export interface Atlas {
@@ -133,7 +149,10 @@ function mark(ctx: CanvasRenderingContext2D, side: Side, colors: Ink): void {
 }
 
 function head(ctx: CanvasRenderingContext2D, colors: Ink, x: number, y: number, r: number): void {
-  ctx.fillStyle = colors.skin;
+  const glow = ctx.createRadialGradient(x - r * 0.35, y - r * 0.4, r * 0.2, x, y, r);
+  glow.addColorStop(0, mix(colors.skin, '#ffffff', 0.45));
+  glow.addColorStop(1, mix(colors.skin, '#000000', 0.25));
+  ctx.fillStyle = glow;
   ctx.strokeStyle = colors.dark;
   ctx.lineWidth = 1.4;
   ctx.beginPath();
@@ -152,7 +171,7 @@ function peasant(ctx: CanvasRenderingContext2D, colors: Ink, step: number, strik
   ctx.moveTo(26, 40);
   ctx.lineTo(30 - step, 48);
   ctx.stroke();
-  ctx.fillStyle = colors.cloth;
+  ctx.fillStyle = lit(ctx, 14, 24, 20, 18, colors.cloth);
   ctx.beginPath();
   ctx.moveTo(16, 24);
   ctx.lineTo(32, 24);
@@ -161,10 +180,20 @@ function peasant(ctx: CanvasRenderingContext2D, colors: Ink, step: number, strik
   ctx.closePath();
   ctx.fill();
   ctx.stroke();
+  ctx.strokeStyle = colors.shade;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(22, 26);
+  ctx.quadraticCurveTo(20, 34, 23, 41);
+  ctx.stroke();
+  ctx.strokeStyle = colors.dark;
+  ctx.lineWidth = 2;
   ctx.fillStyle = colors.trim;
   ctx.fillRect(18, 28, 12, 3);
+  ctx.fillStyle = colors.hi;
+  ctx.fillRect(18, 28, 12, 1);
   head(ctx, colors, 24, 18, 5);
-  ctx.fillStyle = colors.wood;
+  ctx.fillStyle = lit(ctx, 26, 8, 12, 28, colors.wood);
   const fork = 30 + lean + (strike === 1 ? 6 : 0);
   ctx.fillRect(fork, 8, 2, 28);
   ctx.fillRect(fork - 4, 8, 10, 2);
@@ -175,13 +204,21 @@ function peasant(ctx: CanvasRenderingContext2D, colors: Ink, step: number, strik
 
 function knight(ctx: CanvasRenderingContext2D, colors: Ink, step: number, strike: number): void {
   const hoof = strike === 1 ? 3 : step;
-  ctx.fillStyle = colors.metal;
+  ctx.fillStyle = lit(ctx, 8, 26, 28, 16, colors.metal);
   ctx.strokeStyle = colors.dark;
   ctx.lineWidth = 1.6;
   ctx.beginPath();
   ctx.ellipse(22, 34, 14, 8, 0, 0, Math.PI * 2);
   ctx.fill();
   ctx.stroke();
+  ctx.strokeStyle = colors.shade;
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  ctx.moveTo(12, 32);
+  ctx.quadraticCurveTo(22, 28, 32, 33);
+  ctx.stroke();
+  ctx.strokeStyle = colors.dark;
+  ctx.fillStyle = lit(ctx, 32, 16, 12, 16, colors.metal);
   ctx.beginPath();
   ctx.moveTo(32, 30);
   ctx.quadraticCurveTo(40, 22, 42, 16);
@@ -201,8 +238,9 @@ function knight(ctx: CanvasRenderingContext2D, colors: Ink, step: number, strike
     ctx.lineTo(x + swing, 48);
     ctx.stroke();
   });
-  ctx.fillStyle = colors.trim;
+  ctx.fillStyle = lit(ctx, 18, 22, 8, 8, colors.trim);
   ctx.fillRect(18, 22, 8, 8);
+  ctx.strokeRect(18, 22, 8, 8);
   head(ctx, colors, 22, 16, 3.4);
   ctx.strokeStyle = colors.metal;
   ctx.lineWidth = 2.4;
@@ -222,7 +260,7 @@ function archer(ctx: CanvasRenderingContext2D, colors: Ink, step: number, strike
   ctx.moveTo(27, 40);
   ctx.lineTo(31 - step, 48);
   ctx.stroke();
-  ctx.fillStyle = colors.cloth;
+  ctx.fillStyle = lit(ctx, 16, 26, 16, 16, colors.cloth);
   ctx.beginPath();
   ctx.moveTo(16, 26);
   ctx.lineTo(32, 26);
@@ -231,7 +269,15 @@ function archer(ctx: CanvasRenderingContext2D, colors: Ink, step: number, strike
   ctx.closePath();
   ctx.fill();
   ctx.stroke();
-  ctx.fillStyle = colors.trim;
+  ctx.strokeStyle = colors.shade;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(24, 28);
+  ctx.lineTo(23, 41);
+  ctx.stroke();
+  ctx.strokeStyle = colors.dark;
+  ctx.lineWidth = 2;
+  ctx.fillStyle = lit(ctx, 18, 12, 12, 10, colors.trim);
   ctx.beginPath();
   ctx.moveTo(18, 12);
   ctx.lineTo(30, 12);
@@ -264,17 +310,36 @@ function archer(ctx: CanvasRenderingContext2D, colors: Ink, step: number, strike
 
 function cannon(ctx: CanvasRenderingContext2D, colors: Ink, step: number, strike: number): void {
   const recoil = strike < 0 ? 0 : [0, -5, -2][strike] ?? 0;
-  ctx.fillStyle = colors.dark;
+  ctx.fillStyle = lit(ctx, 9, 39, 10, 10, colors.dark);
   ctx.beginPath();
   ctx.arc(14 + step * 0.15, 44, 5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = lit(ctx, 27, 39, 10, 10, colors.dark);
+  ctx.beginPath();
   ctx.arc(32 + step * 0.15, 44, 5, 0, Math.PI * 2);
   ctx.fill();
   ctx.strokeStyle = colors.trim;
   ctx.lineWidth = 1.4;
+  ctx.beginPath();
+  ctx.arc(14 + step * 0.15, 44, 5, 0, Math.PI * 2);
+  ctx.moveTo(32 + step * 0.15 + 5, 44);
+  ctx.arc(32 + step * 0.15, 44, 5, 0, Math.PI * 2);
   ctx.stroke();
-  ctx.fillStyle = colors.wood;
+  ctx.strokeStyle = colors.hi;
+  ctx.lineWidth = 1;
+  for (const x of [14, 32]) {
+    ctx.beginPath();
+    ctx.moveTo(x + step * 0.15 - 3, 44);
+    ctx.lineTo(x + step * 0.15 + 3, 44);
+    ctx.moveTo(x + step * 0.15, 41);
+    ctx.lineTo(x + step * 0.15, 47);
+    ctx.stroke();
+  }
+  ctx.fillStyle = lit(ctx, 10, 34, 26, 6, colors.wood);
   ctx.fillRect(10, 34, 26, 6);
-  ctx.fillStyle = colors.metal;
+  ctx.strokeStyle = colors.dark;
+  ctx.strokeRect(10, 34, 26, 6);
+  ctx.fillStyle = lit(ctx, 18, 24, 22, 8, colors.metal);
   ctx.save();
   ctx.translate(18 + recoil, 30);
   ctx.rotate(-0.2);
@@ -303,7 +368,7 @@ function mage(ctx: CanvasRenderingContext2D, colors: Ink, step: number, strike: 
   ctx.moveTo(28, 42);
   ctx.lineTo(31 - step, 49);
   ctx.stroke();
-  ctx.fillStyle = colors.cloth;
+  ctx.fillStyle = lit(ctx, 12, 14, 24, 30, colors.cloth);
   ctx.beginPath();
   ctx.moveTo(24, 14);
   ctx.lineTo(36, 44);
@@ -311,20 +376,33 @@ function mage(ctx: CanvasRenderingContext2D, colors: Ink, step: number, strike: 
   ctx.closePath();
   ctx.fill();
   ctx.stroke();
+  ctx.strokeStyle = colors.shade;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(24, 18);
+  ctx.lineTo(20, 44);
+  ctx.moveTo(24, 18);
+  ctx.lineTo(28, 44);
+  ctx.stroke();
+  ctx.strokeStyle = colors.dark;
+  ctx.lineWidth = 2;
   ctx.fillStyle = colors.trim;
   ctx.fillRect(20, 28, 8, 3);
   head(ctx, colors, 24, 14, 4);
   ctx.fillStyle = colors.wood;
   ctx.fillRect(34, 10, 2, 30);
   const glow = strike < 0 ? 3 : [3.5, 6, 4][strike] ?? 3;
-  ctx.fillStyle = colors.trim;
+  const orb = ctx.createRadialGradient(34, 9, 0.4, 35, 10, glow);
+  orb.addColorStop(0, colors.hi);
+  orb.addColorStop(0.45, colors.trim);
+  orb.addColorStop(1, mix(colors.trim, '#000000', 0.2));
+  ctx.fillStyle = orb;
   ctx.beginPath();
   ctx.arc(35, 10, glow, 0, Math.PI * 2);
   ctx.fill();
-  ctx.fillStyle = colors.metal;
-  ctx.beginPath();
-  ctx.arc(35, 10, glow * 0.45, 0, Math.PI * 2);
-  ctx.fill();
+  ctx.strokeStyle = colors.hi;
+  ctx.lineWidth = 0.8;
+  ctx.stroke();
 }
 
 function guard(ctx: CanvasRenderingContext2D, colors: Ink, step: number, strike: number): void {
@@ -336,11 +414,20 @@ function guard(ctx: CanvasRenderingContext2D, colors: Ink, step: number, strike:
   ctx.moveTo(28, 40);
   ctx.lineTo(32 - step, 49);
   ctx.stroke();
-  ctx.fillStyle = colors.metal;
+  ctx.fillStyle = lit(ctx, 14, 22, 16, 18, colors.metal);
   ctx.fillRect(14, 22, 16, 18);
   ctx.strokeRect(14, 22, 16, 18);
+  ctx.fillStyle = colors.shade;
+  ctx.fillRect(14, 30, 16, 2);
+  ctx.fillStyle = colors.hi;
+  ctx.fillRect(16, 24, 4, 2);
   ctx.fillStyle = colors.trim;
   ctx.fillRect(20, 26, 4, 10);
+  ctx.fillStyle = colors.dark;
+  ctx.beginPath();
+  ctx.arc(17, 26, 0.8, 0, Math.PI * 2);
+  ctx.arc(27, 26, 0.8, 0, Math.PI * 2);
+  ctx.fill();
   ctx.beginPath();
   ctx.moveTo(16, 16);
   ctx.lineTo(20, 8);
