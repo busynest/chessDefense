@@ -134,6 +134,13 @@ export class ApplicationShell extends connect(connectStore)(LitElement) {
         font-weight: 700;
       }
 
+      @media (max-width: 720px) {
+        header { grid-template-columns: minmax(0, 1fr) auto; padding: 8px 10px; }
+        nav { display: none; }
+        .logo { font-size: 0.95rem; }
+        .logo img { width: 36px; height: 36px; }
+      }
+
       main {
         box-sizing: border-box;
         width: 100%;

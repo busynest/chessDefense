@@ -32,6 +32,15 @@ function tone(frequency: number, duration: number, type: OscillatorType, gain: n
   osc.stop(ctx.currentTime + duration);
 }
 
+let lastHit = 0;
+
+export function playHit(): void {
+  const now = performance.now();
+  if (now - lastHit < 90) return;
+  lastHit = now;
+  tone(520, 0.05, 'square', 0.03);
+}
+
 export function playWave(): void {
   tone(196, 0.18, 'triangle', 0.08);
   window.setTimeout(() => tone(262, 0.22, 'triangle', 0.07), 90);

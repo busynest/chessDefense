@@ -3,7 +3,7 @@ import { blockedSet, distToTower, fallbackAim, isBlockedCell, pathToTower, tower
 import { towerAt } from './chess.js';
 import type { GameState, Projectile, Side, Soldier, Tower } from './types.js';
 import { reportHarm } from './telemetry.js';
-import { ECONOMY, OVERCHARGE, PIECES, SOLDIERS, TICK_SECONDS, WAVES, combatOf, leakDamage, overcharged } from './units.js';
+import { ECONOMY, OVERCHARGE, PIECES, SOLDIERS, SUDDEN, TICK_SECONDS, WAVES, combatOf, leakDamage, overcharged } from './units.js';
 import { aiAct } from './ai.js';
 
 interface Strike {
@@ -20,6 +20,9 @@ export function step(input: GameState): GameState {
   if (input.status !== 'playing') return input;
   const state = structuredClone(input);
   state.tick += 1;
+  if (state.tick === SUDDEN.tick) {
+    state.banner = { text: 'The kings are exposed. Hits land harder.', until: state.tick + 50 };
+  }
   gain(state);
   const hash = navHash(blockedSet(state));
   if (hash !== state.navHash) {
@@ -287,6 +290,16 @@ function soldiersAct(state: GameState, shots: Strike[]): void {
   for (const soldier of state.soldiers) {
     if (soldier.hp <= 0 || soldier.rootedUntil > state.tick) continue;
     const stats = statsOf(soldier, state.tick);
+    if (state.tick >= SUDDEN.tick) {
+      const exposed = focusTower(state, soldier);
+      const exposedClose = exposed !== null && distToTower(soldier.x, soldier.y, exposed) <= stats.range;
+      if (exposedClose && soldier.attackReadyTick <= state.tick) {
+        const cell = towerCells(exposed)[0]!;
+        attacks.push({ soldier, foe: { tower: exposed, x: cell.x, y: cell.y }, wall: null, stats });
+        soldier.path = [];
+        continue;
+      }
+    }
     const foe = nearestFoe(state, soldier, stats.range);
     if (foe?.soldier && soldier.attackReadyTick <= state.tick) {
       attacks.push({ soldier, foe, wall: null, stats });
@@ -356,7 +369,7 @@ function soldiersAct(state: GameState, shots: Strike[]): void {
         lethal: foe.soldier.hp <= 0,
       });
     } else if (foe?.tower) {
-      const dealt = leakDamage(foe.tower.kind, stats.strength);
+      const dealt = towerHit(foe.tower.kind, stats.strength, state.tick);
       foe.tower.hp -= dealt;
       foe.tower.hurtBy = soldier.side;
       reportHarm({
@@ -456,6 +469,12 @@ function laneOf(soldier: Soldier): number {
 
 function bury(state: GameState): void {
   sweepDead(state);
+}
+
+function towerHit(kind: Tower['kind'], strength: number, tick: number): number {
+  if (tick < SUDDEN.tick) return leakDamage(kind, strength);
+  if (kind === 'king') return Math.max(1, Math.round(strength * SUDDEN.leak));
+  return Math.max(1, Math.round(leakDamage(kind, strength) * SUDDEN.tower));
 }
 
 function statsOf(soldier: Soldier, tick: number): { strength: number; speed: number; range: number; attackTicks: number } {

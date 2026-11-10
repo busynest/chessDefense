@@ -15,9 +15,10 @@ export function aiAct(state: GameState): void {
   if (state.tick % period !== 0) return;
   const side: Side = state.humanSide === 'white' ? 'black' : 'white';
   chooseAim(state, side);
-  if (state.difficulty === 'easy' && state.gold[side] >= 64 && improve(state, side, 1)) return;
-  if (state.difficulty === 'easy' && state.gold[side] >= 96 && layBlock(state, side)) return;
-  if (state.difficulty === 'easy' && roll(state, side) < 0.5) return;
+  if (state.difficulty === 'easy' && state.gold[side] >= 48 && improve(state, side, 1)) return;
+  if (state.difficulty === 'easy' && state.gold[side] >= 48 && layBlock(state, side)) return;
+  if (state.difficulty === 'easy' && state.gold[side] >= 70 && improveKnight(state, side)) return;
+  if (state.difficulty === 'easy' && state.gold[side] < 100 && roll(state, side) < 0.5) return;
   const building = state.nextWaveTick - state.tick > 30;
   const buys = state.difficulty === 'hard' ? 2 : 1;
   const hesitate = state.difficulty === 'normal' && roll(state, side) < 0.4;
@@ -166,15 +167,27 @@ function chooseAim(state: GameState, side: Side): void {
   if (aimed.ok) apply(state, aimed.state);
 }
 
+function improveKnight(state: GameState, side: Side): boolean {
+  const knight = state.towers.find((tower) => (
+    tower.side === side && tower.kind === 'knight' && tower.hp > 0 && tower.level < 3
+    && state.gold[side] >= upgradeCost(tower.kind, tower.level)
+  ));
+  if (!knight) return false;
+  const raised = tryUpgrade(state, side, knight.file, knight.rank);
+  if (!raised.ok) return false;
+  apply(state, raised.state);
+  return true;
+}
+
 function layBlock(state: GameState, side: Side): boolean {
-  const budget = Math.min(BLOCKS.max, state.difficulty === 'easy' ? 4 : state.difficulty === 'normal' ? 4 : 5);
+  const budget = Math.min(BLOCKS.max, state.difficulty === 'easy' ? 8 : state.difficulty === 'normal' ? 12 : 14);
   const owned = state.blocks.filter((block) => block.side === side && block.hp > 0).length;
   if (owned >= budget || state.gold[side] < BLOCKS.cost) return false;
-  const gap = 3 + Math.floor(roll(state, side) * 10);
+  const gap = 4 + (state.seed + (side === 'black' ? 3 : 0)) % 7;
   const rows = buildableRows(side).sort((a, b) => side === 'white' ? b - a : a - b);
   for (const y of rows) {
     for (let x = 0; x < 16; x += 1) {
-      if (Math.abs(x - gap) <= 1) continue;
+      if (Math.abs(x - gap) <= 2) continue;
       if (state.blocks.some((block) => block.x === x && block.y === y && block.hp > 0)) continue;
       const placed = tryPlaceBlock(state, side, x, y);
       if (!placed.ok) continue;

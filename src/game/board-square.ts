@@ -8,6 +8,7 @@ import { pieceSvg } from './glyphs.js';
 import { handleCell, handleSquare } from './input.js';
 import './one-square.js';
 import { soldierSvg } from './soldiers.js';
+import { playHit } from './sound.js';
 import { connectStore, type RootState } from '../store.js';
 import type { GameState, PieceKind, Side, Square } from './types.js';
 import { previewRoute } from './pathing.js';
@@ -22,6 +23,7 @@ export class BoardSquare extends connect(connectStore)(LitElement) {
   @state() private ghost: SquareCell | null = null;
   private ruins: Ruin[] = [];
   private ashes: Ash[] = [];
+  private hits: Hit[] = [];
   private ruinTimer = 0;
 
   override stateChanged(state: RootState): void {
@@ -34,6 +36,18 @@ export class BoardSquare extends connect(connectStore)(LitElement) {
         if (!ids.has(tower.id)) {
           this.ruins.push({ file: tower.file, rank: tower.rank, side: tower.side, kind: tower.kind, born: now });
         }
+      }
+      for (const tower of next.towers) {
+        const prev = this.game.towers.find((item) => item.id === tower.id);
+        if (!prev || tower.hp >= prev.hp - 0.4) continue;
+        this.hits.push({
+          x: tower.file * 2 + 1,
+          y: tower.rank * 2 + 1.6,
+          text: String(Math.max(1, Math.round(prev.hp - tower.hp))),
+          born: now,
+          side: tower.side,
+        });
+        playHit();
       }
       for (const soldier of this.game.soldiers) {
         if (!soldiers.has(soldier.id)) {
@@ -48,6 +62,7 @@ export class BoardSquare extends connect(connectStore)(LitElement) {
       }
       this.ruins = this.ruins.filter((ruin) => now - ruin.born < 1500);
       this.ashes = this.ashes.filter((ash) => now - ash.born < 700);
+      this.hits = this.hits.filter((hit) => now - hit.born < 700);
       if (this.ruins.length > 0 || this.ashes.length > 0) {
         window.clearTimeout(this.ruinTimer);
         this.ruinTimer = window.setTimeout(() => this.requestUpdate(), 1600);
@@ -143,7 +158,38 @@ export class BoardSquare extends connect(connectStore)(LitElement) {
       }
       .unit.buff { filter: drop-shadow(0 0 4px #f6e27a); }
       .unit.strike { filter: brightness(1.7) drop-shadow(0 0 4px #fff1c4); }
+      .unit.white::after, .unit.black::after {
+        content: '';
+        position: absolute;
+        left: 50%;
+        bottom: -8%;
+        width: 42%;
+        height: 22%;
+        transform: translateX(-50%);
+      }
+      .unit.white::after { border-radius: 50%; background: #7ec8ff; }
+      .unit.black::after { background: #ffb15a; transform: translateX(-50%) rotate(45deg); }
+      .crowd .unit { animation: none; }
       .unit svg { width: 100%; height: 100%; }
+      .hit {
+        position: absolute;
+        z-index: 6;
+        transform: translate(-50%, -50%);
+        color: #fff6d8;
+        font-weight: 800;
+        font-size: 1.15rem;
+        background: rgba(40, 12, 6, 0.88);
+        border-radius: 6px;
+        padding: 0 5px;
+        text-shadow: 0 1px 0 #3a180c;
+        animation: rise 0.8s ease-out forwards;
+        pointer-events: none;
+      }
+      .hit.black { color: #ffd0b0; }
+      @keyframes rise {
+        from { opacity: 1; translate: 0 0; }
+        to { opacity: 0; translate: 0 -14px; }
+      }
       .shot { width: 2.6%; height: 0.9%; border-radius: 2px; background: #f4e7b0; box-shadow: 0 0 6px #fff1c0; }
       .shot.shell { width: 3%; height: 3%; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #fff, #8d8a84 55%, #2a2a28); box-shadow: 0 0 8px #ffb060; }
       .shot.arrow { width: 3.6%; height: 0.7%; background: linear-gradient(90deg, transparent, #f7f1e1 30%, #f7f1e1); }
@@ -207,7 +253,7 @@ export class BoardSquare extends connect(connectStore)(LitElement) {
       }
       @keyframes puff { to { transform: translate(-50%, -80%) scale(1.8); opacity: 0; } }
       @media (prefers-reduced-motion: reduce) {
-        .unit, .pulse i, .pulse b, .ruin, .ash { animation: none; }
+        .unit, .pulse i, .pulse b, .ruin, .ash, .hit { animation: none; }
       }
     `;
   }
@@ -266,7 +312,7 @@ export class BoardSquare extends connect(connectStore)(LitElement) {
         ${game.towers.filter((tower) => tower.mendedTick > 0 && game.tick - tower.mendedTick < 24).map((tower) => html`
           <div class="mend" style="left:${(tower.file + 0.5) / 8 * 100}%; top:${(7 - tower.rank + 0.5) / 8 * 100}%"></div>
         `)}
-        <div class="actors">
+        <div class="actors ${game.soldiers.length > 48 ? 'crowd' : ''}">
           ${(['white', 'black'] as const).flatMap((side) => previewRoute(game, side).map((cell) => html`
             <div class="route ${side}" style="left:${(cell.x + 0.5) / 16 * 100}%; top:${(15 - cell.y + 0.5) / 16 * 100}%"></div>
           `))}
@@ -293,6 +339,9 @@ export class BoardSquare extends connect(connectStore)(LitElement) {
           })}
           ${this.ashes.map((ash) => html`
             <div class="ash ${ash.side} ${ash.linked ? 'linked' : ''}" style="left:${(ash.x + 0.5) / 16 * 100}%; top:${(15 - ash.y + 0.5) / 16 * 100}%"></div>
+          `)}
+          ${this.hits.map((hit) => html`
+            <div class="hit ${hit.side}" style="left:${(hit.x + 0.5) / 16 * 100}%; top:${(15 - hit.y + 0.5) / 16 * 100}%">${hit.text}</div>
           `)}
           ${game.projectiles.map((shot) => {
             const t = Math.min(1, (game.tick - shot.born) / Math.max(1, shot.life));
@@ -365,6 +414,14 @@ interface Ruin {
   side: Side;
   kind: PieceKind;
   born: number;
+}
+
+interface Hit {
+  x: number;
+  y: number;
+  text: string;
+  born: number;
+  side: Side;
 }
 
 interface Ash {

@@ -17,6 +17,7 @@ import {
   playSpell,
   playUnblock,
   playerSide,
+  selectSquare,
   setOnlineNote,
   setPlacing,
   showMenu,
@@ -35,7 +36,7 @@ import './board-square.js';
 import { markTutorial, setDifficulty, setMuted } from '../prefs/prefs_state.js';
 import { connectStore, store, type RootState } from '../store.js';
 import type { Difficulty, GameState, PlayerCommand, Side, SpellId } from './types.js';
-import { BLOCKS, PIECES, SPELLS, combatOf, overchargeCost, overcharged, repairCost, squareName, upgradeCost } from './units.js';
+import { BLOCKS, PIECES, SPELLS, SUDDEN, combatOf, overchargeCost, overcharged, repairCost, squareName, upgradeCost } from './units.js';
 import type { Unsubscribe } from 'firebase/firestore';
 
 @customElement('chess-defense')
@@ -63,11 +64,12 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
   @state() private muted = false;
 
   private readonly steps = [
-    'Tap one of your pawns. The ring is its range. Towers never move.',
+    'Your front row is selected. The ring is that pawn\'s range. Towers never move.',
     'Upgrade spends gold. Level 3 is as high as a tower goes.',
     'White walls shades the two ranks in front of your towers. The gold strip in the middle stays open. Each side can own 36 walls. A maze that cuts a tower off, or bends the path too far, turns red.',
     'When the build timer ends, each living tower sends its soldier out of its own gate. If the tower falls, those soldiers fade with it.',
     'Tap an enemy tower and press T. The next wave marches on it. Clear sends them back to the King.',
+    'Overcharge appears on a level 3 tower. It spends gold for a short stronger burst, and that tower\'s price goes up each time.',
     'Spell buttons belong to the Queen. Pause freezes the clock. Menu leaves the match.',
   ];
 
@@ -325,6 +327,7 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
     const seed = (Date.now() ^ Math.floor(Math.random() * 1_000_000_000)) >>> 0 || 1;
     const seen = store.getState().prefs.seenTutorial;
     store.dispatch(startLocal({ mode, difficulty: this.difficulty, seed }));
+    if (mode === 'ai') store.dispatch(selectSquare({ file: 3, rank: 1 }));
     this.tutorial = mode === 'ai' && !seen ? 0 : -1;
     this.heardWave = -1;
     this.heardEnd = false;
@@ -444,11 +447,24 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
       }
       .banner { text-align: center; min-height: 1.2em; color: #f6e7a8; font-family: Cinzel, Palatino, serif; }
       .coach { margin: 0; color: #f3e6cf; font-size: 0.92rem; }
+      .dock { display: none; }
       @media (max-width: 720px) {
         .play { display: flex; flex-direction: column; }
-        .table { order: -1; }
-        .hud { padding: 10px; }
+        .table { order: -2; }
+        .hud { order: 0; padding: 10px; }
+        .hud .spells { display: none; }
         h1 { font-size: 1.7rem; }
+        .dock {
+          display: flex;
+          order: -1;
+          gap: 6px;
+          flex-wrap: wrap;
+          padding: 8px;
+          background: rgba(28, 18, 12, 0.94);
+          border: 1px solid #c4a574;
+          border-radius: 12px;
+        }
+        .dock button { flex: 1 1 30%; min-height: 44px; }
       }
     `;
   }
@@ -555,6 +571,24 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
         ${selected ? this.inspect(selected) : html`<div>Tap one of your towers to upgrade it.</div>`}
         ${sides.map((side) => this.spells(slice, side))}
       </aside>
+      ${this.dock(slice)}
+    `;
+  }
+
+  private dock(slice: GameSliceState): TemplateResult {
+    const game = slice.game;
+    const sides: Side[] = game.mode === 'local' ? ['white', 'black'] : [playerSide(slice) ?? 'white'];
+    return html`
+      <div class="dock">
+        <button type="button" @click=${() => store.dispatch(togglePause())}>${game.status === 'paused' ? 'Resume' : 'Pause'}</button>
+        ${sides.map((side) => html`
+          <button type="button" @click=${() => store.dispatch(setPlacing(slice.placing === side ? null : side))}>${side === 'white' ? 'White' : 'Black'} walls</button>
+          ${(['blessing', 'heal', 'blast'] as SpellId[]).map((spell) => {
+            const queen = game.towers.some((tower) => tower.side === side && tower.kind === 'queen' && tower.hp > 0);
+            return html`<button type="button" ?disabled=${!queen || game.mana[side] < SPELLS[spell].mana} @click=${() => handleSpell(side, spell)}>${side === 'black' && sides.length > 1 ? 'B ' : ''}${SPELLS[spell].label}</button>`;
+          })}
+        `)}
+      </div>
     `;
   }
 
@@ -659,7 +693,9 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
       <div class="end">
         <h2>${text}</h2>
         <p>${winner === 'draw' ? 'Both King towers fell together.' : 'The enemy King tower has fallen.'}</p>
-        <p>Wave ${game.wave} · ${seconds}s · White towers ${whiteLeft} · Black towers ${blackLeft}. ${saved}</p>
+        <p>Wave ${game.wave} · ${seconds}s${game.tick >= SUDDEN.tick ? ' · kings exposed' : ''}</p>
+        <p>Towers left: White ${whiteLeft}, Black ${blackLeft}. Walls left: White ${livingWalls(game, 'white')}, Black ${livingWalls(game, 'black')}.</p>
+        <p>Gold left: White ${Math.floor(game.gold.white)}, Black ${Math.floor(game.gold.black)}. ${saved}</p>
         <div class="row" style="justify-content:center;">
           ${game.mode === 'online' ? '' : html`<button type="button" @click=${() => this.start(game.mode === 'local' ? 'local' : 'ai')}>Rematch</button>`}
           <button type="button" @click=${() => this.leave()}>Back to menu</button>

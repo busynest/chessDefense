@@ -393,6 +393,18 @@ export function inBuildZone(side: Side, y: number): boolean {
   return BLOCKS.zoneRows[side].includes(y);
 }
 
+/**
+ * After five minutes the kings are exposed. Soldier hits on a King use the
+ * higher leak, and hits on every other tower are multiplied. Mirrors were
+ * still marching at eight minutes with both kings healthy.
+ */
+export const SUDDEN = {
+  tick: 3000,
+  /** A full hit. The 15% leak is what made a stalled king last for minutes. */
+  leak: 1,
+  tower: 2,
+};
+
 /** How often the AI considers an upgrade, a wall, a repair, or a spell, in ticks. */
 export const AI_PERIOD: Record<'easy' | 'normal' | 'hard', number> = {
   easy: 50,

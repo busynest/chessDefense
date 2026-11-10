@@ -9,7 +9,7 @@ import { createMatch } from './setup.js';
 import { step } from './simulate.js';
 import type { GameState, Soldier, Tower } from './types.js';
 import { shouldPublish } from './publish.js';
-import { BLOCKS, ECONOMY, KING_LEAK, OVERCHARGE, PIECES, SOLDIERS, WAVES, buildableRows, overchargeCost, repairCost, upgradeCost } from './units.js';
+import { BLOCKS, ECONOMY, KING_LEAK, OVERCHARGE, PIECES, SOLDIERS, SUDDEN, WAVES, buildableRows, overchargeCost, repairCost, upgradeCost } from './units.js';
 
 function playing(): GameState {
   return createMatch({ mode: 'local', difficulty: 'normal', seed: 7 });
@@ -149,6 +149,23 @@ test('easy spends gold on a pawn once the bank is high', () => {
   const after = state.towers.filter((tower) => tower.side === 'black' && tower.kind === 'pawn' && tower.level === 1).length;
   assert.ok(after < before);
   assert.ok(state.gold.black < 90);
+});
+
+test('after five minutes a soldier hurts the King harder', () => {
+  const wound = (tick: number) => {
+    const state = bare();
+    state.tick = tick - 1;
+    state.nextWaveTick = 99999;
+    const king = place(state, { side: 'black', kind: 'king', file: 4, rank: 7 });
+    place(state, { side: 'white', kind: 'king', file: 4, rank: 0 });
+    state.soldiers = [fighter({ id: 'axe', side: 'white', kind: 'guard', x: 8, y: 13, hp: 40, maxHp: 40, originId: 'w' })];
+    const next = step(state);
+    const left = next.towers.find((tower) => tower.id === king.id);
+    return king.hp - (left?.hp ?? king.hp);
+  };
+  const early = wound(20);
+  const late = wound(SUDDEN.tick);
+  assert.ok(late > early, `early ${early} late ${late}`);
 });
 
 test('the host publishes the tick the King falls', () => {
