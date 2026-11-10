@@ -1,10 +1,19 @@
-import { css, CSSResult, customElement, html, TemplateResult } from "lit-element";
-import { PageViewElement } from "../lazy-loader";
+import { css, html, type CSSResultGroup, type TemplateResult } from 'lit';
+import { customElement, property } from 'lit/decorators.js';
+import { PageViewElement } from '../lazy-loader.js';
+import './four-square.js';
+import './chess-bishop.js';
+import './chess-king.js';
+import './chess-knight.js';
+import './chess-pawn.js';
+import './chess-queen.js';
+import './chess-rook.js';
 
 @customElement('board-square')
 export class BoardSquare extends PageViewElement {
 
-  // @property ({type: Number})  private widthThis = false;
+  @property({ type: Number })
+  widthThis = 0;
 
 
   constructor() {
@@ -25,7 +34,7 @@ export class BoardSquare extends PageViewElement {
 
 
 
-  static get styles():CSSResult  {
+  static override get styles(): CSSResultGroup {
     return css`
 
     :host {
@@ -34,7 +43,8 @@ export class BoardSquare extends PageViewElement {
     .grid {
 
       height: 100%;
-      max-width: 800px;
+      max-width: min(800px, 100%);
+      box-sizing: border-box;
       margin: auto;
       display: grid;
       grid-gap: 2px;
@@ -64,7 +74,7 @@ export class BoardSquare extends PageViewElement {
         `
     }
 
-  protected render():TemplateResult {
+  protected override render(): TemplateResult {
     return html`
 
      
@@ -84,7 +94,7 @@ export class BoardSquare extends PageViewElement {
     	
      <!-- 1 -->
      <four-square id="a1">
-        <chess-rook id="RLB" on-click="_rook" new="pop"></chess-rook>
+        <chess-rook id="RLB" @click=${this._rook} new="pop"></chess-rook>
      </four-square>
 
      <!-- 2 -->
@@ -94,7 +104,7 @@ export class BoardSquare extends PageViewElement {
 
      <!-- 3 -->
      <four-square id="c1">
-       <chess-bishop myWidth="{{widthThis}}"></chess-bishop>
+       <chess-bishop .myWidth=${this.widthThis}></chess-bishop>
      </four-square>
 
      <!-- 4 -->
@@ -119,7 +129,7 @@ export class BoardSquare extends PageViewElement {
 
      <!-- 8 -->
      <four-square id="h1">
-       <chess-rook on-click="_rook"></chess-rook>
+       <chess-rook @click=${this._rook}></chess-rook>
      </four-square>
      
 
@@ -311,7 +321,7 @@ export class BoardSquare extends PageViewElement {
 
      <!-- 58 -->
      <four-square id="a8">
-           <chess-rook on-click="_rook"></chess-rook>
+           <chess-rook @click=${this._rook}></chess-rook>
      </four-square>
      <!-- 59 -->
      <four-square id="b8">
@@ -339,7 +349,7 @@ export class BoardSquare extends PageViewElement {
      </four-square>
      <!-- 64 -->
      <four-square id="h8">
-           <chess-rook on-click="_rook"></chess-rook>
+           <chess-rook @click=${this._rook}></chess-rook>
      </four-square>
 
      </div>
@@ -387,29 +397,3 @@ var arena, grid, i;
 
 
 **/
-
-/*
-      box: {
-        type: Array,
-        value: [
-          {x:"a1"}, {x:"b1"}, {x:"c1"}, {x:"d1"}, {x:"e1"}, {x:"f1"}, {x:"g1"}, {x:"h1"},
-          {x:"a2"}, {x:"b2"}, {x:"c2"}, {x:"d2"}, {x:"e2"}, {x:"f2"}, {x:"g2"}, {x:"h2"},
-          {x:"a3"}, {x:"b3"}, {x:"c3"}, {x:"d3"}, {x:"e3"}, {x:"f3"}, {x:"g3"}, {x:"h3"},
-          {x:"a4"}, {x:"b4"}, {x:"c4"}, {x:"d4"}, {x:"e4"}, {x:"f4"}, {x:"g4"}, {x:"h4"},
-          {x:"a5"}, {x:"b5"}, {x:"c5"}, {x:"d5"}, {x:"e5"}, {x:"f5"}, {x:"g5"}, {x:"h5"},
-          {x:"a6"}, {x:"b6"}, {x:"c6"}, {x:"d6"}, {x:"e6"}, {x:"f6"}, {x:"g6"}, {x:"h6"},
-          {x:"a7"}, {x:"b7"}, {x:"c7"}, {x:"d7"}, {x:"e7"}, {x:"f7"}, {x:"g7"}, {x:"h7"},
-          {x:"a8"}, {x:"b8"}, {x:"c8"}, {x:"d8"}, {x:"e8"}, {x:"f8"}, {x:"g8"}, {x:"h8"}
-        ]
-      }
-
-    <!-- Chess Defense Game -->
-    <div id="grid" class="grid">
-
-          <dom-repeat items="{{boxes}}">
-            <template><div id="[[box.x]]"></div></template>
-          </dom-repeat>
-
-    </div>
-
-*/

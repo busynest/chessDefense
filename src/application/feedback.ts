@@ -1,107 +1,93 @@
+import { css, html, type CSSResultGroup, type TemplateResult } from 'lit';
+import { customElement, property } from 'lit/decorators.js';
+import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
+import { connect } from 'pwa-helpers/connect-mixin.js';
+import { db } from 'pwa-auth';
 
-import { html, css, TemplateResult, CSSResult }     from 'lit-element';
-import { customElement, property } from "lit-element/lib/decorators.js"
-import { connect }                      from 'pwa-helpers/connect-mixin';
-import { store, RootState }                        from '../store';
-import { PageViewElement }              from '../lazy-loader';
+import { PageViewElement } from '../lazy-loader.js';
+import { connectStore, type RootState } from '../store.js';
 
 @customElement('contractors-questions')
-export class ContractorsQuestions extends connect(store)(PageViewElement) {
+export class ContractorsQuestions extends connect(connectStore)(PageViewElement) {
+  @property({ type: Boolean })
+  signedIn = false;
 
-  @property({type: Boolean}) private _user  = false;
-  @property({type: String})  private _photo = '';
+  @property({ type: String })
+  photo = '';
 
-  constructor() {
-    super();
+  @property({ type: String })
+  name = '';
+
+  override stateChanged(state: RootState): void {
+    const user = state.user.current;
+    this.signedIn = user !== null;
+    this.photo = user?.photoURL ?? '';
+    this.name = user?.displayName || user?.email || '';
   }
 
-  stateChanged(state: RootState) {
-    this._user  = state.settings!.currentUser;
-    this._photo = state.settings!.individual_photo;
-  }
+  private async activateFeedback(event: Event): Promise<void> {
+    event.preventDefault();
+    const form = event.currentTarget as HTMLFormElement;
+    const text = form.querySelector('#texts') as HTMLTextAreaElement;
 
-  protected firstUpdated() {
-    this.shadowRoot!.getElementById('send')!.addEventListener('click', (e:Event) => { e.preventDefault(); this.activateFeedback(); } );
-  }
+    if (!this.signedIn) {
+      text.value = 'Please sign in';
+      return;
+    }
 
-  private activateFeedback() {
-    let text:any = this.shadowRoot!.querySelector('#texts')!;
-    let feed:any = this.shadowRoot!.querySelector('#feedback')!
-    if ( this._user === true ) {
-      this.sendFeedback(text.value);
-      feed.reset();
-      text.value = "Thank you!";
-      text.setAttribute("disabled", "true");
-    } else { feed.reset(); text.value = "Please sign in"; }
-  }
-
-  private sendFeedback(messageText: any) {
-
-    // @ts-ignore - External Resources
-    return firebase
-    .firestore()
-    .collection('feedback')
-    .add({
-      name:           this._user,
-      text:           messageText,
-      profilePicUrl:  this._photo,
-      // @ts-ignore -- External Resourse
-      timestamp:      firebase.firestore.FieldValue.serverTimestamp()
-    }).catch( (error: any) => { console.error('Error writing message', error); });
-  
-  };
-
-  static get styles():CSSResult {
-    return css`
-
-        :host { display: block; }
-        h2 { margin: 0; }
-        .spec[on]     { display:           block; }
-        .spec         { display:           none; }
-
-        .visible[on]  { visibility:        visible; }
-        .visible      { visibility:        hidden; }
-
-        input[type=submit]:hover {
-          background-color:   #45a049;
-        }
-
-    `
-  }
-
-  protected render():TemplateResult {
-    return html`
-
-      <h2>Feedback</h2>
-
-      <form
-        id="feedback"
-        style="
-          box-sizing: border-box;" >
-
-        <p>Please leave your comments with us. </p>
-        <textarea id="texts" class="texts"></textarea>
-        <input
-          type  = "submit"
-          id    = "send"
-          class = "send"
-          style = "
-            box-sizing:         border-box;
-            -webkit-box-sizing: border-box;
-
-            border-radius:          4px;
-            -webkit-border-radius:  4px;
-
-            width:              100%;
-            background-color:   #4CAF50;
-            color:              white;
-            padding:            14px 20px;
-            margin:             8px 0;
-            border:             none;
-            cursor:             pointer;">
-
-      </form>
-
-    `;
+    try {
+      await addDoc(collection(db, 'feedback'), {
+        name: this.name,
+        text: text.value,
+        profilePicUrl: this.photo,
+        timestamp: serverTimestamp(),
+      });
+      form.reset();
+      text.value = 'Thank you!';
+      text.disabled = true;
+    } catch (error) {
+      console.error('Error writing message', error);
     }
   }
+
+  static override get styles(): CSSResultGroup {
+    return css`
+      :host {
+        display: block;
+      }
+
+      h2 {
+        margin: 0 0 8px;
+      }
+
+      textarea {
+        box-sizing: border-box;
+        width: 100%;
+        min-height: 120px;
+      }
+
+      input[type='submit'] {
+        box-sizing: border-box;
+        width: 100%;
+        margin: 8px 0;
+        padding: 14px 20px;
+        border: none;
+        border-radius: 4px;
+        background: #4caf50;
+        color: white;
+        cursor: pointer;
+      }
+    `;
+  }
+
+  protected override render(): TemplateResult {
+    return html`
+      <h2>Feedback</h2>
+      <form @submit=${this.activateFeedback}>
+        <p>Please leave your comments with us.</p>
+        <textarea id="texts"></textarea>
+        <input type="submit" value="Send" />
+      </form>
+    `;
+  }
+}

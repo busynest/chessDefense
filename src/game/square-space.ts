@@ -1,16 +1,9 @@
-import { customElement, html, LitElement, TemplateResult } from "lit-element";
+import { LitElement, html, type TemplateResult } from 'lit';
+import { customElement } from 'lit/decorators.js';
 
 @customElement('square-space')
 export class SquareSpace extends LitElement {
-
-  constructor() {
-    super();
-  }
-
-  protected render():TemplateResult {
-    return html`
-
-
-      `
+  protected override render(): TemplateResult {
+    return html``;
   }
 }

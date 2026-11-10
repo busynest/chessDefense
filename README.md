@@ -1,35 +1,37 @@
+# Chess Defense
 
-[Chess Defense](https://www.chessdefense.com)
+Chess Defense is a chess and tower-defense game, built as a Lit web-components PWA.
 
-# 1v1
-* Two Medieval Kings command an onslaught of villagers to brawl with magic and strategy to defend their own towns of Chess.
-* Each Chess Tower spawns a unique villager to raid with different values of Strength, Life, Speed.
-* 6 Types of Towers: King, Queen = Magic upgrades , Rook, Bishop, Knight, Pawn = Peasant
-* 4 Types of villagers: Archer, Knight, iron canon, Peasant.
-* Magic upgrades:
+## Stack
 
-# [NODEJS](https://nodejs.org/en/)
+- [Lit 3](https://lit.dev/) custom elements
+- [Redux Toolkit 2](https://redux-toolkit.js.org/) (`configureStore` and slices) with the [pwa-helpers](https://github.com/Polymer/pwa-helpers) `connect` mixin
+- [pwa-auth](https://www.npmjs.com/package/pwa-auth) for Firebase sign-in (`<user-icon>`, `<user-drawer>`, `<user-login>`, `<user-settings>`, `<email-reset>`)
+- Firebase 12 (the existing Chess Defense web config)
+- TypeScript compiled with `tsc`, served in development by `@web/dev-server`, and bundled for hosting with Rollup
 
-  Node.js® is a JavaScript runtime built on Chrome's V8 JavaScript engine. Node.js uses an event-driven, non-blocking I/O model that makes it lightweight and efficient. Node.js' package ecosystem, npm, is the largest ecosystem of open source libraries in the world.
+## Run
 
-# Firestore / Hosting / Cloud Functions / Storage
+```bash
+npm install
+npm start
+```
 
-# [WEBCOMPONENTS 1.2.0](https://www.webcomponents.org/)
+`npm start` typechecks and emits `out/`, then opens a dev server on port 8080 and keeps `tsc --watch` running. The page loads `out/application-shell.js`.
 
-  Web components are a set of web platform APIs that allow you to create new custom, reusable, encapsulated HTML tags to use in web pages and web apps. Custom components and widgets build on the Web Component standards, will work across modern browsers, and can be used with any JavaScript library or framework that works with HTML.
+```bash
+npm run typecheck
+npm run build
+```
 
-# Redux
+`npm run build` emits `out/` and writes the hosting bundle to `dist/` (JavaScript, `index.html`, manifest, and images). Firebase Hosting is pointed at `dist`.
 
-# 64 - GRID BOARD
-  <\one-square>
-  * Chess tower does not move / or moves slowly.
-# 256 - GRID BOARD
-  <\four-square>
-  * Waves of Villagers and Blocks
-# Full Block / 1/4 BLOCK
- <\square-space>
-  * 
+```bash
+npx firebase deploy --only hosting
+```
 
-Queens have magical powers
+## Sign-in
 
+The shell calls `initialize({ config })` from `pwa-auth` with the project's existing Firebase web config (`src/firebase-config.ts`). The same JSON is also passed as the `firebase-config` attribute on the auth tags. A signed-in user is `{ uid, displayName, email, photoURL, emailVerified }` and is stored in the Redux `user` slice.
 
+Turn on Email/Password in the Firebase console. Leave Google on if the Continue with Google button stays. Profile photos are stored at `pwa-auth/{uid}/photo`.
