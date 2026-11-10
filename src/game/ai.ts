@@ -3,31 +3,60 @@ import { chebyshev } from './pathing.js';
 import type { GameState, PieceKind, Side, Tower } from './types.js';
 import { AI_PERIOD, BLOCKS, SPELLS, buildableRows, combatOf, overchargeCost, repairCost, upgradeCost } from './units.js';
 
+export type Personality = 'rusher' | 'fortress' | 'tactician';
+
+/** Easy rushes cheap pieces. Normal walls the camp and saves mana. Hard aims and times the burst. */
+export function personalityOf(difficulty: GameState['difficulty']): Personality {
+  if (difficulty === 'easy') return 'rusher';
+  if (difficulty === 'hard') return 'tactician';
+  return 'fortress';
+}
+
 /**
  * One decision for the computer side. Towers do not move.
- * Easy stalls, repairs, and spends spare gold on pawns and a few walls.
- * Normal upgrades, walls, repairs, spells, and Overcharge. Hard does the
- * same more often and prefers the strongest towers.
- * The rng state on the match advances so the same seed replays the same game.
+ * The difficulty picks a personality. The rng on the match advances so the
+ * same seed replays the same game.
  */
 export function aiAct(state: GameState): void {
   const period = AI_PERIOD[state.difficulty];
   if (state.tick % period !== 0) return;
   const side: Side = state.humanSide === 'white' ? 'black' : 'white';
+  const style = personalityOf(state.difficulty);
+  if (style === 'rusher') rush(state, side);
+  else if (style === 'fortress') fortify(state, side);
+  else tactician(state, side);
+}
+
+/** Early gold goes to pawns and knights, then a short wall. */
+function rush(state: GameState, side: Side): void {
   chooseAim(state, side);
-  if (state.difficulty !== 'easy' && prepareWave(state, side)) return;
-  if (state.difficulty !== 'easy' && defendTown(state, side)) return;
-  if (state.difficulty === 'easy' && state.gold[side] >= 48 && improve(state, side, 1)) return;
-  if (state.difficulty === 'easy' && state.gold[side] >= 48 && layBlock(state, side)) return;
-  if (state.difficulty === 'easy' && state.gold[side] >= 70 && improveKnight(state, side)) return;
-  if (state.difficulty === 'easy' && state.gold[side] < 100 && roll(state, side) < 0.5) return;
-  const building = state.nextWaveTick - state.tick > 30;
-  const buys = state.difficulty === 'hard' ? 2 : 1;
-  const hesitate = state.difficulty === 'normal' && roll(state, side) < 0.4;
-  if (state.difficulty !== 'easy' && blastNow(state, side)) return;
+  if (state.gold[side] >= 48 && improve(state, side, 1)) return;
+  if (state.gold[side] >= 48 && layBlock(state, side)) return;
+  if (state.gold[side] >= 70 && improveKnight(state, side)) return;
+  if (state.gold[side] < 100 && roll(state, side) < 0.5) return;
   if (mend(state, side, true)) return;
-  if (!hesitate && state.difficulty !== 'easy' && improve(state, side, buys)) return;
-  if (state.difficulty === 'easy' && roll(state, side) < 0.22 && improve(state, side, 1)) return;
+  if (surge(state, side)) return;
+}
+
+/** Fill the legal lanes, repair what is bleeding, and hold mana for Heal and Blast. */
+function fortify(state: GameState, side: Side): void {
+  chooseAim(state, side);
+  if (mendTown(state, side)) return;
+  if (layBlock(state, side)) return;
+  if (state.gold[side] >= 72 && improve(state, side, 1)) return;
+  if (holdMana(state, side)) return;
+  if (state.gold[side] >= 90) surge(state, side);
+}
+
+/** Switch the mark onto a weak tower and spend the buff on the wave that is about to leave. */
+function tactician(state: GameState, side: Side): void {
+  chooseAim(state, side);
+  if (prepareWave(state, side)) return;
+  if (defendTown(state, side)) return;
+  const building = state.nextWaveTick - state.tick > 30;
+  if (blastNow(state, side)) return;
+  if (mend(state, side, true)) return;
+  if (roll(state, side) >= 0.25 && improve(state, side, 2)) return;
   if (mend(state, side, false)) return;
   if (surge(state, side)) return;
   if (building && layBlock(state, side)) return;
@@ -182,7 +211,7 @@ function improveKnight(state: GameState, side: Side): boolean {
 }
 
 function layBlock(state: GameState, side: Side): boolean {
-  const budget = Math.min(BLOCKS.max, state.difficulty === 'easy' ? 8 : state.difficulty === 'normal' ? 12 : 14);
+  const budget = Math.min(BLOCKS.max, state.difficulty === 'easy' ? 6 : state.difficulty === 'hard' ? 14 : BLOCKS.max);
   const owned = state.blocks.filter((block) => block.side === side && block.hp > 0).length;
   if (owned >= budget || state.gold[side] < BLOCKS.cost) return false;
   const gap = 4 + (state.seed + (side === 'black' ? 3 : 0)) % 7;
@@ -194,6 +223,42 @@ function layBlock(state: GameState, side: Side): boolean {
       const placed = tryPlaceBlock(state, side, x, y);
       if (!placed.ok) continue;
       apply(state, placed.state);
+      return true;
+    }
+  }
+  return false;
+}
+
+function mendTown(state: GameState, side: Side): boolean {
+  const wounded = state.towers.filter((tower) => {
+    if (tower.side !== side || tower.hp <= 0 || tower.hp >= tower.maxHp) return false;
+    if (state.tick < tower.repairReadyTick) return false;
+    if (state.gold[side] < repairCost(tower.maxHp - tower.hp)) return false;
+    const ratio = tower.hp / tower.maxHp;
+    if (tower.kind === 'king') return ratio < 0.5;
+    return ratio < 0.72;
+  });
+  if (wounded.length === 0) return false;
+  const pick = [...wounded].sort((a, b) => woundScore(a) - woundScore(b))[0]!;
+  const mended = tryRepair(state, side, pick.file, pick.rank);
+  if (!mended.ok) return false;
+  apply(state, mended.state);
+  return true;
+}
+
+function holdMana(state: GameState, side: Side): boolean {
+  const hurt = state.towers.some((tower) => tower.side === side && tower.hp > 0 && tower.hp / tower.maxHp < 0.45);
+  if (hurt && state.mana[side] >= SPELLS.heal.mana) {
+    const healed = trySpell(state, side, 'heal');
+    if (healed.ok) {
+      apply(state, healed.state);
+      return true;
+    }
+  }
+  if (enemiesNearQueen(state, side) >= 4 && state.mana[side] >= SPELLS.blast.mana) {
+    const casted = trySpell(state, side, 'blast');
+    if (casted.ok) {
+      apply(state, casted.state);
       return true;
     }
   }

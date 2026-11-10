@@ -79,3 +79,21 @@ Nothing unfinished. Easy still loses every game to Normal and Hard. Hard beats N
 108 games after each side was limited to 36 living walls, with a route check that rejects a wall cutting any tower off from an enemy attack ring or adding more than 8 steps to the open-board path. Easy still buys at most 4 walls, Normal 4, and Hard 5, so none of them reach the cap. Every wall they did buy was already a straight lane, which the new check allows. The batch is the same as the one above: nothing unfinished, Hard beats Normal 17–7, Easy loses every cross match, longest game 481 seconds.
 
 On an empty board the longest route from any tower to any enemy attack ring is 13 steps. With both sides on the 36-wall lane (open columns 1, 5, 9, and 13) it is 17 steps. A peasant takes 5.9 seconds versus 7.7. An iron cannon takes 11.8 versus 15.5. Wave 1's first meeting in the center is 2.1 seconds after launch either way. A one-gap zigzag across the three rows is rejected before it can seal the board.
+
+## Personalities
+
+Easy is a Rusher (pawns and knights, then a few walls). Normal is a Fortress (walls up to the cap, repairs, mana saved for Heal and Blast). Hard is a Tactician (switches the mark onto a weak or crowded tower, blesses, then Overcharges the wave it is about to launch). 108 games, 12 seeds, every pairing. Nothing unfinished. The longest game was 386 seconds.
+
+| Matchup | Personalities | Wins | Mean length | Gold at cap |
+| --- | --- | --- | --- | --- |
+| Easy vs Easy | Rusher vs Rusher | White 0, Black 12 | 194s, wave 12.1 | 53% |
+| Normal vs Normal | Fortress vs Fortress | White 9, Black 3 | 306s, wave 19.7 | 47% |
+| Hard vs Hard | Tactician vs Tactician | White 4, Black 8 | 302s, wave 19.3 | 44% |
+| Easy vs Normal | Rusher vs Fortress | White 4, Black 8 | 250s, wave 15.8 | 51% |
+| Normal vs Easy | Fortress vs Rusher | White 10, Black 2 | 232s, wave 14.6 | 52% |
+| Easy vs Hard | Rusher vs Tactician | White 0, Black 12 | 137s, wave 8.5 | 29% |
+| Hard vs Easy | Tactician vs Rusher | White 12, Black 0 | 139s, wave 8.4 | 29% |
+| Normal vs Hard | Fortress vs Tactician | White 0, Black 12 | 131s, wave 8.1 | 19% |
+| Hard vs Normal | Tactician vs Fortress | White 12, Black 0 | 130s, wave 7.9 | 22% |
+
+Tactician beats Fortress in all 24 cross games and Rusher in all 24. Fortress beats Rusher in 18 of 24. Rusher mirrors all go to Black, the side that spends on the first shared decision. Eighteen games pass five minutes and end in the exposed minute. Overcharge is 7.7 per game. Repairs are 10.7 per game. No game reached the 10 minute cutoff.

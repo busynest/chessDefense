@@ -732,9 +732,9 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
           <div class="choices">
             <label>AI
               <select .value=${this.difficulty} @change=${(event: Event) => store.dispatch(setDifficulty((event.target as HTMLSelectElement).value as Difficulty))}>
-                <option value="easy">Easy</option>
-                <option value="normal">Normal</option>
-                <option value="hard">Hard</option>
+                <option value="easy">Easy · Rusher</option>
+                <option value="normal">Normal · Fortress</option>
+                <option value="hard">Hard · Tactician</option>
               </select>
             </label>
             <button type="button" @click=${() => this.start('ai')}>Play vs AI</button>

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { aiAct } from './ai.js';
+import { aiAct, personalityOf } from './ai.js';
 import { towerAt } from './chess.js';
 import { tryAim, tryOvercharge, tryPlaceBlock, tryRemoveBlock, tryRepair, trySpell, tryUpgrade } from './commands.js';
 import { fallbackAim, longestRoute, pathToTower, pathToward } from './pathing.js';
@@ -507,6 +507,33 @@ test('hard blesses the wave it is about to launch', () => {
   const before = state.mana.black;
   aiAct(state);
   assert.ok(state.mana.black < before);
+});
+
+test('each difficulty is a different spender', () => {
+  assert.equal(personalityOf('easy'), 'rusher');
+  assert.equal(personalityOf('normal'), 'fortress');
+  assert.equal(personalityOf('hard'), 'tactician');
+  const rushed = playing();
+  rushed.mode = 'ai';
+  rushed.difficulty = 'easy';
+  rushed.humanSide = 'white';
+  rushed.tick = 50;
+  rushed.gold.black = 90;
+  aiAct(rushed);
+  assert.ok(rushed.towers.some((tower) => tower.side === 'black' && tower.kind === 'pawn' && tower.level > 1));
+  assert.equal(rushed.blocks.filter((block) => block.side === 'black').length, 0);
+
+  const walled = playing();
+  walled.mode = 'ai';
+  walled.difficulty = 'normal';
+  walled.humanSide = 'white';
+  walled.tick = 50;
+  walled.gold.black = 90;
+  aiAct(walled);
+  const wall = walled.blocks.find((block) => block.side === 'black' && block.hp > 0);
+  assert.ok(wall);
+  assert.ok(buildableRows('black').includes(wall!.y));
+  assert.equal(walled.towers.some((tower) => tower.side === 'black' && tower.level > 1), false);
 });
 
 test('the AI places a wall inside its front ranks', () => {
