@@ -21,6 +21,7 @@ export class OneSquare extends LitElement {
   @property({ type: String }) side: Side | '' = '';
   @property({ type: Number }) hp = 0;
   @property({ type: Number }) maxHp = 1;
+  @property({ type: Number }) level = 1;
   @property({ type: Array }) walls: number[] = [-1, -1, -1, -1];
   @property({ type: Boolean, reflect: true }) etched = false;
   @property({ type: Boolean, reflect: true }) portal = false;
@@ -119,6 +120,14 @@ export class OneSquare extends LitElement {
     `;
   }
 
+  private hover(on: boolean): void {
+    this.dispatchEvent(new CustomEvent('square-hover', {
+      detail: { file: this.file, rank: this.rank, on },
+      bubbles: true,
+      composed: true,
+    }));
+  }
+
   private choose(): void {
     this.dispatchEvent(new CustomEvent('square-click', {
       detail: { file: this.file, rank: this.rank },
@@ -133,17 +142,23 @@ export class OneSquare extends LitElement {
     const showFile = this.rank === 0;
     return html`
       <four-square .walls=${this.walls} ?etched=${this.etched}></four-square>
-      ${this.kind === 'pawn' ? html`<chess-pawn class="piece" .side=${this.side || 'white'} .hp=${this.hp} .maxHp=${this.maxHp}></chess-pawn>` : ''}
-      ${this.kind === 'knight' ? html`<chess-knight class="piece" side=${this.side || 'white'} .hp=${this.hp} .maxHp=${this.maxHp}></chess-knight>` : ''}
-      ${this.kind === 'bishop' ? html`<chess-bishop class="piece" .side=${this.side || 'white'} .hp=${this.hp} .maxHp=${this.maxHp}></chess-bishop>` : ''}
-      ${this.kind === 'rook' ? html`<chess-rook class="piece" .side=${this.side || 'white'} .hp=${this.hp} .maxHp=${this.maxHp}></chess-rook>` : ''}
-      ${this.kind === 'queen' ? html`<chess-queen class="piece" .side=${this.side || 'white'} .hp=${this.hp} .maxHp=${this.maxHp}></chess-queen>` : ''}
-      ${this.kind === 'king' ? html`<chess-king class="piece" .side=${this.side || 'white'} .hp=${this.hp} .maxHp=${this.maxHp}></chess-king>` : ''}
+      ${this.kind === 'pawn' ? html`<chess-pawn class="piece" .side=${this.side || 'white'} .hp=${this.hp} .maxHp=${this.maxHp} .level=${this.level}></chess-pawn>` : ''}
+      ${this.kind === 'knight' ? html`<chess-knight class="piece" side=${this.side || 'white'} .hp=${this.hp} .maxHp=${this.maxHp} .level=${this.level}></chess-knight>` : ''}
+      ${this.kind === 'bishop' ? html`<chess-bishop class="piece" .side=${this.side || 'white'} .hp=${this.hp} .maxHp=${this.maxHp} .level=${this.level}></chess-bishop>` : ''}
+      ${this.kind === 'rook' ? html`<chess-rook class="piece" .side=${this.side || 'white'} .hp=${this.hp} .maxHp=${this.maxHp} .level=${this.level}></chess-rook>` : ''}
+      ${this.kind === 'queen' ? html`<chess-queen class="piece" .side=${this.side || 'white'} .hp=${this.hp} .maxHp=${this.maxHp} .level=${this.level}></chess-queen>` : ''}
+      ${this.kind === 'king' ? html`<chess-king class="piece" .side=${this.side || 'white'} .hp=${this.hp} .maxHp=${this.maxHp} .level=${this.level}></chess-king>` : ''}
       ${this.kind ? html`<div class="hp ${ratio < 0.35 ? 'low' : ''}"><span style="width:${ratio * 100}%"></span></div>` : ''}
       ${this.hint === 'move' || this.hint === 'capture' ? html`<div class="mark ${this.hint}"></div>` : ''}
       ${showRank ? html`<span class="coord rank">${this.rank + 1}</span>` : ''}
       ${showFile ? html`<span class="coord file">${'abcdefgh'[this.file]}</span>` : ''}
-      <button type="button" aria-label=${this.label || 'square'} @click=${this.choose}></button>
+      <button
+        type="button"
+        aria-label=${this.label || 'square'}
+        @click=${this.choose}
+        @pointerenter=${() => this.hover(true)}
+        @pointerleave=${() => this.hover(false)}
+      ></button>
     `;
   }
 }

@@ -10,7 +10,7 @@ import {
   markRecord,
   openOnline,
   playBlock,
-  playMove,
+  playUpgrade,
   playSpell,
   playUnblock,
   playerSide,
@@ -22,13 +22,13 @@ import {
   togglePause,
   type GameSliceState,
 } from './game_state.js';
-import { handleSpell } from './input.js';
+import { handleSpell, handleUpgrade } from './input.js';
 import { createMatchDoc, joinMatchDoc, matchCode, publishSnapshot, readMatch, signedInUid, watchInputs, watchMatch } from './online.js';
 import { loadCareer, recordResult } from './record.js';
 import './board-square.js';
 import { connectStore, store, type RootState } from '../store.js';
 import type { Difficulty, GameState, PlayerCommand, Side, SpellId } from './types.js';
-import { PIECES, SPELLS, squareName } from './units.js';
+import { PIECES, SPELLS, combatOf, squareName, upgradeCost } from './units.js';
 import type { Unsubscribe } from 'firebase/firestore';
 
 @customElement('chess-defense')
@@ -147,12 +147,8 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
     if (this.seen.has(id)) return;
     this.seen.add(id);
     if (store.getState().game.role !== 'host' || command.side !== 'black') return;
-    if (command.type === 'move') {
-      store.dispatch(playMove({
-        from: { file: command.fromFile, rank: command.fromRank },
-        to: { file: command.toFile, rank: command.toRank },
-        side: 'black',
-      }));
+    if (command.type === 'upgrade') {
+      store.dispatch(playUpgrade({ file: command.file, rank: command.rank, side: 'black' }));
     } else if (command.type === 'spell') {
       store.dispatch(playSpell({ side: 'black', spell: command.spell }));
     } else if (command.type === 'block') {
@@ -315,7 +311,7 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
     return html`
       <section class="menu">
         <h1>Chess Defense</h1>
-        <p style="text-align:center; margin:0;">Two kings. One board. Towers move like chess. Their armies do not.</p>
+        <p style="text-align:center; margin:0;">Two kings. One board. The towers never move. Their soldiers do.</p>
         <div class="card">
           <div class="choices">
             <label>AI
@@ -377,17 +373,29 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
         ${(['white', 'black'] as const).map((side) => html`
           <div class="gold">${side === 'white' ? 'White' : 'Black'} ${Math.floor(game.gold[side])} gold · ${Math.floor(game.mana[side])} mana</div>
         `)}
-        ${game.wave === 0 ? html`<p class="coach">Destroy the enemy King tower. Click one of your towers, then a glowing square. The wall button shades your half: green can be built, red cannot.</p>` : ''}
-        ${selected ? html`
-          <div>
-            <strong>${selected.side} ${PIECES[selected.kind].label}</strong>
-            ${squareName(selected.file, selected.rank)}
-            · ${Math.ceil(selected.hp)}/${selected.maxHp}
-            · ${selected.moveReadyTick <= game.tick ? `move ${PIECES[selected.kind].moveCost}g` : `walks ${(Math.max(0, selected.moveReadyTick - game.tick) * 0.1).toFixed(1)}s`}
-          </div>
-        ` : html`<div>Select one of your towers, then a highlighted square.</div>`}
+        ${game.wave === 0 ? html`<p class="coach">Towers stay on their squares. Tap one for its range and Upgrade. The wall button shades your half: green can be built, red cannot.</p>` : ''}
+        ${selected ? this.inspect(selected) : html`<div>Tap one of your towers to upgrade it.</div>`}
         ${sides.map((side) => this.spells(slice, side))}
       </aside>
+    `;
+  }
+
+  private inspect(tower: GameState['towers'][number]): TemplateResult {
+    const stats = combatOf(tower.kind, tower.level);
+    const piece = PIECES[tower.kind];
+    const cost = tower.level < 3 ? upgradeCost(tower.kind, tower.level) : 0;
+    return html`
+      <div>
+        <strong>${tower.side} ${piece.label}</strong>
+        ${squareName(tower.file, tower.rank)}
+        · level ${tower.level}
+        · ${Math.ceil(tower.hp)}/${tower.maxHp}
+      </div>
+      <div>${piece.role}</div>
+      <div>${stats.damage} damage · range ${stats.range.toFixed(1)} · every ${(stats.attackTicks / 10).toFixed(1)}s</div>
+      ${tower.level < 3 ? html`
+        <button type="button" @click=${() => handleUpgrade(tower.side, tower.file, tower.rank)}>Upgrade ${cost}</button>
+      ` : html`<div>Level 3</div>`}
     `;
   }
 

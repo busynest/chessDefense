@@ -1,14 +1,23 @@
 # Chess Defense
 
-Two medieval kings defend their towns on one board. The game is chess played slowly, and tower defense played underneath it.
+Two medieval kings defend their towns on one board. The chess pieces are towers. They never move.
 
 ## Rules
 
 There are two layers.
 
-**Towers, the 8×8.** Chess pieces are towers. They begin in the standard starting position, White along the bottom. They move by the normal chess rules for their piece, but a move spends gold and then the tower has to wait several seconds. Towers cannot share a square. Moving onto an enemy tower captures it. Capturing the enemy King, or reducing the King to zero life, wins the match.
+**Towers, the 8×8.** Chess pieces are tower-defense buildings in that piece's silhouette. They begin in the standard starting position, White along the bottom, and they stay there for the whole match. There is no movement, no capture, no castling, and no promotion. Each tower shoots in its own way and, every wave, sends its soldier. Destroying the enemy King tower wins the match.
 
-There is no castling, no en passant, and pawns do not promote. A pawn moves one square toward the enemy, or two from its starting square when the path is clear, and captures one square diagonally forward.
+| Tower | Role | Level 1 shot | Upgrade |
+| --- | --- | --- | --- |
+| Pawn | Arrow outpost | 3 damage, range 3.2, every 0.8s | 18, then 29 |
+| Knight | Close cleave that roots | 6 damage, range 3.3, every 1.6s | 26, then 42 |
+| Bishop | Piercing bolt that slows | 4 damage, range 6.4, every 1.4s, 2 targets | 26, then 42 |
+| Rook | Cannon splash | 9 damage, range 5.4, every 2.2s | 34, then 54 |
+| Queen | Area magic, and the spell anchor | 5 damage, range 4.6, every 1.6s | 40, then 64 |
+| King | Keep, modest shot, damage aura within 2 squares | 4 damage, range 3, every 1.2s. 300 life | 30, then 48 |
+
+A level adds a quarter more damage, a little range, more life, and slightly stronger soldiers. Level 3 is the top. The King's aura adds 12% damage to friendly towers within two chess squares, and more after an upgrade. Corner rooks stand outside that aura.
 
 **Armies, the 16×16.** Every chess square is split into four cells. Soldiers do not spawn in a trickle. After an 18 second build, every living tower releases its soldier at once: pawns send peasants, knights send cavalry, bishops send archers, rooks send iron cannons, the Queen sends a mage, and the King sends a royal guard. The next wave is 15 seconds later. Wave 1 and 2 send one soldier per tower. Waves 3 and 4 send two. Wave 5 and after send three, and each wave adds 15% life and strength. A side can have 40 soldiers on the board. Anyone past that cap waits for the next launch.
 
@@ -16,7 +25,7 @@ Soldiers march toward the enemy King, route around towers and blocks, fight enem
 
 **Blocks.** Each player spends 12 gold to place a wall on the 16×16 grid, only on their own half. White's half is the bottom eight rows (screen rows 8–15). Black's half is the top eight (screen rows 0–7). A wall has 28 life. Soldiers walk through a gap and only break a wall when it blocks every route, so a maze stalls and a sealed rank gets chewed open. Picking up your own wall refunds 6 gold. A placement that would wall off every route between the two home ranks is rejected. Walls cannot sit on a tower cell or on another wall. A wall in front of a tower does not silence that tower: the soldier deploys on the nearest open cell ahead.
 
-**Economy.** Both towns earn 8 gold and 4 mana each second, starting from 48 gold and 18 mana. Gold pays for tower moves and blocks. Mana pays for Queen spells. Gold caps at 400 and mana at 160.
+**Economy.** Both towns earn 3 gold and 3 mana each second, starting from 36 gold and 14 mana. Gold pays for walls and tower upgrades. Mana pays for Queen spells. Gold caps at 120 and mana at 100.
 
 **Queen magic.** Only a living Queen can cast, and every spell is centered on her.
 
@@ -28,25 +37,25 @@ Soldiers march toward the enemy King, route around towers and blocks, fight enem
 
 ### Units
 
-| Tower | Builds each wave | Life | Move | Aura |
-| --- | --- | --- | --- | --- | --- |
-| Pawn | Peasant | 48 | 8 gold, 4.0s | 3 damage, range 2 |
-| Knight | Knight | 80 | 18 gold, 5.0s | 6 damage, range 2 |
-| Bishop | Archer | 55 | 16 gold, 5.0s | 5 damage, range 4 |
-| Rook | Iron Cannon | 100 | 24 gold, 7.0s | 12 damage, range 5 |
-| Queen | Mage | 90 | 30 gold, 8.0s | 8 damage, range 4 |
-| King | Royal Guard | 140 | 20 gold, 6.0s | 9 damage, range 2 |
+| Tower | Builds each wave | Life |
+| --- | --- | --- |
+| Pawn | Peasant | 56 |
+| Knight | Knight | 96 |
+| Bishop | Archer | 64 |
+| Rook | Iron Cannon | 120 |
+| Queen | Mage | 100 |
+| King | Royal Guard | 300 |
 
-Auras fire on their own cooldown. They are the tower shooting while its soldiers are away.
+The shot table above is the tower's own attack. The soldier table is the army it sends.
 
 | Soldier | Strength | Life | Speed | Range | Attack |
 | --- | --- | --- | --- | --- | --- |
-| Peasant | 5 | 16 | 2.2 | 1 | 0.8s |
-| Knight | 12 | 34 | 3.4 | 1 | 0.9s |
-| Archer | 8 | 16 | 2.0 | 4 | 1.0s |
-| Iron Cannon | 14 | 26 | 1.0 | 5 | 1.6s |
-| Mage | 9 | 20 | 1.8 | 3 | 1.1s |
-| Royal Guard | 14 | 46 | 1.5 | 1 | 0.8s |
+| Peasant | 5 | 24 | 2.2 | 1 | 0.8s |
+| Knight | 11 | 40 | 3.2 | 1 | 0.9s |
+| Archer | 7 | 22 | 2.0 | 4 | 1.0s |
+| Iron Cannon | 12 | 32 | 1.1 | 5 | 1.6s |
+| Mage | 8 | 26 | 1.8 | 3 | 1.1s |
+| Royal Guard | 12 | 54 | 1.5 | 1 | 0.8s |
 
 Speed is cells per second. Range is Chebyshev distance on the 16×16 grid, so 1 includes diagonals. Strength is the damage of one hit. Kills pay a small gold bounty.
 
@@ -60,7 +69,7 @@ Open the site and choose a mode.
 - **Local 2 player.** Both colors are live at once on one screen. White and Black can each select their own towers while the armies keep moving. This is split control, not a turn-based hot-seat, because the match is real time.
 - **Online 1v1.** Sign in, host a four-letter code, and send it to the other player. The host is White and runs the simulation. The guest is Black and sends moves and spells to the host. The host publishes the position about twice a second. The guest is looking at that snapshot, so orders arrive a short moment later. If the host closes the tab, the match stops.
 
-Click one of your towers, then a highlighted square. Green is a move. Red is a capture. The wall button opens block placement: your half of the board is shaded, a green cell is legal, and a red cell is not. Tap a cell to build. Tap your own wall to sell it. Spell buttons sit in the side panel, or above the board on a phone. Pause freezes the armies. The page also pauses while the tab is hidden. Menu leaves the match. Rematch starts the same mode with a new layout seed.
+Tap one of your towers. A ring shows its range, and Upgrade spends gold. The wall button opens block placement: your half of the board is shaded, a green cell is legal, and a red cell is not. Tap a cell to build. Tap your own wall to sell it. Spell buttons sit in the side panel, or above the board on a phone. Pause freezes the armies. The page also pauses while the tab is hidden. Menu leaves the match. Rematch starts the same mode with a new layout seed.
 
 Sign in to save a win, loss, or draw from versus-AI and online matches. Local games are not recorded, because two players share one account. The record is `wins–losses–draws`.
 

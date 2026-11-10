@@ -1,28 +1,64 @@
-import { legalMoves } from './chess.js';
-import { tryMove, tryPlaceBlock, trySpell } from './commands.js';
+import { tryPlaceBlock, trySpell, tryUpgrade } from './commands.js';
 import { chebyshev } from './pathing.js';
-import type { GameState, Side, Square, Tower } from './types.js';
-import { AI_PERIOD, BLOCKS, PIECES, SPELLS } from './units.js';
+import type { GameState, PieceKind, Side } from './types.js';
+import { AI_PERIOD, BLOCKS, SPELLS, upgradeCost } from './units.js';
 
 /**
- * One decision for the computer side. Easy hesitates and mostly heals.
- * Normal uses every spell and takes captures. Hard acts often, walls a lane,
- * and develops pieces without stepping into the enemy army.
+ * One decision for the computer side. Towers do not move.
+ * Easy stalls and heals. Normal upgrades and walls. Hard spends on the
+ * strongest towers first and casts whenever a spell is worth it.
  * The rng state on the match advances so the same seed replays the same game.
  */
 export function aiAct(state: GameState): void {
   const period = AI_PERIOD[state.difficulty];
   if (state.tick % period !== 0) return;
   const side: Side = state.humanSide === 'white' ? 'black' : 'white';
-  if (state.difficulty === 'easy' && roll(state) < 0.45) return;
+  if (state.difficulty === 'easy' && roll(state) < 0.5) return;
   const building = state.nextWaveTick - state.tick > 30;
+  const buys = state.difficulty === 'hard' ? 2 : 1;
+  const hesitate = state.difficulty === 'normal' && roll(state) < 0.4;
+  if (!hesitate && state.difficulty !== 'easy' && improve(state, side, buys)) return;
+  if (state.difficulty === 'easy' && roll(state) < 0.22 && improve(state, side, 1)) return;
   if (building && layBlock(state, side)) return;
-  if (cast(state, side)) return;
-  reposition(state, side);
+  cast(state, side);
+}
+
+const VALUE: Record<PieceKind, number> = {
+  rook: 6,
+  bishop: 5,
+  queen: 5,
+  king: 4,
+  knight: 3,
+  pawn: 2,
+};
+
+function improve(state: GameState, side: Side, buys: number): boolean {
+  let bought = false;
+  for (let n = 0; n < buys; n += 1) {
+    const choices = state.towers.filter((tower) => {
+      if (tower.side !== side || tower.hp <= 0 || tower.level >= 3) return false;
+      return state.gold[side] >= upgradeCost(tower.kind, tower.level);
+    });
+    if (choices.length === 0) break;
+    const ranked = [...choices].sort((a, b) => {
+      const hurt = (tower: typeof a) => (tower.hp / tower.maxHp < 0.55 ? 2 : 0);
+      const score = (tower: typeof a) => VALUE[tower.kind] * (4 - tower.level) + hurt(tower);
+      return score(b) - score(a);
+    });
+    const pick = state.difficulty === 'easy'
+      ? ranked.find((tower) => tower.kind === 'pawn' || tower.kind === 'knight') ?? null
+      : ranked[0];
+    if (!pick) break;
+    const raised = tryUpgrade(state, side, pick.file, pick.rank);
+    if (!raised.ok) break;
+    apply(state, raised.state);
+    bought = true;
+  }
+  return bought;
 }
 
 function layBlock(state: GameState, side: Side): boolean {
-  const budget = state.difficulty === 'easy' ? 2 : state.difficulty === 'normal' ? 4 : 6;
+  const budget = state.difficulty === 'easy' ? 2 : state.difficulty === 'normal' ? 4 : 5;
   const owned = state.blocks.filter((block) => block.side === side && block.hp > 0).length;
   if (owned >= budget || state.gold[side] < BLOCKS.cost) return false;
   const gap = 3 + Math.floor(roll(state) * 10);
@@ -61,84 +97,6 @@ function cast(state: GameState, side: Side): boolean {
     return apply(state, trySpell(state, side, 'blessing').state);
   }
   return false;
-}
-
-function reposition(state: GameState, side: Side): void {
-  const ready = state.towers.filter((tower) => {
-    if (tower.side !== side || tower.hp <= 0) return false;
-    if (state.tick < tower.moveReadyTick) return false;
-    return state.gold[side] >= PIECES[tower.kind].moveCost;
-  });
-  if (ready.length === 0) return;
-  const ordered = [...ready].sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp);
-  for (const tower of ordered) {
-    const moves = legalMoves(state, tower);
-    if (moves.length === 0) continue;
-    const retreat = tower.hp / tower.maxHp < 0.4 ? safer(state, tower, moves) : null;
-    if (retreat) {
-      commit(state, tower, retreat);
-      return;
-    }
-    const capture = moves.find((square) => {
-      const victim = state.towers.find((other) => other.hp > 0 && other.file === square.file && other.rank === square.rank);
-      return victim && victim.side !== side && (state.difficulty !== 'easy' || victim.hp < victim.maxHp * 0.5);
-    });
-    if (capture && tower.kind !== 'king') {
-      commit(state, tower, capture);
-      return;
-    }
-    if (tower.kind === 'king') continue;
-    const advanceBias = state.difficulty === 'hard' ? 0.5 : state.difficulty === 'normal' ? 0.4 : 0.15;
-    if (roll(state) > advanceBias) continue;
-    const forward = [...moves].sort((a, b) => forwardness(side, b) - forwardness(side, a))[0];
-    if (!forward) continue;
-    if (forwardness(side, forward) <= forwardness(side, tower)) continue;
-    if (walksIntoArmy(state, side, forward)) continue;
-    commit(state, tower, forward);
-    return;
-  }
-}
-
-function safer(state: GameState, tower: Tower, moves: Square[]): Square | null {
-  const threats = state.soldiers.filter((soldier) => soldier.side !== tower.side && soldier.hp > 0);
-  if (threats.length === 0) return null;
-  let best: Square | null = null;
-  let bestDist = nearestThreat(tower.file * 2, tower.rank * 2, threats);
-  for (const square of moves) {
-    const occupied = state.towers.some((other) => other.hp > 0 && other.file === square.file && other.rank === square.rank);
-    if (occupied) continue;
-    const dist = nearestThreat(square.file * 2, square.rank * 2, threats);
-    if (dist > bestDist) {
-      best = square;
-      bestDist = dist;
-    }
-  }
-  return best;
-}
-
-function nearestThreat(x: number, y: number, threats: GameState['soldiers']): number {
-  let best = Infinity;
-  for (const soldier of threats) {
-    const dist = chebyshev(x, y, soldier.x, soldier.y);
-    if (dist < best) best = dist;
-  }
-  return best;
-}
-
-function walksIntoArmy(state: GameState, side: Side, square: Square): boolean {
-  return state.soldiers.some((soldier) => {
-    if (soldier.side === side || soldier.hp <= 0) return false;
-    return chebyshev(soldier.x, soldier.y, square.file * 2 + 0.5, square.rank * 2 + 0.5) <= 3;
-  });
-}
-
-function forwardness(side: Side, square: { rank: number }): number {
-  return side === 'white' ? square.rank : 7 - square.rank;
-}
-
-function commit(state: GameState, tower: Tower, to: Square): void {
-  const moved = tryMove(state, { file: tower.file, rank: tower.rank }, to);
-  if (moved.ok) apply(state, moved.state);
 }
 
 function apply(state: GameState, next: GameState): boolean {

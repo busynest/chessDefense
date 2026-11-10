@@ -4,28 +4,39 @@ import type { PieceKind, Side, SoldierKind, SpellId } from './types.js';
 export const TICK_SECONDS = 0.1;
 
 /**
- * Shared economy. Gold pays for tower moves. Mana pays for Queen spells.
- * Both sides receive the same income. Caps keep a stalled match readable.
+ * Shared economy. Gold pays for walls and tower upgrades. Mana pays for Queen spells.
+ * Both sides receive the same income. The cap is low so a hoard cannot buy the whole town.
  */
 export const ECONOMY = {
-  goldPerTick: 0.8,
-  manaPerTick: 0.4,
-  startingGold: 48,
-  startingMana: 18,
-  goldCap: 400,
-  manaCap: 160,
+  goldPerTick: 0.3,
+  manaPerTick: 0.3,
+  startingGold: 36,
+  startingMana: 14,
+  goldCap: 120,
+  manaCap: 100,
 };
+
+export type AttackStyle = 'arrow' | 'cleave' | 'pierce' | 'splash' | 'nova' | 'keep';
 
 export interface PieceDef {
   label: string;
+  role: string;
   soldier: SoldierKind;
   hp: number;
-  moveCost: number;
-  moveTicks: number;
-  auraRange: number;
-  auraDamage: number;
-  auraTicks: number;
+  /** Army-cell reach from the tower's center. */
+  range: number;
+  rangeGrow: number;
+  damage: number;
+  attackTicks: number;
+  style: AttackStyle;
+  /** Extra targets for a cleave, or the splash radius for a cannon or nova. */
+  splash: number;
+  pierce: number;
+  /** Root or slow, in ticks. */
+  controlTicks: number;
   bounty: number;
+  /** Gold to leave level 1. The step to level 3 costs 1.6 times this. */
+  upgrade: number;
 }
 
 export interface SoldierDef {
@@ -55,87 +66,152 @@ export interface SpellDef {
 }
 
 /**
- * Tower stats. The piece kind chooses the soldier it builds.
- * Queen builds a mage and is the only caster. King builds a guard.
- * Move cooldowns are several seconds, so the chess layer stays deliberate.
+ * Fixed towers. Each piece is a tower-defense building in that silhouette.
+ * It never moves. It shoots, and each wave it still sends its soldier.
+ * Queen is the only caster. Destroying the enemy King tower wins.
  */
 export const PIECES: Record<PieceKind, PieceDef> = {
   pawn: {
     label: 'Pawn',
+    role: 'Arrow outpost. Fast single shots at short range.',
     soldier: 'peasant',
-    hp: 48,
-    moveCost: 8,
-    moveTicks: 40,
-    auraRange: 2,
-    auraDamage: 3,
-    auraTicks: 12,
-    bounty: 12,
+    hp: 56,
+    range: 3.2,
+    rangeGrow: 0.35,
+    damage: 3,
+    attackTicks: 8,
+    style: 'arrow',
+    splash: 0,
+    pierce: 1,
+    controlTicks: 0,
+    bounty: 10,
+    upgrade: 18,
   },
   knight: {
     label: 'Knight',
+    role: 'Stable keep. A close cleave that roots soldiers in place.',
     soldier: 'knight',
-    hp: 80,
-    moveCost: 18,
-    moveTicks: 50,
-    auraRange: 2,
-    auraDamage: 6,
-    auraTicks: 14,
-    bounty: 20,
+    hp: 96,
+    range: 3.3,
+    rangeGrow: 0.25,
+    damage: 6,
+    attackTicks: 16,
+    style: 'cleave',
+    splash: 2.15,
+    pierce: 1,
+    controlTicks: 8,
+    bounty: 16,
+    upgrade: 26,
   },
   bishop: {
     label: 'Bishop',
+    role: 'Arcane spire. Long bolts that pierce and slow.',
     soldier: 'archer',
-    hp: 55,
-    moveCost: 16,
-    moveTicks: 50,
-    auraRange: 4,
-    auraDamage: 5,
-    auraTicks: 12,
-    bounty: 18,
+    hp: 64,
+    range: 6.4,
+    rangeGrow: 0.4,
+    damage: 4,
+    attackTicks: 14,
+    style: 'pierce',
+    splash: 0,
+    pierce: 2,
+    controlTicks: 12,
+    bounty: 14,
+    upgrade: 26,
   },
   rook: {
     label: 'Rook',
+    role: 'Cannon fortress. Slow shells with a heavy splash.',
     soldier: 'cannon',
-    hp: 100,
-    moveCost: 24,
-    moveTicks: 70,
-    auraRange: 5,
-    auraDamage: 12,
-    auraTicks: 16,
-    bounty: 28,
+    hp: 120,
+    range: 5.4,
+    rangeGrow: 0.35,
+    damage: 9,
+    attackTicks: 22,
+    style: 'splash',
+    splash: 1.45,
+    pierce: 1,
+    controlTicks: 0,
+    bounty: 22,
+    upgrade: 34,
   },
   queen: {
     label: 'Queen',
+    role: 'Mage citadel. Area magic, and the anchor for Blessing, Heal, and Blast.',
     soldier: 'mage',
-    hp: 90,
-    moveCost: 30,
-    moveTicks: 80,
-    auraRange: 4,
-    auraDamage: 8,
-    auraTicks: 14,
-    bounty: 36,
+    hp: 100,
+    range: 4.6,
+    rangeGrow: 0.3,
+    damage: 5,
+    attackTicks: 16,
+    style: 'nova',
+    splash: 1.7,
+    pierce: 1,
+    controlTicks: 0,
+    bounty: 26,
+    upgrade: 40,
   },
   king: {
     label: 'King',
+    role: 'Crowned keep. High life, a modest shot, and a damage aura for nearby towers.',
     soldier: 'guard',
-    hp: 140,
-    moveCost: 20,
-    moveTicks: 60,
-    auraRange: 2,
-    auraDamage: 9,
-    auraTicks: 12,
+    hp: 300,
+    range: 3,
+    rangeGrow: 0.25,
+    damage: 4,
+    attackTicks: 12,
+    style: 'keep',
+    splash: 0,
+    pierce: 1,
+    controlTicks: 0,
     bounty: 0,
+    upgrade: 30,
   },
 };
 
+export interface CombatStats {
+  range: number;
+  damage: number;
+  attackTicks: number;
+  splash: number;
+  pierce: number;
+  controlTicks: number;
+  soldierScale: number;
+  /** Damage multiplier this king grants to friendly towers within 2 squares. */
+  aura: number;
+  maxHp: number;
+}
+
+/** Level is 1, 2, or 3. Each step adds damage, a little range, and tougher soldiers. */
+export function combatOf(kind: PieceKind, level: number): CombatStats {
+  const def = PIECES[kind];
+  const step = Math.max(0, Math.min(2, level - 1));
+  return {
+    range: def.range + def.rangeGrow * step,
+    damage: Math.max(1, Math.round(def.damage * (1 + 0.25 * step))),
+    attackTicks: Math.max(4, def.attackTicks - step),
+    splash: def.splash + (def.style === 'cleave' ? def.rangeGrow * step : 0),
+    pierce: def.pierce + (def.style === 'pierce' ? step : 0),
+    controlTicks: def.controlTicks + (def.controlTicks > 0 ? step * 2 : 0),
+    soldierScale: 1 + 0.12 * step,
+    aura: def.style === 'keep' ? 0.12 + 0.08 * step : 0,
+    maxHp: Math.round(def.hp * (1 + 0.3 * step)),
+  };
+}
+
+export function upgradeCost(kind: PieceKind, level: number): number {
+  const base = PIECES[kind].upgrade;
+  return level <= 1 ? base : Math.round(base * 1.6);
+}
+
 /** Soldier stats. Every unit has strength, life, speed, plus range and an attack cooldown. */
 export const SOLDIERS: Record<SoldierKind, SoldierDef> = {
-  peasant: { label: 'Peasant', strength: 5, hp: 16, speed: 2.2, range: 1, attackTicks: 8, bounty: 3 },
-  knight: { label: 'Knight', strength: 12, hp: 34, speed: 3.4, range: 1, attackTicks: 9, bounty: 7 },
-  archer: { label: 'Archer', strength: 8, hp: 16, speed: 2.0, range: 4, attackTicks: 10, bounty: 5 },
-  cannon: { label: 'Iron Cannon', strength: 14, hp: 26, speed: 1.0, range: 5, attackTicks: 16, bounty: 9 },
-  mage: { label: 'Mage', strength: 9, hp: 20, speed: 1.8, range: 3, attackTicks: 11, bounty: 8 },
-  guard: { label: 'Royal Guard', strength: 14, hp: 46, speed: 1.5, range: 1, attackTicks: 8, bounty: 10 },
+  peasant: { label: 'Peasant', strength: 5, hp: 24, speed: 2.2, range: 1, attackTicks: 8, bounty: 3 },
+  knight: { label: 'Knight', strength: 11, hp: 40, speed: 3.2, range: 1, attackTicks: 9, bounty: 7 },
+  archer: { label: 'Archer', strength: 7, hp: 22, speed: 2.0, range: 4, attackTicks: 10, bounty: 5 },
+  cannon: { label: 'Iron Cannon', strength: 12, hp: 32, speed: 1.1, range: 5, attackTicks: 16, bounty: 9 },
+  mage: { label: 'Mage', strength: 8, hp: 26, speed: 1.8, range: 3, attackTicks: 11, bounty: 8 },
+  guard: { label: 'Royal Guard', strength: 12, hp: 54, speed: 1.5, range: 1, attackTicks: 8, bounty: 10 },
 };
 
 /**

@@ -30,16 +30,17 @@ export class HowToPage extends PageViewElement {
       </section>
       <section>
         <h2>Towers</h2>
-        <p>Towers start in the chess starting position and move by the real chess rules, slowly. A move spends gold and then the tower has to wait. Pieces cannot stack. Moving onto an enemy tower captures it. There is no castling, no en passant, and pawns do not promote. Every tower can be destroyed. Destroy the enemy King tower and you win.</p>
+        <p>Towers stand on the chess starting squares for the whole match. They do not move, capture, or promote. Gold upgrades a tower to level 3, which hits harder and sends stronger soldiers. Every tower can be destroyed. Destroy the enemy King tower and you win.</p>
         <table>
-          <tr><th>Tower</th><th>Each wave</th><th>Life</th><th>Move</th></tr>
+          <tr><th>Tower</th><th>Role</th><th>Life</th><th>Shot</th><th>Upgrade</th></tr>
           ${pieces.map((kind) => {
             const piece = PIECES[kind];
             return html`<tr>
               <td>${piece.label}</td>
-              <td>${SOLDIERS[piece.soldier].label}</td>
+              <td>${piece.role}</td>
               <td>${piece.hp}</td>
-              <td>${piece.moveCost} gold, ${piece.moveTicks / 10}s</td>
+              <td>${piece.damage} every ${piece.attackTicks / 10}s, range ${piece.range}</td>
+              <td>${piece.upgrade} gold, then ${Math.round(piece.upgrade * 1.6)}</td>
             </tr>`;
           })}
         </table>
@@ -71,7 +72,7 @@ export class HowToPage extends PageViewElement {
       <section>
         <h2>Controls</h2>
         <ul>
-          <li>Click or tap your tower, then a highlighted square. Green is a move, red is a capture.</li>
+          <li>Tap a tower to see its range and stats. Upgrade spends gold and stops at level 3.</li>
           <li>The wall button shades your half. Tap an empty cell to build. A green ghost is legal and a red ghost is not. Tap your own wall to sell it.</li>
           <li>Spell buttons sit in the panel. They stay quiet until you can afford them.</li>
           <li>Pause freezes the armies. Menu leaves the match.</li>

@@ -1,13 +1,13 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { legalMoves, towerAt } from './chess.js';
-import { tryMove, tryPlaceBlock, tryRemoveBlock, trySpell } from './commands.js';
+import { towerAt } from './chess.js';
+import { tryPlaceBlock, tryRemoveBlock, trySpell, tryUpgrade } from './commands.js';
 import { pathToward } from './pathing.js';
 import { createMatch } from './setup.js';
 import { step } from './simulate.js';
 import type { GameState, Soldier, Tower } from './types.js';
-import { BLOCKS, PIECES, WAVES } from './units.js';
+import { BLOCKS, PIECES, WAVES, upgradeCost } from './units.js';
 
 function playing(): GameState {
   return createMatch({ mode: 'local', difficulty: 'normal', seed: 7 });
@@ -18,7 +18,7 @@ function bare(): GameState {
   state.towers = [];
   state.soldiers = [];
   state.blocks = [];
-  state.gold = { white: 200, black: 200 };
+  state.gold = { white: 80, black: 80 };
   state.mana = { white: 100, black: 100 };
   return state;
 }
@@ -33,62 +33,99 @@ function place(state: GameState, partial: Pick<Tower, 'side' | 'kind' | 'file' |
     rank: partial.rank,
     hp: partial.hp ?? def.hp,
     maxHp: def.hp,
-    moveReadyTick: 0,
-    auraReadyTick: 9999,
+    level: 1,
+    attackReadyTick: 9999,
     hurtBy: null,
   };
   state.towers.push(tower);
   return tower;
 }
 
-test('white pawn steps once, twice from home, and captures only on the diagonal', () => {
+function fighter(partial: Pick<Soldier, 'id' | 'side' | 'kind' | 'x' | 'y' | 'hp' | 'maxHp'> & Partial<Soldier>): Soldier {
+  return {
+    attackReadyTick: 0,
+    repathTick: 9999,
+    path: [],
+    buffUntil: 0,
+    buffStr: 0,
+    buffSpeed: 1,
+    power: 1,
+    rootedUntil: 0,
+    slowUntil: 0,
+    hurtBy: null,
+    ...partial,
+  };
+}
+
+test('an upgrade spends gold, raises the level, and stops at level 3', () => {
   const state = bare();
-  place(state, { side: 'white', kind: 'pawn', file: 0, rank: 1 });
-  place(state, { side: 'black', kind: 'pawn', file: 1, rank: 2 });
-  const pawn = towerAt(state, 0, 1)!;
-  const names = legalMoves(state, pawn).map((square) => `${square.file},${square.rank}`).sort();
-  assert.deepEqual(names, ['0,2', '0,3', '1,2']);
+  const pawn = place(state, { side: 'white', kind: 'pawn', file: 0, rank: 1 });
+  pawn.attackReadyTick = 0;
+  const first = tryUpgrade(state, 'white', 0, 1);
+  assert.equal(first.ok, true);
+  assert.equal(towerAt(first.state, 0, 1)?.level, 2);
+  assert.equal(first.state.gold.white, 80 - upgradeCost('pawn', 1));
+  assert.equal(towerAt(first.state, 0, 1)?.file, 0);
+  let cursor = first.state;
+  cursor = tryUpgrade(cursor, 'white', 0, 1).state;
+  const third = tryUpgrade(cursor, 'white', 0, 1);
+  assert.equal(towerAt(third.state, 0, 1)?.level, 3);
+  const capped = tryUpgrade(third.state, 'white', 0, 1);
+  assert.equal(capped.ok, false);
 });
 
-test('a pawn cannot double-step through or onto a piece, and a bishop cannot jump', () => {
+test('a pawn outpost shoots one soldier in range and does not leave its square', () => {
   const state = bare();
-  place(state, { side: 'white', kind: 'pawn', file: 3, rank: 1 });
-  place(state, { side: 'white', kind: 'knight', file: 3, rank: 2 });
-  const pawn = towerAt(state, 3, 1)!;
-  assert.deepEqual(legalMoves(state, pawn), []);
-
-  place(state, { side: 'white', kind: 'bishop', file: 2, rank: 0 });
-  place(state, { side: 'white', kind: 'pawn', file: 3, rank: 1 });
-  const bishop = towerAt(state, 2, 0)!;
-  assert.equal(legalMoves(state, bishop).some((square) => square.file === 4 && square.rank === 2), false);
+  const pawn = place(state, { side: 'white', kind: 'pawn', file: 0, rank: 1 });
+  pawn.attackReadyTick = 0;
+  place(state, { side: 'black', kind: 'king', file: 4, rank: 7 });
+  state.soldiers = [fighter({ id: 'near', side: 'black', kind: 'peasant', x: 1, y: 4, hp: 16, maxHp: 16 })];
+  const next = step(state);
+  const shot = next.soldiers.find((soldier) => soldier.id === 'near');
+  assert.ok(shot && shot.hp < 16);
+  assert.equal(towerAt(next, 0, 1)?.file, 0);
+  assert.equal(towerAt(next, 0, 1)?.rank, 1);
 });
 
-test('knights jump and cannot land on a friend', () => {
+test('a knight keep cleaves every soldier in its circle and roots them', () => {
   const state = bare();
   const knight = place(state, { side: 'white', kind: 'knight', file: 1, rank: 0 });
-  place(state, { side: 'white', kind: 'pawn', file: 2, rank: 2 });
-  const moves = legalMoves(state, knight).map((square) => `${square.file},${square.rank}`).sort();
-  assert.ok(moves.includes('0,2'));
-  assert.ok(moves.includes('2,2') === false);
+  knight.attackReadyTick = 0;
+  place(state, { side: 'black', kind: 'king', file: 4, rank: 7 });
+  state.soldiers = [
+    fighter({ id: 'a', side: 'black', kind: 'peasant', x: 2, y: 1, hp: 30, maxHp: 30 }),
+    fighter({ id: 'b', side: 'black', kind: 'peasant', x: 3, y: 1, hp: 30, maxHp: 30 }),
+    fighter({ id: 'far', side: 'black', kind: 'peasant', x: 14, y: 14, hp: 30, maxHp: 30 }),
+  ];
+  const next = step(state);
+  const a = next.soldiers.find((soldier) => soldier.id === 'a')!;
+  const b = next.soldiers.find((soldier) => soldier.id === 'b')!;
+  const far = next.soldiers.find((soldier) => soldier.id === 'far')!;
+  assert.ok(a.hp < 30 && b.hp < 30);
+  assert.ok(a.rootedUntil > next.tick && b.rootedUntil > next.tick);
+  assert.equal(far.hp, 30);
 });
 
-test('moving onto an enemy tower captures it and pays the move cost', () => {
+test('a bishop bolt slows a soldier, and a rook shell splashes', () => {
   const state = bare();
-  place(state, { side: 'white', kind: 'rook', file: 0, rank: 0 });
-  place(state, { side: 'black', kind: 'pawn', file: 0, rank: 3 });
-  const moved = tryMove(state, { file: 0, rank: 0 }, { file: 0, rank: 3 });
-  assert.equal(moved.ok, true);
-  assert.equal(towerAt(moved.state, 0, 3)?.side, 'white');
-  assert.equal(moved.state.towers.some((tower) => tower.kind === 'pawn'), false);
-  assert.equal(moved.state.gold.white, 200 - PIECES.rook.moveCost + PIECES.pawn.bounty);
-});
+  const bishop = place(state, { side: 'white', kind: 'bishop', file: 2, rank: 0 });
+  bishop.attackReadyTick = 0;
+  place(state, { side: 'black', kind: 'king', file: 4, rank: 7 });
+  state.soldiers = [fighter({ id: 'slow', side: 'black', kind: 'peasant', x: 4, y: 6, hp: 40, maxHp: 40 })];
+  const slowed = step(state);
+  assert.ok((slowed.soldiers.find((soldier) => soldier.id === 'slow')?.slowUntil ?? 0) > slowed.tick);
 
-test('friendly towers cannot stack', () => {
-  const state = bare();
-  place(state, { side: 'white', kind: 'rook', file: 0, rank: 0 });
-  place(state, { side: 'white', kind: 'pawn', file: 0, rank: 3 });
-  const moved = tryMove(state, { file: 0, rank: 0 }, { file: 0, rank: 3 });
-  assert.equal(moved.ok, false);
+  const splash = bare();
+  const rook = place(splash, { side: 'white', kind: 'rook', file: 0, rank: 0 });
+  rook.attackReadyTick = 0;
+  place(splash, { side: 'black', kind: 'king', file: 7, rank: 7 });
+  splash.soldiers = [
+    fighter({ id: 'core', side: 'black', kind: 'peasant', x: 1, y: 2, hp: 40, maxHp: 40 }),
+    fighter({ id: 'edge', side: 'black', kind: 'peasant', x: 2, y: 2, hp: 40, maxHp: 40 }),
+  ];
+  const blasted = step(splash);
+  assert.ok((blasted.soldiers.find((soldier) => soldier.id === 'core')?.hp ?? 40) < 40);
+  assert.ok((blasted.soldiers.find((soldier) => soldier.id === 'edge')?.hp ?? 40) < 40);
 });
 
 test('the first wave is one launch after the build, and the next wave waits', () => {
@@ -137,6 +174,8 @@ test('melee combat damages a soldier and removes it at zero life', () => {
     buffStr: 0,
     buffSpeed: 1,
     power: 1,
+    rootedUntil: 0,
+    slowUntil: 0,
     hurtBy: null,
   };
   const defender: Soldier = { ...attacker, id: 'b', side: 'black', kind: 'peasant', x: 1, y: 2, hp: 5, maxHp: 16 };
@@ -165,6 +204,8 @@ test('destroying the enemy king ends the match', () => {
     buffStr: 0,
     buffSpeed: 1,
     power: 1,
+    rootedUntil: 0,
+    slowUntil: 0,
     hurtBy: null,
   }];
   const next = step(state);
@@ -193,6 +234,8 @@ test('a queen blessing buffs a nearby friendly soldier and spends mana', () => {
     buffStr: 0,
     buffSpeed: 1,
     power: 1,
+    rootedUntil: 0,
+    slowUntil: 0,
     hurtBy: null,
   }];
   const cast = trySpell(state, 'white', 'blessing');
@@ -275,6 +318,8 @@ test('a tower at zero life is removed and no longer blocks its cells', () => {
     buffStr: 0,
     buffSpeed: 1,
     power: 1,
+    rootedUntil: 0,
+    slowUntil: 0,
     hurtBy: null,
   }];
   const next = step(state);
@@ -324,6 +369,8 @@ test('a soldier walks a one-cell gap instead of chewing the wall beside it', () 
     buffStr: 0,
     buffSpeed: 1,
     power: 1,
+    rootedUntil: 0,
+    slowUntil: 0,
     hurtBy: null,
   }];
   let cursor = state;
@@ -354,6 +401,8 @@ test('a soldier breaks a wall when every route is closed', () => {
     buffStr: 0,
     buffSpeed: 1,
     power: 1,
+    rootedUntil: 0,
+    slowUntil: 0,
     hurtBy: null,
   }];
   let cursor = state;
@@ -370,5 +419,5 @@ test('selling a block returns part of its cost', () => {
   const removed = tryRemoveBlock(placed.state, 'white', 2, 5);
   assert.equal(removed.ok, true);
   assert.equal(removed.state.blocks.length, 0);
-  assert.equal(removed.state.gold.white, 200 - BLOCKS.cost + BLOCKS.refund);
+  assert.equal(removed.state.gold.white, 80 - BLOCKS.cost + BLOCKS.refund);
 });

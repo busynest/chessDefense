@@ -3,11 +3,11 @@ import { svg, type SVGTemplateResult } from 'lit';
 import type { PieceKind, Side } from './types.js';
 
 /** Original tower art. White is pale stone and steel-blue. Black is obsidian and ember-gold. */
-export function pieceSvg(kind: PieceKind, side: Side, ratio = 1): SVGTemplateResult {
-  const id = `${side}-${kind}`;
+export function pieceSvg(kind: PieceKind, side: Side, ratio = 1, level = 1): SVGTemplateResult {
+  const id = `${side}-${kind}-${level}`;
   const stone = side === 'white' ? ['#f4efe4', '#c9bfae', '#8d8374'] : ['#4a4038', '#241e1a', '#0e0c0b'];
   const banner = side === 'white' ? '#2c6ea5' : '#a33b2c';
-  const metal = side === 'white' ? '#d5dde8' : '#e0b15a';
+  const metal = level >= 3 ? '#f0d78a' : side === 'white' ? '#d5dde8' : '#e0b15a';
   const cracked = ratio < 0.45;
   const smoking = ratio < 0.32;
   return svg`
@@ -20,9 +20,11 @@ export function pieceSvg(kind: PieceKind, side: Side, ratio = 1): SVGTemplateRes
         </linearGradient>
       </defs>
       <ellipse cx="50" cy="112" rx="28" ry="5" fill="rgba(0,0,0,0.45)"></ellipse>
-      <g fill="url(#stone-${id})" stroke="${metal}" stroke-width="1.4" stroke-linejoin="round">
-        ${body(kind, banner, metal)}
+      <g fill="url(#stone-${id})" stroke="${metal}" stroke-width="${level >= 3 ? 2 : 1.4}" stroke-linejoin="round">
+        ${body(kind, banner, metal, level)}
       </g>
+      ${gear(kind, level, metal, banner)}
+      ${[0, 1, 2].filter((pip) => pip < level).map((pip) => svg`<circle cx="${40 + pip * 10}" cy="108" r="2.3" fill="${metal}"></circle>`)}
       ${cracked ? svg`
         <path d="M38 70 L46 58 L42 48 M58 78 L52 64 L60 50" fill="none" stroke="#1a120c" stroke-width="1.3" opacity="0.8"></path>
       ` : svg``}
@@ -36,7 +38,43 @@ export function pieceSvg(kind: PieceKind, side: Side, ratio = 1): SVGTemplateRes
   `;
 }
 
-function body(kind: PieceKind, banner: string, metal: string): SVGTemplateResult {
+function gear(kind: PieceKind, level: number, metal: string, banner: string): SVGTemplateResult {
+  if (kind === 'pawn') {
+    return svg`
+      <rect x="46" y="62" width="8" height="16" rx="1" fill="#140e0c"></rect>
+      ${level >= 2 ? svg`<rect x="40" y="66" width="5" height="8" fill="#140e0c"></rect><rect x="55" y="66" width="5" height="8" fill="#140e0c"></rect>` : svg``}
+    `;
+  }
+  if (kind === 'knight') {
+    return svg`
+      <rect x="32" y="78" width="36" height="5" fill="${banner}"></rect>
+      ${level >= 3 ? svg`<rect x="36" y="62" width="10" height="8" fill="${metal}"></rect>` : svg``}
+    `;
+  }
+  if (kind === 'bishop') {
+    const crystal = level >= 3 ? 8 : 5;
+    return svg`<polygon points="50,${16 - crystal} ${50 + crystal},18 50,${20 + crystal} ${50 - crystal},18" fill="${metal}" stroke="#fff6d0" stroke-width="0.6"></polygon>`;
+  }
+  if (kind === 'rook') {
+    const barrel = level >= 3 ? 26 : 18;
+    return svg`
+      <rect x="68" y="56" width="${barrel}" height="8" rx="2" fill="#2a2420" stroke="${metal}"></rect>
+      <circle cx="${68 + barrel}" cy="60" r="3.2" fill="#120e0c"></circle>
+    `;
+  }
+  if (kind === 'queen') {
+    return svg`
+      <polygon points="50,6 56,16 50,22 44,16" fill="${metal}" stroke="#fff6d0" stroke-width="0.5"></polygon>
+      ${level >= 2 ? svg`<circle cx="30" cy="24" r="3" fill="${metal}"></circle><circle cx="70" cy="24" r="3" fill="${metal}"></circle>` : svg``}
+    `;
+  }
+  return svg`
+    <path d="M38 18 h6 v-6 h4 v6 h6 v4 h-6 v4 h-4 v-4 h-6z" fill="${metal}"></path>
+    ${level >= 3 ? svg`<ellipse cx="50" cy="100" rx="24" ry="3.5" fill="none" stroke="${banner}" stroke-width="1.6"></ellipse>` : svg``}
+  `;
+}
+
+function body(kind: PieceKind, banner: string, metal: string, level: number): SVGTemplateResult {
   const flag = svg`<path d="M62 28 h16 l-4 5 4 5 h-16z" fill="${banner}" stroke="none"></path>`;
   if (kind === 'pawn') {
     return svg`
@@ -44,7 +82,7 @@ function body(kind: PieceKind, banner: string, metal: string): SVGTemplateResult
       <rect x="40" y="58" width="20" height="22"></rect>
       <polygon points="50,34 62,58 38,58"></polygon>
       <rect x="46" y="28" width="8" height="10" fill="${metal}" stroke="none"></rect>
-      ${flag}
+      ${level >= 2 ? flag : svg``}
     `;
   }
   if (kind === 'rook') {

@@ -24,8 +24,9 @@ export interface Tower {
   rank: number;
   hp: number;
   maxHp: number;
-  moveReadyTick: number;
-  auraReadyTick: number;
+  /** 1, 2, or 3. Gold raises this. Towers never leave their square. */
+  level: number;
+  attackReadyTick: number;
   hurtBy: Side | null;
 }
 
@@ -43,8 +44,10 @@ export interface Soldier {
   buffUntil: number;
   buffStr: number;
   buffSpeed: number;
-  /** Wave scaling. 1 is a wave-1 soldier. */
+  /** Wave scaling times the parent tower's level. 1 is a level-1 wave-1 soldier. */
   power: number;
+  rootedUntil: number;
+  slowUntil: number;
   hurtBy: Side | null;
 }
 
@@ -107,13 +110,11 @@ export interface GameState {
   banner: Banner | null;
 }
 
-export interface MoveCommand {
-  type: 'move';
+export interface UpgradeCommand {
+  type: 'upgrade';
   side: Side;
-  fromFile: number;
-  fromRank: number;
-  toFile: number;
-  toRank: number;
+  file: number;
+  rank: number;
 }
 
 export interface SpellCommand {
@@ -136,4 +137,4 @@ export interface UnblockCommand {
   y: number;
 }
 
-export type PlayerCommand = MoveCommand | SpellCommand | BlockCommand | UnblockCommand;
+export type PlayerCommand = UpgradeCommand | SpellCommand | BlockCommand | UnblockCommand;

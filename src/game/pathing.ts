@@ -109,6 +109,7 @@ export function pathToward(state: GameState, x: number, y: number, side: Side): 
       best = current;
       bestDist = dist;
     }
+    const neighbors: Array<{ key: number; dist: number; forward: number }> = [];
     for (let dy = -1; dy <= 1; dy += 1) {
       for (let dx = -1; dx <= 1; dx += 1) {
         if (dx === 0 && dy === 0) continue;
@@ -117,9 +118,15 @@ export function pathToward(state: GameState, x: number, y: number, side: Side): 
         if (isBlockedCell(blocked, nx, ny)) continue;
         const key = ny * 16 + nx;
         if (previous.has(key)) continue;
-        previous.set(key, current);
-        queue.push(key);
+        const forward = side === 'white' ? ny - cy : cy - ny;
+        neighbors.push({ key, dist: distToTower(nx, ny, king), forward });
       }
+    }
+    neighbors.sort((a, b) => a.dist - b.dist || b.forward - a.forward || a.key - b.key);
+    for (const neighbor of neighbors) {
+      if (previous.has(neighbor.key)) continue;
+      previous.set(neighbor.key, current);
+      queue.push(neighbor.key);
     }
   }
   if (best === start) return [];

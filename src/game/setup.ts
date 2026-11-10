@@ -17,8 +17,8 @@ export function createMatch(options: { mode: Mode; difficulty: Difficulty; seed:
       rank,
       hp: def.hp,
       maxHp: def.hp,
-      moveReadyTick: 0,
-      auraReadyTick: 6 + (stagger % 5),
+      level: 1,
+      attackReadyTick: 4 + (stagger % 5),
       hurtBy: null,
     });
     nextId += 1;
@@ -27,7 +27,7 @@ export function createMatch(options: { mode: Mode; difficulty: Difficulty; seed:
   BACK.forEach((kind, file) => add('white', kind, file, 0, file));
   for (let file = 0; file < 8; file += 1) add('white', 'pawn', file, 1, file);
   BACK.forEach((kind, file) => add('black', kind, file, 7, file));
-  for (let file = 0; file < 8; file += 1) add('black', 'pawn', file, 6, file + 8);
+  for (let file = 0; file < 8; file += 1) add('black', 'pawn', file, 6, file);
 
   return {
     tick: 0,
@@ -48,7 +48,7 @@ export function createMatch(options: { mode: Mode; difficulty: Difficulty; seed:
     projectiles: [],
     blocks: [],
     effects: [],
-    banner: { text: 'Destroy the enemy King tower. Wave 1 has not marched.', until: WAVES.firstWaveTick },
+    banner: { text: 'Towers are fixed. Destroy the enemy King tower.', until: WAVES.firstWaveTick },
   };
 }
 

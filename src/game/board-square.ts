@@ -3,19 +3,20 @@ import { customElement, state } from 'lit/decorators.js';
 import { connect } from 'pwa-helpers/connect-mixin.js';
 
 import { blockProblem } from './commands.js';
-import { legalMoves, towerAt } from './chess.js';
+import { towerAt } from './chess.js';
 import { pieceSvg } from './glyphs.js';
 import { handleCell, handleSquare } from './input.js';
 import './one-square.js';
 import { soldierSvg } from './soldiers.js';
 import { connectStore, type RootState } from '../store.js';
 import type { GameState, PieceKind, Side, Square } from './types.js';
-import { WAVES } from './units.js';
+import { WAVES, combatOf } from './units.js';
 
 @customElement('board-square')
 export class BoardSquare extends connect(connectStore)(LitElement) {
   @state() private game: GameState | null = null;
   @state() private selected: Square | null = null;
+  @state() private hover: Square | null = null;
   @state() private placing: 'white' | 'black' | null = null;
   @state() private ghost: SquareCell | null = null;
   private ruins: Ruin[] = [];
@@ -89,6 +90,15 @@ export class BoardSquare extends connect(connectStore)(LitElement) {
       .ghost { position: absolute; box-sizing: border-box; }
       .ghost.ok { background: rgba(140, 230, 180, 0.45); box-shadow: 0 0 14px #8dffc0, inset 0 0 0 2px #f3fff8; }
       .ghost.bad { background: rgba(220, 50, 40, 0.5); box-shadow: 0 0 14px #ff6a4a, inset 0 0 0 2px #ffe0d8; }
+      .range {
+        position: absolute;
+        border-radius: 50%;
+        border: 2px dashed rgba(246, 231, 168, 0.9);
+        background: rgba(246, 214, 120, 0.12);
+        box-shadow: inset 0 0 18px rgba(246, 214, 120, 0.2);
+        transform: translate(-50%, -50%);
+        pointer-events: none;
+      }
       .unit, .shot, .pulse, .ruin {
         position: absolute;
         transform: translate(-50%, -50%);
@@ -167,19 +177,14 @@ export class BoardSquare extends connect(connectStore)(LitElement) {
   protected override render(): TemplateResult {
     const game = this.game;
     if (!game || game.status === 'menu') return html``;
-    const selectedTower = this.selected ? towerAt(game, this.selected.file, this.selected.rank) : undefined;
-    const moves = selectedTower ? legalMoves(game, selectedTower) : [];
+    const focus = this.selected ?? this.hover;
+    const focusTower = focus ? towerAt(game, focus.file, focus.rank) : undefined;
     const fresh = game.wave > 0 && game.nextWaveTick - game.tick > WAVES.gapTicks - 10;
     const squares = [];
     for (let rank = 7; rank >= 0; rank -= 1) {
       for (let file = 0; file < 8; file += 1) {
         const tower = towerAt(game, file, rank);
-        const move = moves.find((square) => square.file === file && square.rank === rank);
-        const hint = this.selected && this.selected.file === file && this.selected.rank === rank
-          ? 'selected'
-          : move
-            ? (tower ? 'capture' : 'move')
-            : '';
+        const hint = this.selected && this.selected.file === file && this.selected.rank === rank ? 'selected' : '';
         const walls = [
           wallRatio(game, file * 2, rank * 2 + 1),
           wallRatio(game, file * 2 + 1, rank * 2 + 1),
@@ -196,11 +201,15 @@ export class BoardSquare extends connect(connectStore)(LitElement) {
             .side=${tower?.side ?? ''}
             .hp=${tower?.hp ?? 0}
             .maxHp=${tower?.maxHp ?? 1}
+            .level=${tower?.level ?? 1}
             .walls=${walls}
             .etched=${this.placing !== null}
             ?portal=${fresh && !!tower}
             .label=${tower ? `${tower.side} ${tower.kind}` : 'empty square'}
             @square-click=${(event: CustomEvent<{ file: number; rank: number }>) => handleSquare(event.detail.file, event.detail.rank)}
+            @square-hover=${(event: CustomEvent<{ file: number; rank: number; on: boolean }>) => {
+              this.hover = event.detail.on ? { file: event.detail.file, rank: event.detail.rank } : null;
+            }}
           ></one-square>
         `);
       }
@@ -208,6 +217,7 @@ export class BoardSquare extends connect(connectStore)(LitElement) {
     return html`
       <div class="frame">
         ${squares}
+        ${focusTower ? this.ring(focusTower) : ''}
         <div class="actors">
           ${game.effects.map((effect) => {
             const size = effect.spell === 'heal' ? effect.radius * 2 / 8 * 100 : effect.radius * 2 / 16 * 100;
@@ -217,7 +227,7 @@ export class BoardSquare extends connect(connectStore)(LitElement) {
           })}
           ${this.ruins.map((ruin) => html`
             <div class="ruin" style="left:${(ruin.file + 0.5) / 8 * 100}%; top:${(7 - ruin.rank + 0.5) / 8 * 100}%">
-              ${pieceSvg(ruin.kind, ruin.side, 0.2)}
+              ${pieceSvg(ruin.kind, ruin.side, 0.2, 1)}
             </div>
           `)}
           ${game.soldiers.map((soldier) => html`
@@ -241,6 +251,14 @@ export class BoardSquare extends connect(connectStore)(LitElement) {
         ${this.placing ? this.maze(game) : ''}
       </div>
     `;
+  }
+
+  private ring(tower: GameState['towers'][number]): TemplateResult {
+    const range = combatOf(tower.kind, tower.level).range;
+    const size = range * 2 / 16 * 100;
+    const left = (tower.file + 0.5) / 8 * 100;
+    const top = (7 - tower.rank + 0.5) / 8 * 100;
+    return html`<div class="range" style="left:${left}%; top:${top}%; width:${size}%; height:${size}%"></div>`;
   }
 
   private maze(game: GameState): TemplateResult {

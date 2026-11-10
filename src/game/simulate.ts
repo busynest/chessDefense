@@ -2,7 +2,7 @@ import { resolveKings, sweepDead } from './commands.js';
 import { distToTower, isBlockedCell, pathToward, towerCells, blockedSet } from './pathing.js';
 import type { GameState, Projectile, Side, Soldier, Tower } from './types.js';
 import { reportHarm } from './telemetry.js';
-import { ECONOMY, PIECES, SOLDIERS, TICK_SECONDS, WAVES } from './units.js';
+import { ECONOMY, PIECES, SOLDIERS, TICK_SECONDS, WAVES, combatOf } from './units.js';
 import { aiAct } from './ai.js';
 
 interface Strike {
@@ -72,7 +72,8 @@ function launchWave(state: GameState): void {
       if (sideCount(state, tower.side) >= WAVES.soldierCap) break;
       const cell = spawnCell(state, tower, n);
       if (!cell) break;
-      const hp = Math.max(1, Math.round(def.hp * scale));
+      const grown = scale * combatOf(tower.kind, tower.level).soldierScale;
+      const hp = Math.max(1, Math.round(def.hp * grown));
       state.soldiers.push({
         id: nid(state),
         side: tower.side,
@@ -87,7 +88,9 @@ function launchWave(state: GameState): void {
         buffUntil: 0,
         buffStr: 0,
         buffSpeed: 1,
-        power: scale,
+        power: grown,
+        rootedUntil: 0,
+        slowUntil: 0,
         hurtBy: null,
       });
     }
@@ -115,7 +118,7 @@ function spawnCell(state: GameState, tower: Tower, n: number): { x: number; y: n
     for (let x = 0; x < 16; x += 1) {
       if (blocked.has(y * 16 + x)) continue;
       const side = Math.min(Math.abs(x - homeX), Math.abs(x - (homeX + 1)));
-      const score = forward * 3 + side + (x + y + n) * 0.01;
+      const score = forward * 3 + side + Math.abs(x - 7.5) * 0.01 + n * 0.001;
       if (score < bestScore) {
         best = { x, y };
         bestScore = score;
@@ -126,75 +129,114 @@ function spawnCell(state: GameState, tower: Tower, n: number): { x: number; y: n
 }
 
 function towersShoot(state: GameState, shots: Strike[]): void {
+  const hits: Array<{ tower: Tower; foe: Soldier; amount: number; control: number; controlKind: 'root' | 'slow' | 'none' }> = [];
   for (const tower of state.towers) {
-    if (tower.hp <= 0 || tower.auraReadyTick > state.tick) continue;
-    const def = PIECES[tower.kind];
-    const foe = nearestSoldier(state, towerCenter(tower), tower.side, def.auraRange);
-    if (!foe) continue;
-    foe.hp -= def.auraDamage;
-    foe.hurtBy = tower.side;
-    reportHarm({
-      source: 'tower',
-      kind: tower.kind,
-      side: tower.side,
-      target: 'soldier',
-      targetKind: foe.kind,
-      amount: def.auraDamage,
-      lethal: foe.hp <= 0,
-    });
-    tower.auraReadyTick = state.tick + def.auraTicks;
-    shots.push({
-      x: tower.file * 2 + 0.5,
-      y: tower.rank * 2 + 0.5,
-      tx: foe.x,
-      ty: foe.y,
-      side: tower.side,
-      kind: def.soldier === 'cannon' ? 'shell' : def.soldier === 'archer' ? 'arrow' : 'shot',
-    });
+    if (tower.hp <= 0 || tower.attackReadyTick > state.tick) continue;
+    const stats = combatOf(tower.kind, tower.level);
+    const origin = towerCenter(tower);
+    const foes = soldiersInRange(state, origin, tower.side, stats.range);
+    if (foes.length === 0) continue;
+    const bonus = kingAura(state, tower);
+    const damage = Math.max(1, Math.round(stats.damage * bonus));
+    const style = PIECES[tower.kind].style;
+    const queue = (foe: Soldier, amount: number, control: number, controlKind: 'root' | 'slow' | 'none') => {
+      hits.push({ tower, foe, amount, control, controlKind });
+    };
+    if (style === 'cleave') {
+      for (const foe of foes) queue(foe, damage, stats.controlTicks, 'root');
+    } else if (style === 'pierce') {
+      const hit = foes.slice(0, stats.pierce);
+      for (const foe of hit) queue(foe, damage, stats.controlTicks, 'slow');
+      const far = hit[hit.length - 1] ?? foes[0]!;
+      shots.push(bolt(tower, far, 'magic'));
+    } else if (style === 'splash') {
+      const primary = foes[0]!;
+      queue(primary, damage, 0, 'none');
+      for (const foe of foes) {
+        if (foe === primary) continue;
+        if (chebyshevSoldier(foe, primary) > stats.splash) continue;
+        queue(foe, Math.max(1, Math.round(damage * 0.5)), 0, 'none');
+      }
+      shots.push(bolt(tower, primary, 'shell'));
+    } else if (style === 'nova') {
+      const primary = foes[0]!;
+      for (const foe of foes) {
+        if (chebyshevSoldier(foe, primary) > stats.splash) continue;
+        queue(foe, damage, 0, 'none');
+      }
+      shots.push(bolt(tower, primary, 'magic'));
+    } else {
+      const foe = foes[0]!;
+      queue(foe, damage, 0, 'none');
+      shots.push(bolt(tower, foe, style === 'arrow' ? 'arrow' : 'shot'));
+    }
+    tower.attackReadyTick = state.tick + stats.attackTicks;
   }
+  for (const hit of hits) strikeSoldier(state, hit.tower, hit.foe, hit.amount, hit.control, hit.controlKind);
+}
+
+function kingAura(state: GameState, tower: Tower): number {
+  let bonus = 1;
+  for (const king of state.towers) {
+    if (king.side !== tower.side || king.kind !== 'king' || king.hp <= 0 || king.id === tower.id) continue;
+    const dist = Math.max(Math.abs(king.file - tower.file), Math.abs(king.rank - tower.rank));
+    if (dist > 2) continue;
+    bonus += combatOf('king', king.level).aura;
+  }
+  return bonus;
+}
+
+function soldiersInRange(state: GameState, origin: { x: number; y: number }, side: Side, range: number): Soldier[] {
+  return state.soldiers
+    .filter((soldier) => soldier.side !== side && soldier.hp > 0 && chebyshevPoint(soldier, origin) <= range)
+    .sort((a, b) => chebyshevPoint(a, origin) - chebyshevPoint(b, origin));
+}
+
+function strikeSoldier(state: GameState, tower: Tower, foe: Soldier, amount: number, control: number, controlKind: 'root' | 'slow' | 'none'): void {
+  foe.hp -= amount;
+  foe.hurtBy = tower.side;
+  if (controlKind === 'root') foe.rootedUntil = Math.max(foe.rootedUntil, state.tick + control);
+  if (controlKind === 'slow') foe.slowUntil = Math.max(foe.slowUntil, state.tick + control);
+  reportHarm({
+    source: 'tower',
+    kind: tower.kind,
+    side: tower.side,
+    target: 'soldier',
+    targetKind: foe.kind,
+    amount,
+    lethal: foe.hp <= 0,
+  });
+}
+
+function bolt(tower: Tower, foe: Soldier, kind: Projectile['kind']): Strike {
+  return {
+    x: tower.file * 2 + 0.5,
+    y: tower.rank * 2 + 0.5,
+    tx: foe.x,
+    ty: foe.y,
+    side: tower.side,
+    kind,
+  };
+}
+
+function chebyshevPoint(soldier: { x: number; y: number }, origin: { x: number; y: number }): number {
+  return Math.max(Math.abs(soldier.x - origin.x), Math.abs(soldier.y - origin.y));
+}
+
+function chebyshevSoldier(a: Soldier, b: Soldier): number {
+  return Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
 }
 
 function soldiersAct(state: GameState, shots: Strike[]): void {
   const blocked = blockedSet(state);
+  const attacks: Array<{ soldier: Soldier; foe: ReturnType<typeof nearestFoe>; wall: GameState['blocks'][number] | null; stats: ReturnType<typeof statsOf> }> = [];
+  const movers: Soldier[] = [];
   for (const soldier of state.soldiers) {
-    if (soldier.hp <= 0) continue;
+    if (soldier.hp <= 0 || soldier.rootedUntil > state.tick) continue;
     const stats = statsOf(soldier, state.tick);
     const foe = nearestFoe(state, soldier, stats.range);
     if (foe && soldier.attackReadyTick <= state.tick) {
-      if (foe.soldier) {
-        foe.soldier.hp -= stats.strength;
-        foe.soldier.hurtBy = soldier.side;
-        reportHarm({
-          source: 'soldier',
-          kind: soldier.kind,
-          side: soldier.side,
-          target: 'soldier',
-          targetKind: foe.soldier.kind,
-          amount: stats.strength,
-          lethal: foe.soldier.hp <= 0,
-        });
-      } else if (foe.tower) {
-        foe.tower.hp -= stats.strength;
-        foe.tower.hurtBy = soldier.side;
-        reportHarm({
-          source: 'soldier',
-          kind: soldier.kind,
-          side: soldier.side,
-          target: 'tower',
-          targetKind: foe.tower.kind,
-          amount: stats.strength,
-          lethal: foe.tower.hp <= 0,
-        });
-      }
-      soldier.attackReadyTick = state.tick + stats.attackTicks;
-      shots.push({
-        x: soldier.x,
-        y: soldier.y,
-        tx: foe.x,
-        ty: foe.y,
-        side: soldier.side,
-        kind: soldier.kind === 'cannon' ? 'shell' : soldier.kind === 'archer' || soldier.kind === 'mage' ? 'arrow' : 'shot',
-      });
+      attacks.push({ soldier, foe, wall: null, stats });
       continue;
     }
     if (foe) continue;
@@ -205,25 +247,69 @@ function soldiersAct(state: GameState, shots: Strike[]): void {
     const next = soldier.path[0];
     if (!next || isBlockedCell(blocked, next.x, next.y)) {
       const wall = nearestBlock(state, soldier);
-      if (wall && soldier.attackReadyTick <= state.tick) {
-        wall.hp -= stats.strength;
-        wall.hurtBy = soldier.side;
-        reportHarm({
-          source: 'soldier',
-          kind: soldier.kind,
-          side: soldier.side,
-          target: 'block',
-          targetKind: 'block',
-          amount: stats.strength,
-          lethal: wall.hp <= 0,
-        });
-        soldier.attackReadyTick = state.tick + stats.attackTicks;
-        shots.push({ x: soldier.x, y: soldier.y, tx: wall.x, ty: wall.y, side: soldier.side, kind: 'shot' });
-      }
+      if (wall && soldier.attackReadyTick <= state.tick) attacks.push({ soldier, foe: null, wall, stats });
       soldier.path = pathToward(state, soldier.x, soldier.y, soldier.side);
       soldier.repathTick = state.tick + 10;
       continue;
     }
+    movers.push(soldier);
+  }
+  for (const attack of attacks) {
+    const { soldier, foe, wall, stats } = attack;
+    if (foe?.soldier) {
+      foe.soldier.hp -= stats.strength;
+      foe.soldier.hurtBy = soldier.side;
+      reportHarm({
+        source: 'soldier',
+        kind: soldier.kind,
+        side: soldier.side,
+        target: 'soldier',
+        targetKind: foe.soldier.kind,
+        amount: stats.strength,
+        lethal: foe.soldier.hp <= 0,
+      });
+    } else if (foe?.tower) {
+      foe.tower.hp -= stats.strength;
+      foe.tower.hurtBy = soldier.side;
+      reportHarm({
+        source: 'soldier',
+        kind: soldier.kind,
+        side: soldier.side,
+        target: 'tower',
+        targetKind: foe.tower.kind,
+        amount: stats.strength,
+        lethal: foe.tower.hp <= 0,
+      });
+    } else if (wall) {
+      wall.hp -= stats.strength;
+      wall.hurtBy = soldier.side;
+      reportHarm({
+        source: 'soldier',
+        kind: soldier.kind,
+        side: soldier.side,
+        target: 'block',
+        targetKind: 'block',
+        amount: stats.strength,
+        lethal: wall.hp <= 0,
+      });
+    }
+    soldier.attackReadyTick = state.tick + stats.attackTicks;
+    const target = foe ?? wall;
+    if (!target) continue;
+    shots.push({
+      x: soldier.x,
+      y: soldier.y,
+      tx: target.x,
+      ty: target.y,
+      side: soldier.side,
+      kind: soldier.kind === 'cannon' ? 'shell' : soldier.kind === 'archer' || soldier.kind === 'mage' ? 'arrow' : 'shot',
+    });
+  }
+  for (const soldier of movers) {
+    if (soldier.hp <= 0) continue;
+    const stats = statsOf(soldier, state.tick);
+    const next = soldier.path[0];
+    if (!next || isBlockedCell(blocked, next.x, next.y)) continue;
     const dx = next.x - soldier.x;
     const dy = next.y - soldier.y;
     const dist = Math.hypot(dx, dy);
@@ -248,7 +334,7 @@ function statsOf(soldier: Soldier, tick: number): { strength: number; speed: num
   const buffed = soldier.buffUntil >= tick;
   return {
     strength: Math.max(1, Math.round(base.strength * soldier.power) + (buffed ? soldier.buffStr : 0)),
-    speed: base.speed * (buffed ? soldier.buffSpeed : 1),
+    speed: base.speed * (buffed ? soldier.buffSpeed : 1) * (soldier.slowUntil >= tick ? 0.55 : 1),
     range: base.range,
     attackTicks: base.attackTicks,
   };

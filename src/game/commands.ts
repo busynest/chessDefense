@@ -1,8 +1,8 @@
-import { legalMoves, towerAt } from './chess.js';
+import { towerAt } from './chess.js';
 import { chebyshev, placementSeals, towerCells } from './pathing.js';
-import type { GameState, Side, SpellId, Square } from './types.js';
+import type { GameState, Side, SpellId } from './types.js';
 import { reportHarm } from './telemetry.js';
-import { BLOCKS, ECONOMY, PIECES, SOLDIERS, SPELLS, ownsHalf, squareName } from './units.js';
+import { BLOCKS, ECONOMY, PIECES, SOLDIERS, SPELLS, combatOf, ownsHalf, squareName, upgradeCost } from './units.js';
 
 export interface MoveResult {
   state: GameState;
@@ -23,44 +23,24 @@ function banner(state: GameState, text: string): void {
   state.banner = { text, until: state.tick + 30 };
 }
 
-/**
- * Move a tower if the destination is a legal chess move, the cooldown is ready,
- * and that side can pay the gold cost. Landing on an enemy tower captures it.
- * Capturing the king ends the match.
- */
-export function tryMove(input: GameState, from: Square, to: Square, side?: Side): MoveResult {
+/** Raise a fixed tower one level. Level 3 is the top. The tower does not move. */
+export function tryUpgrade(input: GameState, side: Side, file: number, rank: number): MoveResult {
   if (input.status !== 'playing') return { state: input, ok: false, reason: 'The match is not running.' };
-  const mover = towerAt(input, from.file, from.rank);
-  if (!mover) return { state: input, ok: false, reason: 'No tower there.' };
-  if (side && mover.side !== side) return { state: input, ok: false, reason: 'That is not your tower.' };
-  const def = PIECES[mover.kind];
-  if (input.tick < mover.moveReadyTick) return { state: input, ok: false, reason: 'That tower is still walking.' };
-  if (input.gold[mover.side] < def.moveCost) return { state: input, ok: false, reason: 'Not enough gold.' };
-  const allowed = legalMoves(input, mover).some((square) => square.file === to.file && square.rank === to.rank);
-  if (!allowed) return { state: input, ok: false, reason: 'Illegal chess move.' };
+  const tower = towerAt(input, file, rank);
+  if (!tower || tower.side !== side) return { state: input, ok: false, reason: 'That is not your tower.' };
+  if (tower.level >= 3) return { state: input, ok: false, reason: 'That tower is already level 3.' };
+  const cost = upgradeCost(tower.kind, tower.level);
+  if (input.gold[side] < cost) return { state: input, ok: false, reason: 'Not enough gold to upgrade.' };
 
   const state = fresh(input);
-  const piece = towerAt(state, from.file, from.rank)!;
-  const victim = towerAt(state, to.file, to.rank);
-  state.gold[piece.side] = Math.max(0, state.gold[piece.side] - def.moveCost);
-  piece.file = to.file;
-  piece.rank = to.rank;
-  piece.moveReadyTick = state.tick + def.moveTicks;
-  const captured = victim ? PIECES[victim.kind].label : '';
-  if (victim) {
-    victim.hp = 0;
-    victim.hurtBy = piece.side;
-  }
-  sweepDead(state);
-  resolveKings(state);
-  if (state.status === 'playing') {
-    banner(
-      state,
-      captured
-        ? `${label(piece.side)} ${def.label} captures the ${captured} on ${squareName(to.file, to.rank)}.`
-        : `${label(piece.side)} ${def.label} moves to ${squareName(to.file, to.rank)}.`,
-    );
-  }
+  const piece = towerAt(state, file, rank)!;
+  state.gold[side] -= cost;
+  piece.level += 1;
+  const nextHp = combatOf(piece.kind, piece.level).maxHp;
+  const healed = nextHp - piece.maxHp;
+  piece.maxHp = nextHp;
+  piece.hp = Math.min(nextHp, piece.hp + Math.max(0, healed));
+  banner(state, `${label(side)} ${PIECES[piece.kind].label} on ${squareName(file, rank)} is now level ${piece.level}.`);
   return { state, ok: true, reason: '' };
 }
 

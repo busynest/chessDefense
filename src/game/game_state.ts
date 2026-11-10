@@ -1,6 +1,6 @@
 import { createSlice, current, type PayloadAction } from '@reduxjs/toolkit';
 
-import { tryMove, tryPlaceBlock, tryRemoveBlock, trySpell } from './commands.js';
+import { tryPlaceBlock, tryRemoveBlock, trySpell, tryUpgrade } from './commands.js';
 import { createMatch, createMenu } from './setup.js';
 import { step } from './simulate.js';
 import type { Difficulty, GameState, Side, SpellId, Square } from './types.js';
@@ -89,14 +89,13 @@ const gameSlice = createSlice({
     selectSquare(state, action: PayloadAction<Square | null>) {
       state.selected = action.payload;
     },
-    playMove(state, action: PayloadAction<{ from: Square; to: Square; side: Side }>) {
-      const result = tryMove(current(state.game), action.payload.from, action.payload.to, action.payload.side);
+    playUpgrade(state, action: PayloadAction<{ file: number; rank: number; side: Side }>) {
+      const result = tryUpgrade(current(state.game), action.payload.side, action.payload.file, action.payload.rank);
       if (!result.ok) {
-        state.onlineNote = result.reason;
+        state.game.banner = { text: result.reason, until: state.game.tick + 30 };
         return;
       }
       state.game = result.state;
-      state.selected = null;
     },
     playSpell(state, action: PayloadAction<{ side: Side; spell: SpellId }>) {
       const result = trySpell(current(state.game), action.payload.side, action.payload.spell);
@@ -142,7 +141,7 @@ export const {
   applySnapshot,
   togglePause,
   selectSquare,
-  playMove,
+  playUpgrade,
   playSpell,
   playBlock,
   playUnblock,
