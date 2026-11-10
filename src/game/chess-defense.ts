@@ -12,6 +12,7 @@ import {
   playBlock,
   playUpgrade,
   playRepair,
+  playOvercharge,
   playSpell,
   playUnblock,
   playerSide,
@@ -23,13 +24,13 @@ import {
   togglePause,
   type GameSliceState,
 } from './game_state.js';
-import { handleRepair, handleSpell, handleUpgrade } from './input.js';
+import { handleOvercharge, handleRepair, handleSpell, handleUpgrade } from './input.js';
 import { createMatchDoc, joinMatchDoc, matchCode, publishSnapshot, readMatch, signedInUid, watchInputs, watchMatch } from './online.js';
 import { loadCareer, recordResult } from './record.js';
 import './board-square.js';
 import { connectStore, store, type RootState } from '../store.js';
 import type { Difficulty, GameState, PlayerCommand, Side, SpellId } from './types.js';
-import { PIECES, SPELLS, combatOf, repairCost, squareName, upgradeCost } from './units.js';
+import { OVERCHARGE, PIECES, SPELLS, combatOf, overcharged, repairCost, squareName, upgradeCost } from './units.js';
 import type { Unsubscribe } from 'firebase/firestore';
 
 @customElement('chess-defense')
@@ -152,6 +153,8 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
       store.dispatch(playUpgrade({ file: command.file, rank: command.rank, side: 'black' }));
     } else if (command.type === 'repair') {
       store.dispatch(playRepair({ file: command.file, rank: command.rank, side: 'black' }));
+    } else if (command.type === 'overcharge') {
+      store.dispatch(playOvercharge({ file: command.file, rank: command.rank, side: 'black' }));
     } else if (command.type === 'spell') {
       store.dispatch(playSpell({ side: 'black', spell: command.spell }));
     } else if (command.type === 'block') {
@@ -258,6 +261,15 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
       }
       button.quiet, .link { background: linear-gradient(#3d4e68, #243044); }
       button.repair { background: linear-gradient(#2f6b45, #1c4630); }
+      button.charge { background: linear-gradient(#c9862a, #8a4e12); color: #fff8e8; }
+      .role { margin: 0; line-height: 1.35; }
+      .actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+      .actions button, .actions .level { min-height: 40px; }
+      @media (max-width: 720px) {
+        .role, .gold { font-size: 0.92rem; }
+        button, .link { padding: 0 10px; font-size: 0.82rem; }
+        .actions { gap: 6px; }
+      }
       button:disabled { opacity: 0.45; cursor: default; }
       label { display: grid; gap: 4px; font-size: 0.9rem; }
       select, input {
@@ -395,13 +407,14 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
         · level ${tower.level}
         · ${Math.ceil(tower.hp)}/${tower.maxHp}
       </div>
-      <div>${piece.role}</div>
-      <div>${stats.damage} damage · range ${stats.range.toFixed(1)} · every ${(stats.attackTicks / 10).toFixed(1)}s</div>
-      <div class="row">
+      <p class="role">${piece.role}</p>
+      <div>${stats.damage} damage · range ${stats.range.toFixed(1)} · every ${(stats.attackTicks / 10).toFixed(1)}s${overcharged(tower.overchargeUntil, this.slice?.game.tick ?? 0) ? ' · overcharged' : ''}</div>
+      <div class="actions">
         ${tower.level < 3 ? html`
           <button type="button" @click=${() => handleUpgrade(tower.side, tower.file, tower.rank)}>Upgrade ${cost}</button>
-        ` : html`<div>Level 3</div>`}
+        ` : html`<span class="level">Level 3</span>`}
         ${this.repairButton(tower)}
+        ${this.chargeButton(tower)}
       </div>
     `;
   }
@@ -418,6 +431,27 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
         class="repair"
         ?disabled=${missing <= 0 || wait > 0}
         @click=${() => handleRepair(tower.side, tower.file, tower.rank)}>
+        ${label}
+      </button>
+    `;
+  }
+
+  private chargeButton(tower: GameState['towers'][number]): TemplateResult {
+    if (tower.level < 3) return html``;
+    const tick = this.slice?.game.tick ?? 0;
+    const active = overcharged(tower.overchargeUntil, tick);
+    const wait = Math.max(0, tower.overchargeReadyTick - tick);
+    const label = active
+      ? `Charged ${Math.ceil((tower.overchargeUntil - tick) / 10)}s`
+      : wait > 0
+        ? `Charge ${Math.ceil(wait / 10)}s`
+        : `Overcharge ${OVERCHARGE.cost}`;
+    return html`
+      <button
+        type="button"
+        class="charge"
+        ?disabled=${active || wait > 0}
+        @click=${() => handleOvercharge(tower.side, tower.file, tower.rank)}>
         ${label}
       </button>
     `;

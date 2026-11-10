@@ -35,6 +35,8 @@ Soldiers march toward the enemy King, route around towers and blocks, fight enem
 
 **Repair.** Tap a wounded tower and spend gold for the life it is missing, about one gold per eight life, at least 4. The tower cannot be repaired again for 8 seconds. Soldiers that reach the King deal 15% of a normal hit, so one leaker wounds the keep.
 
+**Overcharge.** A level 3 tower can spend 16 gold to hit 50% harder and faster for 10 seconds. Soldiers it launches in that window are stronger. It cannot be bought again for 12 seconds. The tower glows gold while the boost lasts.
+
 **Win.** Destroy the enemy King tower, with soldiers or with a chess capture. If both King towers fall on the same step, the match is a draw.
 
 ### Units

@@ -1,37 +1,35 @@
 # Playtest report
 
-108 AI-vs-AI games after the King, repair, and Blast pass. 12 seeds, every pairing of easy, normal, and hard. Each side rolls on its own random stream, so White no longer spends Black's rolls by acting first. On a tick when both sides act, who goes first alternates. Nothing unfinished, nothing thrown, no desync on the repeated Normal mirrors.
+108 AI-vs-AI games after Overcharge. 12 seeds, every pairing of easy, normal, and hard. Nothing unfinished, nothing thrown, no desync on the repeated Normal mirrors.
 
 ## What changed
 
-- The King has 720 life. A soldier's hit on the King is 15% of a normal hit (`KING_LEAK`), rounded, and at least 1. Other towers still take the full hit. In a Hard-vs-Easy trace the losing King dropped to 645 of 720 on wave 5, was still standing on wave 7, and fell at 117 seconds.
-- Repair sits beside Upgrade. Cost is `ceil(missing life × 0.12)`, at least 4 gold. The tower then cannot be repaired for 8 seconds. A green flash marks the mend. The guest sends a repair command; the host applies it. Every difficulty repairs. Hard mends the King below 85% and any tower below 60% before it buys another upgrade. Easy and Normal wait until the wound is deeper. Once upgrades are done, any difficulty mends whatever is damaged, which is the gold sink at level 3.
-- Blast's radius is 6 cells, up from 4, so it reaches the pawn line. Normal and Hard cast it before spending gold when enemies are already in that circle (1 enemy for Hard, 2 for Normal).
-- The old shared random stream was the first-player bias: White's roll changed Black's next roll. Each side now has its own stream.
+- Level 3 towers can buy **Overcharge** for 16 gold. For 10 seconds the tower hits 50% harder and fires faster, and soldiers it launches in that window are 35% stronger. It cannot be bought again for 12 seconds. The tower glows gold and the panel reads "Charged". Healthy towers can spend this. It does not need missing life.
+- Hard buys up to four ready level-3 towers whenever it can pay, preferring rooks, bishops, and the Queen. Normal buys up to two when a wave is close, enemies are out, or the bank is at least 48. Easy buys one, and only a pawn or knight unless those are not ready.
+- The guest sends an overcharge command. The host applies it.
+- The tower panel wraps Upgrade, Repair, and Overcharge on one row. On a phone the board stays above the panel and the spell buttons stay on one line.
+- Easy was briefly allowed to buy the best tower once it was rich. That made Easy mirrors run to the 10 minute cutoff, so that change was taken back. The shorter Overcharge cooldown is the small follow-up that stayed.
 
 ## Batch
 
 | Matchup | Wins | Mean length |
 | --- | --- | --- |
-| Easy vs Easy | White 8, Black 4 | 187s (3.1 min), wave 11.7 |
-| Normal vs Normal | White 8, Black 4 | 246s (4.1 min), wave 15.7 |
-| Hard vs Hard | White 4, Black 8 | 257s (4.3 min), wave 16.3 |
-| Normal vs Easy, both seats | Normal 24, Easy 0 | 114–115s, wave 6.8 |
-| Hard vs Easy, both seats | Hard 24, Easy 0 | 113–114s, wave 6.7 |
-| Hard vs Normal, both seats | Hard 21, Normal 3 | 237–251s, wave 15–16 |
+| Easy vs Easy | White 8, Black 4 | 173s (2.9 min), wave 10.7 |
+| Normal vs Normal | White 6, Black 6 | 218s (3.6 min), wave 13.8 |
+| Hard vs Hard | White 7, Black 5 | 241s (4.0 min), wave 15.3 |
+| Normal vs Easy, both seats | Normal 24, Easy 0 | 99–101s |
+| Hard vs Easy, both seats | Hard 24, Easy 0 | 105–112s |
+| Hard vs Normal, both seats | Hard 17, Normal 7 | 210–218s |
 
-Hard vs Easy was about 74 seconds before this pass. It is now about 114 seconds, and the King lives through the first leak. Mirror games sit at 3.1, 4.1, and 4.3 minutes. Normal and Hard mirrors are just past the 4 minute mark.
+Ordering holds. Hard beats Normal in 17 of 24. Normal and Hard both beat Easy in all 24. No match hit 5 minutes. Hard vs Easy stays near 110 seconds, not a one-minute end.
 
-Gold spent is 93% of gold gained (182,516 of 195,761). Repairs: **1,430** in 108 games, **13.2 per game**. Mana spent is 87%. Spells: Blessing 2,490, Blast **221** (2.0 per game, up from 81 / 0.75), Heal 49. Heal dropped because Blast now fires first when the camp is touched. All six tower types still land hits. Bishop towers remain the highest tower damage because they shoot farthest.
+Gold spent is **99%** of gold gained. Overcharges: **9,262**, **86 per game**. Repairs: **1,093**, **10 per game**. Blast 384, Blessing 1,489, Heal 34.
 
-About **49%** of side-ticks are at the 120 gold cap. Repair is used, and it does not keep up with 3 gold a second once a town is mostly level 3 and only one tower is wounded. The 8 second cooldown is longer than it takes to refill the cap.
+Time at the 120 gold cap is **25%** of side-ticks, down from **49%**. It did not reach the 20% aim. The leftover is mostly Easy, which rarely owns a level 3 tower, so Overcharge is not there to buy. Normal and Hard, which do reach level 3, spend the bank down.
 
-## Sides
-
-Mirrors are 8–4 White, 8–4 White, and 4–8 Black. Together that is 20 White and 16 Black. The old Hard-mirror result was 8–4 White when both sides shared one random stream and White always rolled first. That specific White advantage is gone: Hard mirrors now lean Black by the same 8–4 margin. On 12 games that split is still noise-sized, and it is no longer the same side every difficulty.
+Hard mirrors are 7–5, closer than the old 8–4 White. Normal mirrors are 6–6. Easy mirrors are still 8–4 White.
 
 ## For Jack
 
-- Gold still reaches 120 for about half the match. The next sink that would matter is either slower income or a repeatable level-3 spend that is not gated on missing life (a brace, or a shorter repair cooldown on Hard only). Left alone so this batch stays the measurement.
-- Normal and Hard mirrors run a little past 4 minutes. If that is too long, a slightly higher King leak (toward 0.2) shortens them without bringing Hard vs Easy back to a one-minute end.
-- Heal is now the rare spell, because Blast answers the camp first. That is the trade for making Blast a real choice.
+- Easy still fills the gold cap because Overcharge is level 3 only and Easy rarely gets there. A cheap level-1 spend would cut the rest of the cap time. It would also give Easy something to do with gold, so it needs a careful price or Easy stops being Easy.
+- Hard vs Normal is 17–7, clear but no longer a rout. That is the Overcharge button in both players' hands.

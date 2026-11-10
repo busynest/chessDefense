@@ -25,6 +25,7 @@ export class OneSquare extends LitElement {
   @property({ type: Array }) walls: number[] = [-1, -1, -1, -1];
   @property({ type: Boolean, reflect: true }) etched = false;
   @property({ type: Boolean, reflect: true }) portal = false;
+  @property({ type: Boolean, reflect: true }) charged = false;
   @property({ type: String }) label = '';
 
   static override get styles(): CSSResultGroup {
@@ -60,6 +61,16 @@ export class OneSquare extends LitElement {
         z-index: 2;
       }
       :host([portal]) .piece { filter: drop-shadow(0 0 7px #f0c56a) drop-shadow(0 4px 2px rgba(0, 0, 0, 0.5)); }
+      :host([charged]) .piece {
+        filter: drop-shadow(0 0 10px #ffe08a) drop-shadow(0 0 3px #fff6c8) drop-shadow(0 4px 2px rgba(0, 0, 0, 0.5));
+        animation: charge 0.9s ease-in-out infinite;
+      }
+      @keyframes charge {
+        50% { filter: drop-shadow(0 0 16px #fff1a8) brightness(1.18) drop-shadow(0 4px 2px rgba(0, 0, 0, 0.5)); }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        :host([charged]) .piece { animation: none; }
+      }
       four-square { position: absolute; inset: 0; }
       .piece {
         position: absolute;

@@ -35,3 +35,13 @@ export function listenRepair(sink: ((mend: Mend) => void) | null): void {
 export function reportRepair(mend: Mend): void {
   repairSink?.(mend);
 }
+
+let overchargeSink: ((mend: Mend) => void) | null = null;
+
+export function listenOvercharge(sink: ((mend: Mend) => void) | null): void {
+  overchargeSink = sink;
+}
+
+export function reportOvercharge(mend: Mend): void {
+  overchargeSink?.(mend);
+}

@@ -21,6 +21,8 @@ export function createMatch(options: { mode: Mode; difficulty: Difficulty; seed:
       attackReadyTick: 4 + (stagger % 5),
       repairReadyTick: 0,
       mendedTick: 0,
+      overchargeUntil: 0,
+      overchargeReadyTick: 0,
       hurtBy: null,
     });
     nextId += 1;

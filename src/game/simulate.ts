@@ -2,7 +2,7 @@ import { resolveKings, sweepDead } from './commands.js';
 import { distToTower, isBlockedCell, pathToward, towerCells, blockedSet } from './pathing.js';
 import type { GameState, Projectile, Side, Soldier, Tower } from './types.js';
 import { reportHarm } from './telemetry.js';
-import { ECONOMY, PIECES, SOLDIERS, TICK_SECONDS, WAVES, combatOf, leakDamage } from './units.js';
+import { ECONOMY, OVERCHARGE, PIECES, SOLDIERS, TICK_SECONDS, WAVES, combatOf, leakDamage, overcharged } from './units.js';
 import { aiAct } from './ai.js';
 
 interface Strike {
@@ -72,7 +72,7 @@ function launchWave(state: GameState): void {
       if (sideCount(state, tower.side) >= WAVES.soldierCap) break;
       const cell = spawnCell(state, tower, n);
       if (!cell) break;
-      const grown = scale * combatOf(tower.kind, tower.level).soldierScale;
+      const grown = scale * combatOf(tower.kind, tower.level).soldierScale * (overcharged(tower.overchargeUntil, state.tick) ? OVERCHARGE.soldier : 1);
       const hp = Math.max(1, Math.round(def.hp * grown));
       state.soldiers.push({
         id: nid(state),
@@ -137,7 +137,8 @@ function towersShoot(state: GameState, shots: Strike[]): void {
     const foes = soldiersInRange(state, origin, tower.side, stats.range);
     if (foes.length === 0) continue;
     const bonus = kingAura(state, tower);
-    const damage = Math.max(1, Math.round(stats.damage * bonus));
+    const charged = overcharged(tower.overchargeUntil, state.tick);
+    const damage = Math.max(1, Math.round(stats.damage * bonus * (charged ? OVERCHARGE.damage : 1)));
     const style = PIECES[tower.kind].style;
     const queue = (foe: Soldier, amount: number, control: number, controlKind: 'root' | 'slow' | 'none') => {
       hits.push({ tower, foe, amount, control, controlKind });
@@ -170,7 +171,8 @@ function towersShoot(state: GameState, shots: Strike[]): void {
       queue(foe, damage, 0, 'none');
       shots.push(bolt(tower, foe, style === 'arrow' ? 'arrow' : 'shot'));
     }
-    tower.attackReadyTick = state.tick + stats.attackTicks;
+    const haste = charged ? OVERCHARGE.haste : 1;
+    tower.attackReadyTick = state.tick + Math.max(3, Math.round(stats.attackTicks * haste));
   }
   for (const hit of hits) strikeSoldier(state, hit.tower, hit.foe, hit.amount, hit.control, hit.controlKind);
 }

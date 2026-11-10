@@ -1,7 +1,7 @@
-import { tryPlaceBlock, tryRepair, trySpell, tryUpgrade } from './commands.js';
+import { tryOvercharge, tryPlaceBlock, tryRepair, trySpell, tryUpgrade } from './commands.js';
 import { chebyshev } from './pathing.js';
 import type { GameState, PieceKind, Side, Tower } from './types.js';
-import { AI_PERIOD, BLOCKS, SPELLS, repairCost, upgradeCost } from './units.js';
+import { AI_PERIOD, BLOCKS, OVERCHARGE, SPELLS, repairCost, upgradeCost } from './units.js';
 
 /**
  * One decision for the computer side. Towers do not move.
@@ -22,6 +22,7 @@ export function aiAct(state: GameState): void {
   if (!hesitate && state.difficulty !== 'easy' && improve(state, side, buys)) return;
   if (state.difficulty === 'easy' && roll(state, side) < 0.22 && improve(state, side, 1)) return;
   if (mend(state, side, false)) return;
+  if (surge(state, side)) return;
   if (building && layBlock(state, side)) return;
   cast(state, side);
 }
@@ -81,6 +82,37 @@ function mend(state: GameState, side: Side, urgent: boolean): boolean {
 function woundScore(tower: Tower): number {
   const ratio = tower.hp / tower.maxHp;
   return tower.kind === 'king' ? ratio - 1 : ratio;
+}
+
+function surge(state: GameState, side: Side): boolean {
+  if (state.gold[side] < OVERCHARGE.cost) return false;
+  const waveSoon = state.nextWaveTick - state.tick < 50;
+  const enemies = state.soldiers.some((soldier) => soldier.side !== side && soldier.hp > 0);
+  if (state.difficulty === 'easy' && state.gold[side] < 64 && roll(state, side) > 0.35) return false;
+  if (state.difficulty === 'normal' && !waveSoon && !enemies && state.gold[side] < 48) return false;
+  const limit = state.difficulty === 'hard' ? 4 : state.difficulty === 'normal' ? 2 : 1;
+  let bought = false;
+  for (let n = 0; n < limit; n += 1) {
+    if (state.gold[side] < OVERCHARGE.cost) break;
+    const ready = state.towers.filter((tower) => (
+      tower.side === side
+      && tower.hp > 0
+      && tower.level >= 3
+      && tower.overchargeUntil <= state.tick
+      && tower.overchargeReadyTick <= state.tick
+    ));
+    if (ready.length === 0) break;
+    const ranked = [...ready].sort((a, b) => VALUE[b.kind] - VALUE[a.kind]);
+    const pick = state.difficulty === 'easy'
+      ? ranked.find((tower) => tower.kind === 'pawn' || tower.kind === 'knight') ?? ranked[ranked.length - 1]
+      : ranked[0];
+    if (!pick) break;
+    const charged = tryOvercharge(state, side, pick.file, pick.rank);
+    if (!charged.ok) break;
+    apply(state, charged.state);
+    bought = true;
+  }
+  return bought;
 }
 
 function layBlock(state: GameState, side: Side): boolean {

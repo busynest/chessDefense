@@ -7,7 +7,7 @@ import { writeFile } from 'node:fs/promises';
 import { aiAct } from '../out/game/ai.js';
 import { createMatch } from '../out/game/setup.js';
 import { step } from '../out/game/simulate.js';
-import { listenHarm, listenRepair } from '../out/game/telemetry.js';
+import { listenHarm, listenOvercharge, listenRepair } from '../out/game/telemetry.js';
 import { ECONOMY, TICK_SECONDS } from '../out/game/units.js';
 
 const MAX_TICKS = 6000;
@@ -62,9 +62,11 @@ function play(seed, whiteDiff, blackDiff) {
   let blocksPlaced = { white: 0, black: 0 };
   let blocksDestroyed = { white: 0, black: 0 };
   let repairs = 0;
+  let overcharges = 0;
   let error = '';
   listenHarm((event) => harm.push(event));
   listenRepair(() => { repairs += 1; });
+  listenOvercharge(() => { overcharges += 1; });
   try {
     while (state.status === 'playing' && state.tick < MAX_TICKS) {
       const goldBefore = { ...state.gold };
@@ -119,6 +121,7 @@ function play(seed, whiteDiff, blackDiff) {
   } finally {
     listenHarm(null);
     listenRepair(null);
+    listenOvercharge(null);
   }
   const towersLeft = { white: 0, black: 0 };
   for (const tower of state.towers) towersLeft[tower.side] += 1;
@@ -137,6 +140,7 @@ function play(seed, whiteDiff, blackDiff) {
     economy,
     spells,
     repairs,
+    overcharges,
     blocksPlaced,
     blocksDestroyed,
     firstDeath: firstDeaths[0] ?? null,
@@ -178,6 +182,7 @@ function summarize(games) {
   let blocksPlaced = 0;
   let blocksDestroyed = 0;
   let repairs = 0;
+  let overcharges = 0;
   const spells = { blessing: 0, heal: 0, blast: 0 };
   for (const game of games) {
     const key = `${game.white}-vs-${game.black}`;
@@ -213,6 +218,7 @@ function summarize(games) {
     spells.heal += game.spells.heal;
     spells.blast += game.spells.blast;
     repairs += game.repairs;
+    overcharges += game.overcharges;
   }
   const table = {};
   for (const [key, row] of Object.entries(byMatchup)) {
@@ -250,6 +256,7 @@ function summarize(games) {
     blocksPlaced,
     blocksDestroyed,
     repairs,
+    overcharges,
     spells,
     firstTowerDeath: firstDeath,
     harm,

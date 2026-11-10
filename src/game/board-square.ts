@@ -10,7 +10,7 @@ import './one-square.js';
 import { soldierSvg } from './soldiers.js';
 import { connectStore, type RootState } from '../store.js';
 import type { GameState, PieceKind, Side, Square } from './types.js';
-import { WAVES, combatOf } from './units.js';
+import { WAVES, combatOf, overcharged } from './units.js';
 
 @customElement('board-square')
 export class BoardSquare extends connect(connectStore)(LitElement) {
@@ -215,6 +215,7 @@ export class BoardSquare extends connect(connectStore)(LitElement) {
             .walls=${walls}
             .etched=${this.placing !== null}
             ?portal=${fresh && !!tower}
+            ?charged=${!!tower && overcharged(tower.overchargeUntil, game.tick)}
             .label=${tower ? `${tower.side} ${tower.kind}` : 'empty square'}
             @square-click=${(event: CustomEvent<{ file: number; rank: number }>) => handleSquare(event.detail.file, event.detail.rank)}
             @square-hover=${(event: CustomEvent<{ file: number; rank: number; on: boolean }>) => {

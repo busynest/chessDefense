@@ -2,12 +2,12 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import { towerAt } from './chess.js';
-import { tryPlaceBlock, tryRemoveBlock, tryRepair, trySpell, tryUpgrade } from './commands.js';
+import { tryOvercharge, tryPlaceBlock, tryRemoveBlock, tryRepair, trySpell, tryUpgrade } from './commands.js';
 import { pathToward } from './pathing.js';
 import { createMatch } from './setup.js';
 import { step } from './simulate.js';
 import type { GameState, Soldier, Tower } from './types.js';
-import { BLOCKS, KING_LEAK, PIECES, SOLDIERS, WAVES, repairCost, upgradeCost } from './units.js';
+import { BLOCKS, KING_LEAK, OVERCHARGE, PIECES, SOLDIERS, WAVES, repairCost, upgradeCost } from './units.js';
 
 function playing(): GameState {
   return createMatch({ mode: 'local', difficulty: 'normal', seed: 7 });
@@ -37,6 +37,8 @@ function place(state: GameState, partial: Pick<Tower, 'side' | 'kind' | 'file' |
     attackReadyTick: 9999,
     repairReadyTick: 0,
     mendedTick: 0,
+    overchargeUntil: 0,
+    overchargeReadyTick: 0,
     hurtBy: null,
   };
   state.towers.push(tower);
@@ -100,6 +102,31 @@ test('a leaked soldier wounds the King instead of striking at full strength', ()
   assert.equal(pawnLeft?.hp, 40 - full);
   assert.equal(king.kind, 'king');
   assert.equal(pawn.kind, 'pawn');
+});
+
+test('overcharge spends gold on a level 3 tower and then waits', () => {
+  const state = bare();
+  const pawn = place(state, { side: 'white', kind: 'pawn', file: 0, rank: 1 });
+  pawn.attackReadyTick = 0;
+  assert.equal(tryOvercharge(state, 'white', 0, 1).ok, false);
+  pawn.level = 3;
+  const charged = tryOvercharge(state, 'white', 0, 1);
+  assert.equal(charged.ok, true);
+  assert.equal(charged.state.gold.white, 80 - OVERCHARGE.cost);
+  const piece = towerAt(charged.state, 0, 1)!;
+  assert.equal(piece.overchargeUntil, charged.state.tick + OVERCHARGE.duration);
+  assert.equal(tryOvercharge(charged.state, 'white', 0, 1).ok, false);
+  const foe = fighter({ id: 'target', side: 'black', kind: 'peasant', x: 1, y: 4, hp: 40, maxHp: 40 });
+  const quiet = bare();
+  const plain = place(quiet, { side: 'white', kind: 'pawn', file: 0, rank: 1 });
+  plain.level = 3;
+  plain.attackReadyTick = 0;
+  quiet.soldiers = [{ ...foe }];
+  const boosted = charged.state;
+  boosted.soldiers = [{ ...foe, id: 'boosted' }];
+  const normalHit = step(quiet).soldiers.find((soldier) => soldier.id === 'target')!.hp;
+  const boostedHit = step(boosted).soldiers.find((soldier) => soldier.id === 'boosted')!.hp;
+  assert.ok(boostedHit < normalHit);
 });
 
 test('an upgrade spends gold, raises the level, and stops at level 3', () => {

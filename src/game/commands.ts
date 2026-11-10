@@ -2,8 +2,8 @@ import { towerAt } from './chess.js';
 import { chebyshev, placementSeals, towerCells } from './pathing.js';
 import type { GameState, Side, SpellId } from './types.js';
 import { reportHarm } from './telemetry.js';
-import { BLOCKS, ECONOMY, PIECES, REPAIR, SOLDIERS, SPELLS, combatOf, ownsHalf, repairCost, squareName, upgradeCost } from './units.js';
-import { reportRepair } from './telemetry.js';
+import { BLOCKS, ECONOMY, OVERCHARGE, PIECES, REPAIR, SOLDIERS, SPELLS, combatOf, ownsHalf, repairCost, squareName, upgradeCost } from './units.js';
+import { reportOvercharge, reportRepair } from './telemetry.js';
 
 export interface MoveResult {
   state: GameState;
@@ -64,6 +64,26 @@ export function tryRepair(input: GameState, side: Side, file: number, rank: numb
   piece.mendedTick = state.tick;
   reportRepair({ side, kind: piece.kind });
   banner(state, `${label(side)} repairs the ${PIECES[piece.kind].label} on ${squareName(file, rank)}.`);
+  return { state, ok: true, reason: '' };
+}
+
+/** Level 3 only. Boosts damage, fire rate, and soldiers spawned during the window. */
+export function tryOvercharge(input: GameState, side: Side, file: number, rank: number): MoveResult {
+  if (input.status !== 'playing') return { state: input, ok: false, reason: 'The match is not running.' };
+  const tower = towerAt(input, file, rank);
+  if (!tower || tower.side !== side) return { state: input, ok: false, reason: 'That is not your tower.' };
+  if (tower.level < 3) return { state: input, ok: false, reason: 'Overcharge needs a level 3 tower.' };
+  if (input.tick < tower.overchargeUntil) return { state: input, ok: false, reason: 'That tower is already overcharged.' };
+  if (input.tick < tower.overchargeReadyTick) return { state: input, ok: false, reason: 'Overcharge is still cooling down.' };
+  if (input.gold[side] < OVERCHARGE.cost) return { state: input, ok: false, reason: 'Not enough gold to overcharge.' };
+
+  const state = fresh(input);
+  const piece = towerAt(state, file, rank)!;
+  state.gold[side] -= OVERCHARGE.cost;
+  piece.overchargeUntil = state.tick + OVERCHARGE.duration;
+  piece.overchargeReadyTick = state.tick + OVERCHARGE.cooldown;
+  reportOvercharge({ side, kind: piece.kind });
+  banner(state, `${label(side)} overcharges the ${PIECES[piece.kind].label} on ${squareName(file, rank)}.`);
   return { state, ok: true, reason: '' };
 }
 

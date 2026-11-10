@@ -228,6 +228,26 @@ export function repairCost(missing: number): number {
   return Math.max(REPAIR.minimum, Math.ceil(missing * REPAIR.perHp));
 }
 
+/**
+ * Level-3 gold sink. A healthy tower can still spend.
+ * Damage and fire rate rise, and soldiers spawned during the boost are stronger.
+ */
+export const OVERCHARGE = {
+  cost: 16,
+  /** 10 seconds of boosted fire. */
+  duration: 100,
+  /** 12 seconds from the purchase before it can be bought again. */
+  cooldown: 120,
+  damage: 1.5,
+  /** Attack cooldown multiplier. Lower is faster. */
+  haste: 0.7,
+  soldier: 1.35,
+};
+
+export function overcharged(until: number, tick: number): boolean {
+  return until > tick;
+}
+
 /** Soldier stats. Every unit has strength, life, speed, plus range and an attack cooldown. */
 export const SOLDIERS: Record<SoldierKind, SoldierDef> = {
   peasant: { label: 'Peasant', strength: 5, hp: 24, speed: 2.2, range: 1, attackTicks: 8, bounty: 3 },

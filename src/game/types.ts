@@ -31,6 +31,10 @@ export interface Tower {
   repairReadyTick: number;
   /** Tick of the last repair, for the mend flash. 0 if never. */
   mendedTick: number;
+  /** Overcharge boost lasts until this tick. */
+  overchargeUntil: number;
+  /** Next tick this level-3 tower may be overcharged again. */
+  overchargeReadyTick: number;
   hurtBy: Side | null;
 }
 
@@ -130,6 +134,13 @@ export interface RepairCommand {
   rank: number;
 }
 
+export interface OverchargeCommand {
+  type: 'overcharge';
+  side: Side;
+  file: number;
+  rank: number;
+}
+
 export interface SpellCommand {
   type: 'spell';
   side: Side;
@@ -150,4 +161,4 @@ export interface UnblockCommand {
   y: number;
 }
 
-export type PlayerCommand = UpgradeCommand | RepairCommand | SpellCommand | BlockCommand | UnblockCommand;
+export type PlayerCommand = UpgradeCommand | RepairCommand | OverchargeCommand | SpellCommand | BlockCommand | UnblockCommand;
