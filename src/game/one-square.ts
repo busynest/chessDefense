@@ -27,6 +27,8 @@ export class OneSquare extends LitElement {
   @property({ type: Boolean, reflect: true }) portal = false;
   @property({ type: Boolean, reflect: true }) charged = false;
   @property({ type: String }) label = '';
+  /** Side that marked this tower for its next wave. */
+  @property({ type: String }) marked: Side | '' = '';
 
   static override get styles(): CSSResultGroup {
     return css`
@@ -111,6 +113,24 @@ export class OneSquare extends LitElement {
       }
       .file { right: 2px; bottom: 2px; }
       .rank { left: 2px; top: 2px; }
+      .cross {
+        position: absolute;
+        inset: 10%;
+        border: 2px dashed #f4f7ff;
+        border-radius: 50%;
+        z-index: 3;
+        pointer-events: none;
+        box-shadow: 0 0 10px currentColor;
+      }
+      .cross.white { color: #f4f7ff; border-color: #f4f7ff; }
+      .cross.black { color: #ffb089; border-color: #ffb089; }
+      .cross::before, .cross::after {
+        content: "";
+        position: absolute;
+        background: currentColor;
+      }
+      .cross::before { left: 50%; top: 18%; bottom: 18%; width: 2px; margin-left: -1px; }
+      .cross::after { top: 50%; left: 18%; right: 18%; height: 2px; margin-top: -1px; }
     `;
   }
 
@@ -143,6 +163,7 @@ export class OneSquare extends LitElement {
       ${this.kind === 'queen' ? html`<chess-queen class="piece" .side=${this.side || 'white'} .hp=${this.hp} .maxHp=${this.maxHp} .level=${this.level}></chess-queen>` : ''}
       ${this.kind === 'king' ? html`<chess-king class="piece" .side=${this.side || 'white'} .hp=${this.hp} .maxHp=${this.maxHp} .level=${this.level}></chess-king>` : ''}
       ${this.kind ? html`<div class="hp ${ratio < 0.35 ? 'low' : ''}"><span style="width:${ratio * 100}%"></span></div>` : ''}
+      ${this.marked ? html`<div class="cross ${this.marked}"></div>` : ''}
       ${showRank ? html`<span class="coord rank">${this.rank + 1}</span>` : ''}
       ${showFile ? html`<span class="coord file">${'abcdefgh'[this.file]}</span>` : ''}
       <button

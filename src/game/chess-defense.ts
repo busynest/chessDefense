@@ -9,6 +9,7 @@ import {
   controlsSide,
   markRecord,
   openOnline,
+  playAim,
   playBlock,
   playUpgrade,
   playRepair,
@@ -24,7 +25,7 @@ import {
   togglePause,
   type GameSliceState,
 } from './game_state.js';
-import { handleOvercharge, handleRepair, handleSpell, handleUpgrade } from './input.js';
+import { handleAim, handleOvercharge, handleRepair, handleSpell, handleUpgrade } from './input.js';
 import { rememberMatch, recentMatches } from './history.js';
 import { closeMatch, createMatchDoc, joinMatchDoc, matchCode, publishSnapshot, readMatch, signedInUid, watchInputs, watchMatch } from './online.js';
 import { shouldPublish } from './publish.js';
@@ -66,6 +67,7 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
     'Upgrade spends gold. Level 3 is as high as a tower goes.',
     'White walls shades the two ranks in front of your towers. The gold strip in the middle stays open. A green cell can take a block, and a red cell cannot. Each row keeps a gap.',
     'When the build timer ends, every living tower sends its soldier at once.',
+    'Tap an enemy tower and press T. The next wave marches on it. Clear sends them back to the King.',
     'Spell buttons belong to the Queen. Pause freezes the clock. Menu leaves the match.',
   ];
 
@@ -140,6 +142,14 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
       handleSpell(side, 'heal');
     } else if (key === 'l') {
       handleSpell(side, 'blast');
+    } else if (key === 't' && selected) {
+      const marked = towerAt(slice.game, selected.file, selected.rank);
+      if (!marked) return;
+      const attacker: Side = marked.side === 'white' ? 'black' : 'white';
+      if (!controlsSide(slice, attacker)) return;
+      const current = slice.game.waveTarget[attacker];
+      if (current && current.file === marked.file && current.rank === marked.rank) handleAim(attacker, -1, -1);
+      else handleAim(attacker, marked.file, marked.rank);
     }
   };
 
@@ -271,6 +281,8 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
       store.dispatch(playSpell({ side: 'black', spell: command.spell }));
     } else if (command.type === 'block') {
       store.dispatch(playBlock({ side: 'black', x: command.x, y: command.y }));
+    } else if (command.type === 'target') {
+      store.dispatch(playAim({ side: 'black', file: command.file, rank: command.rank }));
     } else {
       store.dispatch(playUnblock({ side: 'black', x: command.x, y: command.y }));
     }
@@ -512,6 +524,12 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
           <button type="button" class="quiet" @click=${() => store.dispatch(setMuted(!this.muted))}>${this.muted ? 'Unmute' : 'Mute'}</button>
         </div>
         <div class="wave">${waveLabel}</div>
+        ${(['white', 'black'] as const).filter((side) => controlsSide(slice, side)).map((side) => {
+          const mark = game.waveTarget[side];
+          const marked = mark ? towerAt(game, mark.file, mark.rank) : undefined;
+          const name = marked ? `${PIECES[marked.kind].label} ${squareName(marked.file, marked.rank)}` : 'Enemy King';
+          return html`<div>Next wave target: ${name}${mark ? html` <button type="button" class="quiet" @click=${() => handleAim(side, -1, -1)}>Clear</button>` : ''}</div>`;
+        })}
         <div class="row">
           ${sides.map((side) => html`
             <button
@@ -533,7 +551,7 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
             <button type="button" @click=${() => this.advanceTutorial(false)}>Next</button>
             <button type="button" class="quiet" @click=${() => this.advanceTutorial(true)}>Skip tutorial</button>
           </div>
-        ` : game.wave === 0 ? html`<p class="coach">Towers stay on their squares. Tap one for its range, Upgrade, or Repair. Walls go on the two ranks in front of your towers. The center strip stays open, and each row keeps a gap. Keys: P pause, W walls, U upgrade, R repair, O overcharge, B H L spells.</p>` : ''}
+        ` : game.wave === 0 ? html`<p class="coach">Towers stay on their squares. Tap an enemy tower and press T to aim the next wave. Walls go on the two ranks in front of your towers. Keys: P pause, T target, W walls, U upgrade, R repair, O overcharge, B H L spells.</p>` : ''}
         ${selected ? this.inspect(selected) : html`<div>Tap one of your towers to upgrade it.</div>`}
         ${sides.map((side) => this.spells(slice, side))}
       </aside>
@@ -541,9 +559,15 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
   }
 
   private inspect(tower: GameState['towers'][number]): TemplateResult {
+    const slice = this.slice;
     const stats = combatOf(tower.kind, tower.level);
     const piece = PIECES[tower.kind];
     const cost = tower.level < 3 ? upgradeCost(tower.kind, tower.level) : 0;
+    const mine = slice ? controlsSide(slice, tower.side) : false;
+    const attacker: Side = tower.side === 'white' ? 'black' : 'white';
+    const canAim = slice ? controlsSide(slice, attacker) : false;
+    const marked = slice?.game.waveTarget[attacker];
+    const aimed = !!marked && marked.file === tower.file && marked.rank === tower.rank;
     return html`
       <div>
         <strong>${tower.side} ${piece.label}</strong>
@@ -554,11 +578,14 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
       <p class="role">${piece.role}</p>
       <div>${stats.damage} damage · range ${stats.range.toFixed(1)} · every ${(stats.attackTicks / 10).toFixed(1)}s${overcharged(tower.overchargeUntil, this.slice?.game.tick ?? 0) ? ' · overcharged' : ''}</div>
       <div class="actions">
-        ${tower.level < 3 ? html`
+        ${mine && tower.level < 3 ? html`
           <button type="button" @click=${() => handleUpgrade(tower.side, tower.file, tower.rank)}>Upgrade ${cost}</button>
-        ` : html`<span class="level">Level 3</span>`}
-        ${this.repairButton(tower)}
-        ${this.chargeButton(tower)}
+        ` : mine ? html`<span class="level">Level 3</span>` : ''}
+        ${mine ? this.repairButton(tower) : ''}
+        ${mine ? this.chargeButton(tower) : ''}
+        ${canAim ? html`
+          <button type="button" @click=${() => handleAim(attacker, aimed ? -1 : tower.file, aimed ? -1 : tower.rank)}>${aimed ? 'Clear target' : 'Target'}</button>
+        ` : ''}
       </div>
     `;
   }

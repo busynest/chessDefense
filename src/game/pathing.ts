@@ -82,60 +82,134 @@ export function isBlockedCell(blocked: Set<number>, x: number, y: number): boole
 }
 
 /**
- * Walk toward the closest reachable cell to the enemy king.
- * The king often starts walled in by friendly towers, so the goal is
- * "as close as the grid allows" rather than a free square beside the king.
- * Returns steps after the current cell, capped so state stays small.
+ * When a soldier's marked tower is gone, pick the living enemy tower
+ * closest to the soldier among those closer to the enemy King than the
+ * soldier is. Null means march on the King.
  */
-export function pathToward(state: GameState, x: number, y: number, side: Side): Cell[] {
+export function fallbackAim(state: GameState, side: Side, x: number, y: number): { file: number; rank: number } | null {
   const king = state.towers.find((tower) => tower.side !== side && tower.kind === 'king' && tower.hp > 0);
-  if (!king) return [];
+  const kingDist = king ? distToTower(x, y, king) : Infinity;
+  const ahead = state.towers.filter((tower) => {
+    if (tower.side === side || tower.hp <= 0 || tower.kind === 'king') return false;
+    if (!king) return true;
+    return distToTower(tower.file * 2 + 0.5, tower.rank * 2 + 0.5, king) < kingDist - 0.5;
+  });
+  if (ahead.length === 0) return null;
+  ahead.sort((a, b) => distToTower(x, y, a) - distToTower(x, y, b) || a.file - b.file || a.rank - b.rank);
+  const pick = ahead[0]!;
+  return { file: pick.file, rank: pick.rank };
+}
+
+const FLOW = new Map<string, Int16Array>();
+
+function navKey(blocked: Set<number>, tower: Tower, range: number): string {
+  let hash = 2166136261;
+  for (let i = 0; i < 256; i += 1) {
+    if (!blocked.has(i)) continue;
+    hash = Math.imul(hash ^ i, 16777619);
+  }
+  return `${tower.file}${tower.rank}:${range}:${hash >>> 0}`;
+}
+
+/** Distance, in steps, from every open cell to the tower's attack ring. */
+export function flowToTower(state: GameState, tower: Tower, range: number): Int16Array {
   const blocked = blockedSet(state);
-  const sx = Math.round(x);
-  const sy = Math.round(y);
-  if (sx < 0 || sy < 0 || sx > 15 || sy > 15) return [];
-  const start = sy * 16 + sx;
-  const previous = new Map<number, number>();
-  const queue: number[] = [start];
-  previous.set(start, -1);
-  let best = start;
-  let bestDist = distToTower(sx, sy, king);
-  while (queue.length > 0) {
-    const current = queue.shift()!;
+  const key = navKey(blocked, tower, range);
+  const cached = FLOW.get(key);
+  if (cached) return cached;
+  const dist = new Int16Array(256);
+  dist.fill(-1);
+  let nearest = Infinity;
+  for (let i = 0; i < 256; i += 1) {
+    if (blocked.has(i)) continue;
+    const gap = distToTower(i % 16, (i / 16) | 0, tower);
+    if (gap < nearest) nearest = gap;
+  }
+  const ring = nearest <= range ? range : nearest;
+  const queue: number[] = [];
+  for (let i = 0; i < 256; i += 1) {
+    if (blocked.has(i)) continue;
+    const gap = distToTower(i % 16, (i / 16) | 0, tower);
+    if (gap > 0 && gap <= ring) {
+      dist[i] = 0;
+      queue.push(i);
+    }
+  }
+  let head = 0;
+  while (head < queue.length) {
+    const current = queue[head]!;
+    head += 1;
     const cx = current % 16;
     const cy = (current / 16) | 0;
-    const dist = distToTower(cx, cy, king);
-    if (dist < bestDist) {
-      best = current;
-      bestDist = dist;
-    }
-    const neighbors: Array<{ key: number; dist: number; forward: number }> = [];
+    const base = dist[current] ?? 0;
     for (let dy = -1; dy <= 1; dy += 1) {
       for (let dx = -1; dx <= 1; dx += 1) {
         if (dx === 0 && dy === 0) continue;
         const nx = cx + dx;
         const ny = cy + dy;
         if (isBlockedCell(blocked, nx, ny)) continue;
-        const key = ny * 16 + nx;
-        if (previous.has(key)) continue;
-        const forward = side === 'white' ? ny - cy : cy - ny;
-        neighbors.push({ key, dist: distToTower(nx, ny, king), forward });
+        const next = ny * 16 + nx;
+        if (dist[next] !== -1) continue;
+        dist[next] = base + 1;
+        queue.push(next);
       }
     }
-    neighbors.sort((a, b) => a.dist - b.dist || b.forward - a.forward || a.key - b.key);
-    for (const neighbor of neighbors) {
-      if (previous.has(neighbor.key)) continue;
-      previous.set(neighbor.key, current);
-      queue.push(neighbor.key);
-    }
   }
-  if (best === start) return [];
+  if (FLOW.size > 48) FLOW.clear();
+  FLOW.set(key, dist);
+  return dist;
+}
+
+/**
+ * Steps toward the attack ring of a tower. Equal shortest steps are spread
+ * by `lane` so a wave does not stack on one file. Already in range returns
+ * an empty path. Deterministic for the same grid, tower, range, and lane.
+ */
+export function pathToTower(state: GameState, x: number, y: number, tower: Tower, range: number, lane: number): Cell[] {
+  const field = flowToTower(state, tower, range);
+  let cursor = Math.round(y) * 16 + Math.round(x);
+  if (cursor < 0 || cursor > 255 || (field[cursor] ?? -1) <= 0) return [];
   const cells: Cell[] = [];
-  let cursor = best;
-  while (cursor !== start && cursor >= 0) {
-    cells.push({ x: cursor % 16, y: (cursor / 16) | 0 });
-    cursor = previous.get(cursor) ?? -1;
+  for (let step = 0; step < 10 && (field[cursor] ?? -1) > 0; step += 1) {
+    const cx = cursor % 16;
+    const cy = (cursor / 16) | 0;
+    const options: number[] = [];
+    for (let dy = -1; dy <= 1; dy += 1) {
+      for (let dx = -1; dx <= 1; dx += 1) {
+        if (dx === 0 && dy === 0) continue;
+        const nx = cx + dx;
+        const ny = cy + dy;
+        if (nx < 0 || ny < 0 || nx > 15 || ny > 15) continue;
+        const key = ny * 16 + nx;
+        if (field[key] === (field[cursor] ?? 0) - 1) options.push(key);
+      }
+    }
+    if (options.length === 0) break;
+    options.sort((a, b) => a - b);
+    const pick = options[(lane + step) % options.length]!;
+    cells.push({ x: pick % 16, y: (pick / 16) | 0 });
+    cursor = pick;
   }
-  cells.reverse();
-  return cells.slice(0, 12);
+  return cells;
+}
+
+/**
+ * Walk toward the enemy King's attack ring.
+ * The king often starts walled in by friendly towers, so the goal is
+ * the closest open cell the grid allows.
+ */
+export function pathToward(state: GameState, x: number, y: number, side: Side): Cell[] {
+  const king = state.towers.find((tower) => tower.side !== side && tower.kind === 'king' && tower.hp > 0);
+  if (!king) return [];
+  return pathToTower(state, x, y, king, 1, 0);
+}
+
+/** A faint route from the middle of a side's front to its marked tower. The King draws no preview. */
+export function previewRoute(state: GameState, side: Side): Cell[] {
+  const mark = state.waveTarget[side];
+  if (!mark) return [];
+  const tower = state.towers.find((piece) => piece.hp > 0 && piece.file === mark.file && piece.rank === mark.rank && piece.side !== side);
+  if (!tower) return [];
+  const y = side === 'white' ? 4 : 11;
+  return pathToTower(state, 8, y, tower, 1, 0);
 }

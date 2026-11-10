@@ -55,6 +55,9 @@ export function createMatch(options: { mode: Mode; difficulty: Difficulty; seed:
     blocks: [],
     effects: [],
     banner: { text: 'Towers are fixed. Destroy the enemy King tower.', until: WAVES.firstWaveTick },
+    waveTarget: { white: null, black: null },
+    navHash: 0,
+    navStamp: 0,
   };
 }
 

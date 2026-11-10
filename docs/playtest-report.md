@@ -43,3 +43,18 @@ Time at the 120 gold cap is **35%** of side-ticks, down from **40%** before the 
 | Hard vs Normal, both seats | Hard 23, Normal 1 | 183–193s | 30–31% |
 
 Ordering holds. Means stay inside the previous band. Cap time is 34% and Overcharge is 9.8 per game. One Normal mirror, seed 6, ran 355 seconds. Nothing else reached five minutes, and nothing was left unfinished. No retune.
+
+## Wave targets
+
+108 games after each side can mark the next wave's tower. Easy marks the closest enemy pawn and returns to the King when the pawns are gone. Normal marks the weakest exposed tower. Hard marks the Queen, then a rook. The mark is free. Sending Easy at the King with no mark left both Easy armies milling, so three games hit the 10 minute cutoff. Aiming the pawn line fixed that. No other retune.
+
+| Matchup | Wins | Mean length | Gold at cap |
+| --- | --- | --- | --- |
+| Easy vs Easy | White 3, Black 9 | 199s, wave 12.4 | 64% |
+| Normal vs Normal | White 5, Black 7 | 227s, wave 14.4 | 40% |
+| Hard vs Hard | White 4, Black 8 | 254s, wave 16.2 | 32% |
+| Normal vs Easy, both seats | Normal 24, Easy 0 | 114–119s | 29–34% |
+| Hard vs Easy, both seats | Hard 24, Easy 0 | 116–118s | 27% |
+| Hard vs Normal, both seats | Hard 14, Normal 10 | 218–238s | 34–38% |
+
+Nothing unfinished. Easy still loses every game to Normal and Hard. Hard still beats Normal, 14–10, closer than the 23–1 from before waves could be aimed. Three games passed five minutes. The longest was an Easy mirror at 373 seconds. Cap time is 38%. Overcharge is 13 per game.

@@ -59,6 +59,10 @@ export interface Soldier {
   rootedUntil: number;
   slowUntil: number;
   hurtBy: Side | null;
+  /** Enemy tower this soldier is locked onto. Null means the enemy King. */
+  aim: Square | null;
+  /** Path cache. A new value means walls or towers changed. */
+  navStamp: number;
 }
 
 export interface Projectile {
@@ -120,6 +124,10 @@ export interface GameState {
   blocks: Block[];
   effects: Pulse[];
   banner: Banner | null;
+  /** Tower the next wave will march on. Null means the enemy King. */
+  waveTarget: Record<Side, Square | null>;
+  navHash: number;
+  navStamp: number;
 }
 
 export interface UpgradeCommand {
@@ -163,4 +171,12 @@ export interface UnblockCommand {
   y: number;
 }
 
-export type PlayerCommand = UpgradeCommand | RepairCommand | OverchargeCommand | SpellCommand | BlockCommand | UnblockCommand;
+/** file < 0 clears the mark. The next wave then marches on the King. */
+export interface TargetCommand {
+  type: 'target';
+  side: Side;
+  file: number;
+  rank: number;
+}
+
+export type PlayerCommand = UpgradeCommand | RepairCommand | OverchargeCommand | SpellCommand | BlockCommand | UnblockCommand | TargetCommand;

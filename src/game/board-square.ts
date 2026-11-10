@@ -10,6 +10,7 @@ import './one-square.js';
 import { soldierSvg } from './soldiers.js';
 import { connectStore, type RootState } from '../store.js';
 import type { GameState, PieceKind, Side, Square } from './types.js';
+import { previewRoute } from './pathing.js';
 import { BLOCKS, WAVES, buildableRows, combatOf, overcharged } from './units.js';
 
 @customElement('board-square')
@@ -81,6 +82,17 @@ export class BoardSquare extends connect(connectStore)(LitElement) {
         z-index: 5;
       }
       .actors { pointer-events: none; }
+      .route {
+        position: absolute;
+        width: 3.2%;
+        height: 3.2%;
+        border-radius: 50%;
+        transform: translate(-50%, -50%);
+        opacity: 0.85;
+        pointer-events: none;
+      }
+      .route.white { background: #f4f7ff; box-shadow: 0 0 6px #f4f7ff; }
+      .route.black { background: #ffb089; box-shadow: 0 0 6px #ffb089; }
       .maze { touch-action: none; }
       .band { position: absolute; left: 0; right: 0; height: 6.25%; pointer-events: none; }
       .band.allowed { background: rgba(70, 160, 210, 0.34); box-shadow: inset 0 0 18px rgba(140, 210, 255, 0.35); }
@@ -199,6 +211,11 @@ export class BoardSquare extends connect(connectStore)(LitElement) {
       for (let file = 0; file < 8; file += 1) {
         const tower = towerAt(game, file, rank);
         const hint = this.selected && this.selected.file === file && this.selected.rank === rank ? 'selected' : '';
+        const marked: Side | '' = tower && game.waveTarget.white && game.waveTarget.white.file === file && game.waveTarget.white.rank === rank
+          ? 'white'
+          : tower && game.waveTarget.black && game.waveTarget.black.file === file && game.waveTarget.black.rank === rank
+            ? 'black'
+            : '';
         const walls = [
           wallRatio(game, file * 2, rank * 2 + 1),
           wallRatio(game, file * 2 + 1, rank * 2 + 1),
@@ -221,6 +238,7 @@ export class BoardSquare extends connect(connectStore)(LitElement) {
             ?portal=${fresh && !!tower}
             ?charged=${!!tower && overcharged(tower.overchargeUntil, game.tick)}
             .label=${tower ? `${tower.side} ${tower.kind}` : 'empty square'}
+            .marked=${marked}
             @square-click=${(event: CustomEvent<{ file: number; rank: number }>) => handleSquare(event.detail.file, event.detail.rank)}
             @square-hover=${(event: CustomEvent<{ file: number; rank: number; on: boolean }>) => {
               this.hover = event.detail.on ? { file: event.detail.file, rank: event.detail.rank } : null;
@@ -237,6 +255,9 @@ export class BoardSquare extends connect(connectStore)(LitElement) {
           <div class="mend" style="left:${(tower.file + 0.5) / 8 * 100}%; top:${(7 - tower.rank + 0.5) / 8 * 100}%"></div>
         `)}
         <div class="actors">
+          ${(['white', 'black'] as const).flatMap((side) => previewRoute(game, side).map((cell) => html`
+            <div class="route ${side}" style="left:${(cell.x + 0.5) / 16 * 100}%; top:${(15 - cell.y + 0.5) / 16 * 100}%"></div>
+          `))}
           ${game.effects.map((effect) => {
             const size = effect.spell === 'heal' ? effect.radius * 2 / 8 * 100 : effect.radius * 2 / 16 * 100;
             const left = (effect.file + 0.5) / 8 * 100;

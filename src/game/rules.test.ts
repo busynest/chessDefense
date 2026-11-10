@@ -3,8 +3,8 @@ import { test } from 'node:test';
 
 import { aiAct } from './ai.js';
 import { towerAt } from './chess.js';
-import { tryOvercharge, tryPlaceBlock, tryRemoveBlock, tryRepair, trySpell, tryUpgrade } from './commands.js';
-import { pathToward } from './pathing.js';
+import { tryAim, tryOvercharge, tryPlaceBlock, tryRemoveBlock, tryRepair, trySpell, tryUpgrade } from './commands.js';
+import { fallbackAim, pathToTower, pathToward } from './pathing.js';
 import { createMatch } from './setup.js';
 import { step } from './simulate.js';
 import type { GameState, Soldier, Tower } from './types.js';
@@ -60,6 +60,8 @@ function fighter(partial: Pick<Soldier, 'id' | 'side' | 'kind' | 'x' | 'y' | 'hp
     rootedUntil: 0,
     slowUntil: 0,
     hurtBy: null,
+    aim: null,
+    navStamp: 0,
     ...partial,
   };
 }
@@ -292,6 +294,8 @@ test('melee combat damages a soldier and removes it at zero life', () => {
     rootedUntil: 0,
     slowUntil: 0,
     hurtBy: null,
+    aim: null,
+    navStamp: 0,
   };
   const defender: Soldier = { ...attacker, id: 'b', side: 'black', kind: 'peasant', x: 1, y: 2, hp: 5, maxHp: 16 };
   state.soldiers = [attacker, defender];
@@ -322,6 +326,8 @@ test('destroying the enemy king ends the match', () => {
     rootedUntil: 0,
     slowUntil: 0,
     hurtBy: null,
+    aim: null,
+    navStamp: 0,
   }];
   const next = step(state);
   assert.equal(next.status, 'victory');
@@ -352,6 +358,8 @@ test('a queen blessing buffs a nearby friendly soldier and spends mana', () => {
     rootedUntil: 0,
     slowUntil: 0,
     hurtBy: null,
+    aim: null,
+    navStamp: 0,
   }];
   const cast = trySpell(state, 'white', 'blessing');
   assert.equal(cast.ok, true);
@@ -458,6 +466,8 @@ test('a tower at zero life is removed and no longer blocks its cells', () => {
     rootedUntil: 0,
     slowUntil: 0,
     hurtBy: null,
+    aim: null,
+    navStamp: 0,
   }];
   const next = step(state);
   assert.equal(next.towers.some((tower) => tower.id === pawn.id), false);
@@ -509,6 +519,8 @@ test('a soldier walks a one-cell gap instead of chewing the wall beside it', () 
     rootedUntil: 0,
     slowUntil: 0,
     hurtBy: null,
+    aim: null,
+    navStamp: 0,
   }];
   let cursor = state;
   for (let i = 0; i < 90; i += 1) cursor = step(cursor);
@@ -541,6 +553,8 @@ test('a soldier breaks a wall when every route is closed', () => {
     rootedUntil: 0,
     slowUntil: 0,
     hurtBy: null,
+    aim: null,
+    navStamp: 0,
   }];
   let cursor = state;
   for (let i = 0; i < 20; i += 1) cursor = step(cursor);
@@ -557,4 +571,65 @@ test('selling a block returns part of its cost', () => {
   assert.equal(removed.ok, true);
   assert.equal(removed.state.blocks.length, 0);
   assert.equal(removed.state.gold.white, 80 - BLOCKS.cost + BLOCKS.refund);
+});
+
+test('a side marks an enemy tower for the next wave and can clear it', () => {
+  const state = playing();
+  assert.equal(tryAim(state, 'white', 0, 1).ok, false);
+  const marked = tryAim(state, 'white', 0, 6);
+  assert.equal(marked.ok, true);
+  assert.deepEqual(marked.state.waveTarget.white, { file: 0, rank: 6 });
+  assert.equal(marked.state.gold.white, state.gold.white);
+  const cleared = tryAim(marked.state, 'white', -1, -1);
+  assert.equal(cleared.ok, true);
+  assert.equal(cleared.state.waveTarget.white, null);
+  const guest = tryAim(state, 'black', 4, 0);
+  assert.equal(guest.ok, true);
+  assert.equal(tryAim(state, 'black', 4, 7).ok, false);
+});
+
+test('the next wave locks onto the marked tower and falls back when it is gone', () => {
+  let state = bare();
+  place(state, { side: 'white', kind: 'pawn', file: 0, rank: 1 });
+  const pawn = place(state, { side: 'black', kind: 'pawn', file: 0, rank: 6, hp: 40 });
+  place(state, { side: 'white', kind: 'king', file: 4, rank: 0 });
+  place(state, { side: 'black', kind: 'king', file: 4, rank: 7 });
+  state.waveTarget.white = { file: pawn.file, rank: pawn.rank };
+  state.nextWaveTick = 1;
+  state = step(state);
+  const launched = state.soldiers.find((soldier) => soldier.side === 'white');
+  assert.ok(launched);
+  assert.deepEqual(launched.aim, { file: 0, rank: 6 });
+  const marked = state.towers.find((tower) => tower.file === 0 && tower.rank === 6);
+  assert.ok(marked);
+  marked.hp = 0;
+  const fallen = step(state);
+  assert.equal(fallen.waveTarget.white, null);
+  const walker = fallen.soldiers.find((soldier) => soldier.id === launched.id);
+  assert.equal(walker?.aim, null);
+});
+
+test('a ranged soldier stops at range and a new wall changes the path', () => {
+  const state = bare();
+  const king = place(state, { side: 'black', kind: 'king', file: 4, rank: 7 });
+  place(state, { side: 'white', kind: 'king', file: 4, rank: 0 });
+  assert.equal(pathToTower(state, 8, 12, king, 4, 0).length, 0);
+  const open = pathToTower(state, 0, 2, king, 1, 0);
+  assert.ok(open.length > 0);
+  for (let x = 0; x < 16; x += 1) {
+    if (x === 15) continue;
+    state.blocks.push({ x, y: 6, side: 'white', hp: 28, maxHp: 28, hurtBy: null });
+  }
+  const around = pathToTower(state, 0, 2, king, 1, 0);
+  assert.ok(around.length > 0);
+  assert.ok(around.every((cell) => !(cell.y === 6 && cell.x !== 15)));
+  assert.notDeepEqual(open, around);
+});
+
+test('a fallen mark falls back toward the King', () => {
+  const state = bare();
+  place(state, { side: 'black', kind: 'king', file: 4, rank: 7 });
+  place(state, { side: 'black', kind: 'pawn', file: 0, rank: 6 });
+  assert.deepEqual(fallbackAim(state, 'white', 1, 2), { file: 0, rank: 6 });
+  assert.equal(fallbackAim(state, 'white', 8, 14), null);
 });

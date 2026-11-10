@@ -215,6 +215,34 @@ function rowWouldClose(input: GameState, x: number, y: number): boolean {
   return open === 0;
 }
 
+/** Free. Marks the tower the next wave will march on. file < 0 clears it back to the King. */
+export function tryAim(input: GameState, side: Side, file: number, rank: number): MoveResult {
+  if (input.status !== 'playing') return { state: input, ok: false, reason: 'The match is not running.' };
+  const state = fresh(input);
+  if (file < 0 || rank < 0) {
+    state.waveTarget[side] = null;
+    banner(state, `${label(side)} will send the next wave at the enemy King.`);
+    return { state, ok: true, reason: '' };
+  }
+  const tower = towerAt(state, file, rank);
+  if (!tower || tower.side === side) return { state: input, ok: false, reason: 'That is not an enemy tower.' };
+  state.waveTarget[side] = { file, rank };
+  banner(state, `${label(side)} marks the ${PIECES[tower.kind].label} on ${squareName(file, rank)}.`);
+  return { state, ok: true, reason: '' };
+}
+
+/** If the marked tower fell before the launch, the next wave goes to the King. */
+export function refreshAims(state: GameState): void {
+  for (const side of ['white', 'black'] as const) {
+    const mark = state.waveTarget[side];
+    if (!mark) continue;
+    const tower = towerAt(state, mark.file, mark.rank);
+    if (tower && tower.hp > 0 && tower.side !== side) continue;
+    state.waveTarget[side] = null;
+    banner(state, `The marked tower fell. ${label(side)}'s next wave marches on the King.`);
+  }
+}
+
 export function blockProblem(input: GameState, side: Side, x: number, y: number): string {
   if (input.status !== 'playing') return 'The match is not running.';
   if (x < 0 || y < 0 || x > 15 || y > 15) return 'That cell is off the board.';

@@ -73,7 +73,8 @@ export class HowToPage extends PageViewElement {
         <h2>Controls</h2>
         <ul>
           <li>Tap a tower to see its range and stats. Upgrade spends gold and stops at level 3. Repair spends gold to restore missing life, then waits 8 seconds. Overcharge, on a level 3 tower, costs 36 gold the first time and 28 more each time that same tower buys it again. The boost lasts 8 seconds and then waits 30.</li>
-          <li>Keys: P or Space pauses, Escape pauses or cancels a wall, M returns to the menu, W toggles walls, U upgrades the selected tower, R repairs it, O overcharges it, and B, H, and L cast Blessing, Heal, and Blast.</li>
+          <li>Tap an enemy tower, then Target or T. The next wave locks onto that tower until it falls. Clear, or T again, sends the wave back to the King. The mark is free.</li>
+          <li>Keys: P or Space pauses, Escape pauses or cancels a wall, M returns to the menu, T targets the selected enemy tower, W toggles walls, U upgrades the selected tower, R repairs it, O overcharges it, and B, H, and L cast Blessing, Heal, and Blast.</li>
           <li>The wall button shades the two ranks in front of your towers. The gold strip across the middle is reserved. A green ghost is legal and a red ghost is not. Each row must keep a gap. Tap your own wall to sell it.</li>
           <li>Spell buttons sit in the panel. They stay quiet until you can afford them.</li>
           <li>Pause freezes the armies. Menu leaves the match.</li>

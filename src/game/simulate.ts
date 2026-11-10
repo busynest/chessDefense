@@ -1,5 +1,6 @@
-import { resolveKings, sweepDead } from './commands.js';
-import { distToTower, isBlockedCell, pathToward, towerCells, blockedSet } from './pathing.js';
+import { refreshAims, resolveKings, sweepDead } from './commands.js';
+import { blockedSet, distToTower, fallbackAim, isBlockedCell, pathToTower, towerCells } from './pathing.js';
+import { towerAt } from './chess.js';
 import type { GameState, Projectile, Side, Soldier, Tower } from './types.js';
 import { reportHarm } from './telemetry.js';
 import { ECONOMY, OVERCHARGE, PIECES, SOLDIERS, TICK_SECONDS, WAVES, combatOf, leakDamage, overcharged } from './units.js';
@@ -20,6 +21,12 @@ export function step(input: GameState): GameState {
   const state = structuredClone(input);
   state.tick += 1;
   gain(state);
+  const hash = navHash(blockedSet(state));
+  if (hash !== state.navHash) {
+    state.navHash = hash;
+    state.navStamp += 1;
+  }
+  refreshAims(state);
   if (state.tick >= state.nextWaveTick) launchWave(state);
   const shots: Strike[] = [];
   towersShoot(state, shots);
@@ -92,9 +99,28 @@ function launchWave(state: GameState): void {
         rootedUntil: 0,
         slowUntil: 0,
         hurtBy: null,
+        aim: aimOf(state, tower.side),
+        navStamp: state.navStamp,
       });
     }
   }
+}
+
+function navHash(blocked: Set<number>): number {
+  let hash = 2166136261;
+  for (let i = 0; i < 256; i += 1) {
+    if (!blocked.has(i)) continue;
+    hash = Math.imul(hash ^ i, 16777619);
+  }
+  return hash >>> 0;
+}
+
+function aimOf(state: GameState, side: Side): Soldier['aim'] {
+  const mark = state.waveTarget[side];
+  if (!mark) return null;
+  const tower = towerAt(state, mark.file, mark.rank);
+  if (!tower || tower.hp <= 0 || tower.side === side) return null;
+  return { file: mark.file, rank: mark.rank };
 }
 
 function sideCount(state: GameState, side: Side): number {
@@ -229,6 +255,21 @@ function chebyshevSoldier(a: Soldier, b: Soldier): number {
   return Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
 }
 
+function focusTower(state: GameState, soldier: Soldier): Tower | null {
+  if (soldier.aim) {
+    const marked = towerAt(state, soldier.aim.file, soldier.aim.rank);
+    if (marked && marked.hp > 0 && marked.side !== soldier.side) return marked;
+    soldier.aim = fallbackAim(state, soldier.side, soldier.x, soldier.y);
+    soldier.path = [];
+    soldier.navStamp = -1;
+  }
+  if (soldier.aim) {
+    const next = towerAt(state, soldier.aim.file, soldier.aim.rank);
+    if (next && next.hp > 0) return next;
+  }
+  return state.towers.find((tower) => tower.side !== soldier.side && tower.kind === 'king' && tower.hp > 0) ?? null;
+}
+
 function soldiersAct(state: GameState, shots: Strike[]): void {
   const blocked = blockedSet(state);
   const attacks: Array<{ soldier: Soldier; foe: ReturnType<typeof nearestFoe>; wall: GameState['blocks'][number] | null; stats: ReturnType<typeof statsOf> }> = [];
@@ -237,21 +278,48 @@ function soldiersAct(state: GameState, shots: Strike[]): void {
     if (soldier.hp <= 0 || soldier.rootedUntil > state.tick) continue;
     const stats = statsOf(soldier, state.tick);
     const foe = nearestFoe(state, soldier, stats.range);
-    if (foe && soldier.attackReadyTick <= state.tick) {
+    if (foe?.soldier && soldier.attackReadyTick <= state.tick) {
       attacks.push({ soldier, foe, wall: null, stats });
       continue;
     }
-    if (foe) continue;
-    if (soldier.repathTick <= state.tick || soldier.path.length === 0) {
-      soldier.path = pathToward(state, soldier.x, soldier.y, soldier.side);
-      soldier.repathTick = state.tick + 10;
+    if (foe?.soldier) continue;
+    const focus = focusTower(state, soldier);
+    const focusClose = focus !== null && distToTower(soldier.x, soldier.y, focus) <= stats.range;
+    if (focusClose && soldier.attackReadyTick <= state.tick) {
+      const cell = towerCells(focus)[0]!;
+      attacks.push({ soldier, foe: { tower: focus, x: cell.x, y: cell.y }, wall: null, stats });
+      soldier.path = [];
+      continue;
+    }
+    if (focusClose) {
+      soldier.path = [];
+      continue;
+    }
+    if (foe?.tower && soldier.attackReadyTick <= state.tick) {
+      attacks.push({ soldier, foe, wall: null, stats });
+      continue;
+    }
+    if (soldier.navStamp !== state.navStamp || soldier.path.length === 0) {
+      soldier.path = focus
+        ? pathToTower(state, soldier.x, soldier.y, focus, stats.range, laneOf(soldier))
+        : [];
+      if (soldier.path.length === 0 && focus) {
+        const blocker = nearestTower(state, soldier);
+        if (blocker && blocker.id !== focus.id) {
+          soldier.path = pathToTower(state, soldier.x, soldier.y, blocker, stats.range, laneOf(soldier));
+        }
+      }
+      soldier.navStamp = state.navStamp;
+      soldier.repathTick = state.tick + 12;
     }
     const next = soldier.path[0];
     if (!next || isBlockedCell(blocked, next.x, next.y)) {
       const wall = nearestBlock(state, soldier);
       if (wall && soldier.attackReadyTick <= state.tick) attacks.push({ soldier, foe: null, wall, stats });
-      soldier.path = pathToward(state, soldier.x, soldier.y, soldier.side);
-      soldier.repathTick = state.tick + 10;
+      soldier.path = focus
+        ? pathToTower(state, soldier.x, soldier.y, focus, stats.range, laneOf(soldier))
+        : [];
+      soldier.navStamp = state.navStamp;
       continue;
     }
     movers.push(soldier);
@@ -328,6 +396,12 @@ function soldiersAct(state: GameState, shots: Strike[]): void {
   }
 }
 
+function laneOf(soldier: Soldier): number {
+  let lane = 0;
+  for (let i = 0; i < soldier.id.length; i += 1) lane = (lane + soldier.id.charCodeAt(i) * (i + 1)) % 97;
+  return lane;
+}
+
 function bury(state: GameState): void {
   sweepDead(state);
 }
@@ -355,6 +429,20 @@ function nearestSoldier(state: GameState, origin: { x: number; y: number }, side
     const dist = Math.max(Math.abs(soldier.x - origin.x), Math.abs(soldier.y - origin.y));
     if (dist < bestDist) {
       best = soldier;
+      bestDist = dist;
+    }
+  }
+  return best;
+}
+
+function nearestTower(state: GameState, soldier: Soldier): Tower | null {
+  let best: Tower | null = null;
+  let bestDist = Infinity;
+  for (const tower of state.towers) {
+    if (tower.side === soldier.side || tower.hp <= 0) continue;
+    const dist = distToTower(soldier.x, soldier.y, tower);
+    if (dist < bestDist) {
+      best = tower;
       bestDist = dist;
     }
   }

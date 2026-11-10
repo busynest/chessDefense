@@ -1,4 +1,4 @@
-import { tryOvercharge, tryPlaceBlock, tryRepair, trySpell, tryUpgrade } from './commands.js';
+import { tryAim, tryOvercharge, tryPlaceBlock, tryRepair, trySpell, tryUpgrade } from './commands.js';
 import { chebyshev } from './pathing.js';
 import type { GameState, PieceKind, Side, Tower } from './types.js';
 import { AI_PERIOD, BLOCKS, SPELLS, buildableRows, combatOf, overchargeCost, repairCost, upgradeCost } from './units.js';
@@ -14,6 +14,7 @@ export function aiAct(state: GameState): void {
   const period = AI_PERIOD[state.difficulty];
   if (state.tick % period !== 0) return;
   const side: Side = state.humanSide === 'white' ? 'black' : 'white';
+  chooseAim(state, side);
   if (state.difficulty === 'easy' && state.gold[side] >= 64 && improve(state, side, 1)) return;
   if (state.difficulty === 'easy' && state.gold[side] >= 96 && layBlock(state, side)) return;
   if (state.difficulty === 'easy' && roll(state, side) < 0.5) return;
@@ -126,6 +127,38 @@ function surge(state: GameState, side: Side): boolean {
   return true;
 }
 
+function chooseAim(state: GameState, side: Side): void {
+  const foes = state.towers.filter((tower) => tower.side !== side && tower.hp > 0);
+  if (foes.length === 0) return;
+  if (state.difficulty === 'easy') {
+    const pawns = foes.filter((tower) => tower.kind === 'pawn');
+    if (pawns.length === 0) {
+      if (state.waveTarget[side]) {
+        const cleared = tryAim(state, side, -1, -1);
+        if (cleared.ok) apply(state, cleared.state);
+      }
+      return;
+    }
+  }
+  const exposed = (tower: Tower) => (side === 'white' ? tower.rank : 7 - tower.rank);
+  const pool = state.difficulty === 'easy' ? foes.filter((tower) => tower.kind === 'pawn') : foes;
+  const weakest = [...pool].sort((a, b) => (a.hp / a.maxHp) - (b.hp / b.maxHp) || exposed(a) - exposed(b) || a.file - b.file)[0]!;
+  let pick = weakest;
+  if (state.difficulty === 'hard') {
+    const queen = foes.find((tower) => tower.kind === 'queen' && tower.hp / tower.maxHp > 0.25);
+    const rook = foes.filter((tower) => tower.kind === 'rook' && tower.hp > 0).sort((a, b) => b.hp - a.hp)[0];
+    pick = queen ?? rook ?? weakest;
+  } else if (pick.kind === 'king') {
+    const other = foes.find((tower) => tower.kind !== 'king');
+    if (other) pick = other;
+  }
+  const current = state.waveTarget[side];
+  if (current && current.file === pick.file && current.rank === pick.rank) return;
+  if (pick.kind === 'king' && !current) return;
+  const aimed = tryAim(state, side, pick.file, pick.rank);
+  if (aimed.ok) apply(state, aimed.state);
+}
+
 function layBlock(state: GameState, side: Side): boolean {
   const budget = state.difficulty === 'easy' ? 4 : state.difficulty === 'normal' ? 4 : 5;
   const owned = state.blocks.filter((block) => block.side === side && block.hp > 0).length;
@@ -196,6 +229,7 @@ function apply(state: GameState, next: GameState): boolean {
   state.winner = next.winner;
   state.nextId = next.nextId;
   state.rng = next.rng;
+  state.waveTarget = next.waveTarget;
   return true;
 }
 

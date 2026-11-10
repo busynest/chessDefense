@@ -1,6 +1,6 @@
 import { createSlice, current, type PayloadAction } from '@reduxjs/toolkit';
 
-import { tryOvercharge, tryPlaceBlock, tryRemoveBlock, tryRepair, trySpell, tryUpgrade } from './commands.js';
+import { tryAim, tryOvercharge, tryPlaceBlock, tryRemoveBlock, tryRepair, trySpell, tryUpgrade } from './commands.js';
 import { createMatch, createMenu } from './setup.js';
 import { step } from './simulate.js';
 import type { Difficulty, GameState, Side, SpellId, Square } from './types.js';
@@ -129,6 +129,14 @@ const gameSlice = createSlice({
       }
       state.game = result.state;
     },
+    playAim(state, action: PayloadAction<{ side: Side; file: number; rank: number }>) {
+      const result = tryAim(current(state.game), action.payload.side, action.payload.file, action.payload.rank);
+      if (!result.ok) {
+        state.game.banner = { text: result.reason, until: state.game.tick + 30 };
+        return;
+      }
+      state.game = result.state;
+    },
     playUnblock(state, action: PayloadAction<{ side: Side; x: number; y: number }>) {
       const result = tryRemoveBlock(current(state.game), action.payload.side, action.payload.x, action.payload.y);
       if (!result.ok) {
@@ -163,6 +171,7 @@ export const {
   playSpell,
   playBlock,
   playUnblock,
+  playAim,
   setPlacing,
   tick,
   markRecord,

@@ -1,5 +1,5 @@
 import { towerAt } from './chess.js';
-import { controlsSide, playBlock, playOvercharge, playRepair, playSpell, playUnblock, playUpgrade, selectSquare } from './game_state.js';
+import { controlsSide, playAim, playBlock, playOvercharge, playRepair, playSpell, playUnblock, playUpgrade, selectSquare } from './game_state.js';
 import { sendCommand, signedInUid } from './online.js';
 import { store } from '../store.js';
 import type { PlayerCommand, Side, SpellId } from './types.js';
@@ -10,8 +10,21 @@ export function handleSquare(file: number, rank: number): void {
   const game = slice.game;
   if (game.status !== 'playing') return;
   const tower = towerAt(game, file, rank);
-  if (tower && controlsSide(slice, tower.side)) store.dispatch(selectSquare({ file, rank }));
+  if (tower) store.dispatch(selectSquare({ file, rank }));
   else store.dispatch(selectSquare(null));
+}
+
+/** Mark an enemy tower for the next wave. file < 0 clears the mark back to the King. */
+export function handleAim(side: Side, file: number, rank: number): void {
+  const slice = store.getState().game;
+  if (!controlsSide(slice, side)) return;
+  const command: PlayerCommand = { type: 'target', side, file, rank };
+  if (slice.role === 'guest') {
+    const uid = signedInUid();
+    if (uid) void sendCommand(slice.onlineCode, uid, command);
+    return;
+  }
+  store.dispatch(playAim({ side, file, rank }));
 }
 
 export function handleUpgrade(side: Side, file: number, rank: number): void {
