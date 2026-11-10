@@ -71,13 +71,33 @@ Ranked gaps, most felt first:
 
 Easy's gold-cap time fell from 74% to 52%. The longest game is 385s, down from 481s. Thirty-three games pass five minutes and then end in the exposed-kings minute. Cross-tier order is unchanged: Easy loses every game to Normal and Hard, and Hard beats Normal 16–8. Overcharge is 14.7 per game. Gold sits at the 120 cap 43% of the time.
 
+## Third pass
+
+| Category | Was | Now | What changed |
+| --- | --- | --- | --- |
+| Core fun / pacing | 7 | 7 | The five-minute exposure is now a HUD countdown, and How to play states it. King hits are full hits, other towers take double, and a soldier in range strikes the tower before dueling. |
+| Clarity / onboarding | 7 | 8 | The tour points. Step 1 rings the pawn. Later steps highlight a wall square, the Target button, and Blessing. Skip still works. How to play can replay the tour. |
+| Game feel / juice | 6 | 7 | Each shot kind has its own synthesized voice. A tower flashes when hit, and a collapse shakes the board unless reduced motion is on. The wave launch is a four-note fanfare. |
+| Visual polish | 7 | 7 | Soldiers are drawn on one canvas as distinct tokens (circle, triangle, diamond, block) in the team color. The towers are unchanged. |
+| UI / HUD, desktop | 6 | 7 | One gold line for both sides. Wall count lives on the button. The exposed countdown is its own line. |
+| UI / HUD, phone | 6 | 7 | The same shorter HUD, with the dock still under the board. |
+| AI / difficulty curve | 6 | 7 | Normal and Hard bless the wave they are about to launch, then Overcharge a tower for that launch, and heal or repair a tower that has enemies on it. |
+| Balance | 6 | 7 | 108 games, nothing unfinished. Easy mirrors mean 233s. Normal mirrors fell from 321s to 275s. Longest game 371s. Hard beats Normal 15–9. Easy loses every cross match. Easy gold-cap time is 52%. |
+| Online | 6 | 7 | Either player can offer a rematch. When both have agreed, the host starts a new match and both keep their seats. |
+| Performance | 6 | 7 | 4× CPU, wave 12, 64 soldiers. Before: 64 soldier elements, 16.7ms idle frame. After: one canvas, 17.6ms idle frame, 19.3ms per simulation step plus paint. The frame stayed on the 60Hz cap. The node count is what dropped. |
+| Accessibility | 5 | 6 | Settings has Bright colors (blue and orange) on top of the circle and diamond. Buttons show a focus ring. The wave line is aria-live and the panel is labeled. |
+| Stability | 8 | 8 | 37 unit tests passed, including Hard blessing the next wave and the online rematch agreement. |
+| Completeness | 7 | 7 | Rematch is in. A damage log is not. |
+
+**Overall now: 7.** A player can learn it from the board, hear the difference between a cannon and an arrow, and finish a mirror when the kings are exposed. It is still not a 10.
+
+108 games after the hunt and the full King hit. Nothing unfinished, no draws. Easy vs Easy 6–6, mean 233s, wave 14.7. Normal vs Normal 6–6, 275s. Hard vs Hard 5–7, 291s. Normal and Hard both beat Easy 24–0. Hard beats Normal 15–9, means 270–293s. Longest game 371s. Twenty-six games pass five minutes and end in the exposed minute. Easy gold-cap time 52%. All-sides gold cap 42%. Overcharge 15.4 per game.
+
 ## Still left for a 10
 
-- A real first-match coach that points at the pawn, the wall rank, and an enemy tower, instead of a text step.
-- Impact: a flinch on the tower, a hit pause of a frame, distinct sounds for cannon, arrow, and spell.
-- Desktop HUD that is a few decisions, not a column of every system.
-- Online rematch, a ready check, and a full two-window playtest under latency.
-- A measured frame time on a 4× CPU throttle at wave 15, and a render path that is not one DOM node per soldier.
-- Colorblind settings, not only a second shape. Focus order on the board.
-- AI that is more than one script with three budgets. Hard should feel like it is hunting, not clicking faster.
-- Replay and a damage breakdown on the result.
+- Soldier tokens are clear and cheap, and they are not the old illustrated sprites.
+- The desktop panel is shorter and still lists every system once a tower is selected.
+- Online rematch has no ready check and has not been sat through in two browsers under latency.
+- Focus order on the board squares is the browser default.
+- Hard and Normal now time a blessing and an Overcharge to the launch and defend a tower under attack. They are still one script.
+- No replay, and the result still has no damage breakdown.

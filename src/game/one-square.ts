@@ -29,6 +29,8 @@ export class OneSquare extends LitElement {
   @property({ type: String }) label = '';
   /** Side that marked this tower for its next wave. */
   @property({ type: String }) marked: Side | '' = '';
+  @property({ type: Boolean, reflect: true }) flash = false;
+  @property({ type: Boolean, reflect: true }) coach = false;
 
   static override get styles(): CSSResultGroup {
     return css`
@@ -61,6 +63,15 @@ export class OneSquare extends LitElement {
       :host([hint='selected']) {
         box-shadow: inset 0 0 0 2px #f6e7a8, 0 0 14px rgba(246, 214, 120, 0.85);
         z-index: 2;
+      }
+      :host([flash]) { animation: hit 0.28s linear; }
+      :host([coach]) { z-index: 3; box-shadow: inset 0 0 0 4px #f6e7a8, 0 0 18px #f6e7a8; }
+      @keyframes hit {
+        0% { filter: brightness(2.2); }
+        100% { filter: brightness(1); }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        :host([flash]) { animation: none; }
       }
       :host([portal]) .piece { filter: drop-shadow(0 0 7px #f0c56a) drop-shadow(0 4px 2px rgba(0, 0, 0, 0.5)); }
       :host([charged]) .piece {

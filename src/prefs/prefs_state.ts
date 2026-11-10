@@ -2,12 +2,16 @@ import { createSlice, type PayloadAction } from '@reduxjs/toolkit';
 
 import type { Difficulty } from '../game/types.js';
 
+export type TeamPalette = 'classic' | 'bright';
+
 export interface PrefsState {
   difficulty: Difficulty;
   muted: boolean;
   /** 0 to 1. */
   volume: number;
   seenTutorial: boolean;
+  /** High-contrast team colors plus the circle and diamond marks. */
+  palette: TeamPalette;
 }
 
 const KEY = 'chessdefense-prefs';
@@ -17,6 +21,7 @@ const defaults: PrefsState = {
   muted: false,
   volume: 0.5,
   seenTutorial: false,
+  palette: 'classic',
 };
 
 function load(): PrefsState {
@@ -33,6 +38,7 @@ function load(): PrefsState {
       muted: parsed.muted === true,
       volume,
       seenTutorial: parsed.seenTutorial === true,
+      palette: parsed.palette === 'bright' ? 'bright' : 'classic',
     };
   } catch {
     return defaults;
@@ -63,8 +69,11 @@ const prefsSlice = createSlice({
     markTutorial(state) {
       state.seenTutorial = true;
     },
+    setPalette(state, action: PayloadAction<TeamPalette>) {
+      state.palette = action.payload;
+    },
   },
 });
 
-export const { setDifficulty, setMuted, setVolume, markTutorial } = prefsSlice.actions;
+export const { setDifficulty, setMuted, setVolume, markTutorial, setPalette } = prefsSlice.actions;
 export const prefsReducer = prefsSlice.reducer;

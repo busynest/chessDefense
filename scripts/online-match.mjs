@@ -23,6 +23,7 @@ import {
 } from 'firebase/firestore';
 
 import { tryOvercharge, tryPlaceBlock, tryRepair, trySpell, tryUpgrade } from '../out/game/commands.js';
+import { rematchAgreed } from '../out/game/online.js';
 import { createMatch } from '../out/game/setup.js';
 import { step } from '../out/game/simulate.js';
 import { BLOCKS, overchargeCost } from '../out/game/units.js';
@@ -289,6 +290,11 @@ await updateDoc(doc(host.db, 'matches', code), { status: 'abandoned' });
 const left = await returned.until((data) => data.status === 'abandoned');
 assert.equal(left.status, 'abandoned');
 
+assert.equal(rematchAgreed({}), false);
+assert.equal(rematchAgreed({ rematch: { host: true, guest: true } }), true);
+await updateDoc(doc(host.db, 'matches', code), { rematch: { host: true, guest: true } });
+const agreed = await returned.until((data) => rematchAgreed(data));
+assert.equal(rematchAgreed(agreed), true);
 inputs.stop();
 returned.stop();
 await signOut(host.auth);

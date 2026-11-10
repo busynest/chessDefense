@@ -2,7 +2,9 @@ import { css, html, type CSSResultGroup, type TemplateResult } from 'lit';
 import { customElement } from 'lit/decorators.js';
 
 import { PageViewElement } from '../lazy-loader.js';
-import { BLOCKS, PIECES, SOLDIERS, SPELLS, WAVES } from '../game/units.js';
+import { BLOCKS, PIECES, SOLDIERS, SPELLS, SUDDEN, WAVES } from '../game/units.js';
+import { navigate } from './application_state.js';
+import { store } from '../store.js';
 import type { PieceKind, SoldierKind, SpellId } from '../game/types.js';
 
 @customElement('how-to-page')
@@ -11,6 +13,16 @@ export class HowToPage extends PageViewElement {
     return css`
       :host { display: block; color: #f5f5f5; }
       a { color: #f6d56a; }
+      button {
+        min-height: 44px;
+        border-radius: 8px;
+        border: 1px solid #e6c98a;
+        padding: 0 12px;
+        background: #8c3a2a;
+        color: #fff6e8;
+        font-family: Cinzel, Palatino, serif;
+      }
+      button:focus-visible { outline: 3px solid #f6e7a8; outline-offset: 2px; }
       table { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
       th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid rgba(255,255,255,0.15); }
       h1, h2 { margin: 0 0 8px; }
@@ -26,7 +38,8 @@ export class HowToPage extends PageViewElement {
       <section>
         <h1>How to play</h1>
         <p>Two medieval kings defend their towns on one board. The 8×8 squares are towers. Each square is split into four, and those 256 cells are where the armies march.</p>
-        <p><a href="/">Back to the match</a></p>
+        <p><a href="/">Back to the match</a> · <button type="button" @click=${() => { store.dispatch(navigate('/')); window.dispatchEvent(new Event('chessdefense-tour')); }}>Replay the tour</button></p>
+        <p>At ${SUDDEN.tick / 10} seconds the kings are exposed. The HUD counts down. Soldier hits on a King become full hits, hits on other towers double, and a soldier in range of a tower strikes it before dueling.</p>
       </section>
       <section>
         <h2>Towers</h2>

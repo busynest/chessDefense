@@ -453,6 +453,19 @@ test('walls stay in the two front ranks, off the center, and leave a gap', () =>
   assert.equal(closed.reason, 'Each row must keep a gap');
 });
 
+test('hard blesses the wave it is about to launch', () => {
+  const state = playing();
+  state.mode = 'ai';
+  state.difficulty = 'hard';
+  state.humanSide = 'white';
+  state.tick = 96;
+  state.nextWaveTick = 120;
+  state.mana.black = 100;
+  const before = state.mana.black;
+  aiAct(state);
+  assert.ok(state.mana.black < before);
+});
+
 test('the AI places a wall inside its front ranks', () => {
   const state = playing();
   state.mode = 'ai';

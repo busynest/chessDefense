@@ -15,6 +15,8 @@ export function aiAct(state: GameState): void {
   if (state.tick % period !== 0) return;
   const side: Side = state.humanSide === 'white' ? 'black' : 'white';
   chooseAim(state, side);
+  if (state.difficulty !== 'easy' && prepareWave(state, side)) return;
+  if (state.difficulty !== 'easy' && defendTown(state, side)) return;
   if (state.difficulty === 'easy' && state.gold[side] >= 48 && improve(state, side, 1)) return;
   if (state.difficulty === 'easy' && state.gold[side] >= 48 && layBlock(state, side)) return;
   if (state.difficulty === 'easy' && state.gold[side] >= 70 && improveKnight(state, side)) return;
@@ -196,6 +198,43 @@ function layBlock(state: GameState, side: Side): boolean {
     }
   }
   return false;
+}
+
+function prepareWave(state: GameState, side: Side): boolean {
+  const until = state.nextWaveTick - state.tick;
+  const window = state.difficulty === 'hard' ? 50 : 32;
+  if (until < 0 || until > window) return false;
+  if (until > 18 && state.mana[side] >= SPELLS.blessing.mana) {
+    const casted = trySpell(state, side, 'blessing');
+    if (casted.ok) {
+      apply(state, casted.state);
+      return true;
+    }
+  }
+  return surge(state, side);
+}
+
+function defendTown(state: GameState, side: Side): boolean {
+  const hot = state.towers.some((tower) => (
+    tower.side === side && tower.hp > 0 && tower.hp / tower.maxHp < 0.62 && enemyWithin(state, tower, 5)
+  ));
+  if (!hot) return false;
+  if (state.difficulty === 'hard' && state.mana[side] >= SPELLS.heal.mana) {
+    const healed = trySpell(state, side, 'heal');
+    if (healed.ok) {
+      apply(state, healed.state);
+      return true;
+    }
+  }
+  return mend(state, side, true);
+}
+
+function enemyWithin(state: GameState, tower: Tower, range: number): boolean {
+  const x = tower.file * 2 + 0.5;
+  const y = tower.rank * 2 + 0.5;
+  return state.soldiers.some((soldier) => (
+    soldier.side !== tower.side && soldier.hp > 0 && chebyshev(soldier.x, soldier.y, x, y) <= range
+  ));
 }
 
 function enemiesNearQueen(state: GameState, side: Side): number {

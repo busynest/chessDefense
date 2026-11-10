@@ -28,7 +28,8 @@ import {
 } from './game_state.js';
 import { handleAim, handleOvercharge, handleRepair, handleSpell, handleUpgrade } from './input.js';
 import { rememberMatch, recentMatches } from './history.js';
-import { closeMatch, createMatchDoc, joinMatchDoc, matchCode, publishSnapshot, readMatch, signedInUid, watchInputs, watchMatch } from './online.js';
+import { clearRematch, closeMatch, createMatchDoc, joinMatchDoc, matchCode, offerRematch, publishSnapshot, readMatch, rematchAgreed, signedInUid, watchInputs, watchMatch } from './online.js';
+import { createMatch } from './setup.js';
 import { shouldPublish } from './publish.js';
 import { loadCareer, recordResult } from './record.js';
 import { playTap, playVictory, playWave } from './sound.js';
@@ -63,15 +64,16 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
   @state() private tutorial = -1;
   @state() private muted = false;
 
-  private readonly steps = [
-    'Your front row is selected. The ring is that pawn\'s range. Towers never move.',
-    'Upgrade spends gold. Level 3 is as high as a tower goes.',
-    'White walls shades the two ranks in front of your towers. The gold strip in the middle stays open. Each side can own 36 walls. A maze that cuts a tower off, or bends the path too far, turns red.',
-    'When the build timer ends, each living tower sends its soldier out of its own gate. If the tower falls, those soldiers fade with it.',
-    'Tap an enemy tower and press T. The next wave marches on it. Clear sends them back to the King.',
-    'Overcharge appears on a level 3 tower. It spends gold for a short stronger burst, and that tower\'s price goes up each time.',
-    'Spell buttons belong to the Queen. Pause freezes the clock. Menu leaves the match.',
+  private readonly steps: { text: string; coach: string }[] = [
+    { text: 'This pawn is yours. The ring is its range. Towers never move.', coach: 'pawn' },
+    { text: 'Upgrade spends gold. Level 3 is as high as a tower goes.', coach: 'upgrade' },
+    { text: 'Walls go on the two ranks in front of your towers. The gold center stays open. Each side can own 36.', coach: 'walls' },
+    { text: 'When the timer ends, each tower sends its soldier out of its own square. If the tower falls, those soldiers fade.', coach: 'wave' },
+    { text: 'That is the enemy King. Target sends the next wave there. Clear sends them back.', coach: 'target' },
+    { text: 'Overcharge is on a level 3 tower. It spends gold for a short stronger burst, and the price rises each time.', coach: 'upgrade' },
+    { text: 'Blessing, Heal, and Blast belong to the Queen. At five minutes the kings are exposed and hits land harder.', coach: 'blessing' },
   ];
+  private rematchBusy = false;
 
   override stateChanged(state: RootState): void {
     this.slice = state.game;
@@ -89,21 +91,30 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
   protected override firstUpdated(): void {
     window.addEventListener('keydown', this.onKey);
     window.addEventListener('pagehide', this.abandonIfHost);
-  }
-
-  protected override updated(changed: PropertyValues): void {
-    this.syncLoop();
-    this.syncOnline();
-    this.syncSound();
-    if (changed.has('slice') || changed.has('active')) void this.persist();
+    window.addEventListener('chessdefense-tour', this.onTour);
   }
 
   override disconnectedCallback(): void {
     window.removeEventListener('keydown', this.onKey);
     window.removeEventListener('pagehide', this.abandonIfHost);
+    window.removeEventListener('chessdefense-tour', this.onTour);
     super.disconnectedCallback();
     this.stopLoop();
     this.teardown();
+  }
+
+  private onTour = (): void => {
+    this.tutorial = 0;
+    this.start('ai');
+    this.tutorial = 0;
+  };
+
+  protected override updated(changed: PropertyValues): void {
+    this.syncLoop();
+    this.syncOnline();
+    this.syncSound();
+    this.placeCoach();
+    if (changed.has('slice') || changed.has('active')) void this.persist();
   }
 
   private onKey = (event: KeyboardEvent): void => {
@@ -245,7 +256,7 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
     this.stopInputs = null;
   }
 
-  private onMatch(data: { guestId: string | null; status?: string; snapshot?: GameState }): void {
+  private onMatch(data: { guestId: string | null; status?: string; snapshot?: GameState; rematch?: { host?: boolean; guest?: boolean } }): void {
     const slice = store.getState().game;
     if (slice.role === 'host' && data.guestId && slice.game.status === 'lobby') {
       store.dispatch(openOnline());
@@ -256,6 +267,27 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
     }
     if (slice.role === 'guest' && data.status === 'abandoned') {
       store.dispatch(setOnlineNote('The host left the match.'));
+    }
+    const agree = data.rematch;
+    if (slice.role === 'host' && rematchAgreed({ rematch: agree }) && !this.rematchBusy) {
+      this.rematchBusy = true;
+      const fresh = createMatch({
+        mode: 'online',
+        difficulty: 'normal',
+        seed: (slice.game.seed + 1) >>> 0 || 1,
+        humanSide: 'white',
+      });
+      store.dispatch(applySnapshot(fresh));
+      store.dispatch(setOnlineNote('Rematch live.'));
+      void publishSnapshot(slice.onlineCode, fresh)
+        .then(() => clearRematch(slice.onlineCode))
+        .catch((error: unknown) => {
+          store.dispatch(setOnlineNote(error instanceof Error ? error.message : 'Could not start the rematch.'));
+        })
+        .finally(() => { this.rematchBusy = false; });
+    }
+    if (slice.role === 'guest' && agree?.host && !agree.guest) {
+      store.dispatch(setOnlineNote('The host wants a rematch.'));
     }
     if (slice.role === 'guest' && data.snapshot) {
       store.dispatch(applySnapshot(data.snapshot));
@@ -341,6 +373,63 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
       return;
     }
     this.tutorial += 1;
+    this.aimCoach();
+  }
+
+  private exposedClock(tick: number): string {
+    const left = Math.max(0, Math.ceil((SUDDEN.tick - tick) / 10));
+    const minutes = Math.floor(left / 60);
+    const seconds = String(left % 60).padStart(2, '0');
+    return `${minutes}:${seconds}`;
+  }
+
+  private coachCell(): { file: number; rank: number } {
+    const step = this.tutorial >= 0 ? this.steps[this.tutorial] : undefined;
+    if (step?.coach === 'pawn' || step?.coach === 'upgrade') return { file: 3, rank: 1 };
+    if (step?.coach === 'walls') return { file: 4, rank: 2 };
+    if (step?.coach === 'target') return { file: 4, rank: 7 };
+    return { file: -1, rank: -1 };
+  }
+
+  private aimCoach(): void {
+    if (this.tutorial < 0) return;
+    const step = this.steps[this.tutorial];
+    if (!step) return;
+    if (step.coach === 'target') store.dispatch(selectSquare({ file: 4, rank: 7 }));
+    else if (step.coach !== 'wave' && step.coach !== 'blessing') store.dispatch(selectSquare({ file: 3, rank: 1 }));
+  }
+
+  private placeCoach(): void {
+    const arrow = this.shadowRoot?.getElementById('coach-arrow');
+    if (!arrow) return;
+    if (this.tutorial < 0) {
+      arrow.hidden = true;
+      return;
+    }
+    const step = this.steps[this.tutorial];
+    const target = step ? this.shadowRoot?.querySelector(`[data-coach="${step.coach}"]`) : null;
+    if (!target) {
+      arrow.hidden = true;
+      return;
+    }
+    const rect = target.getBoundingClientRect();
+    arrow.hidden = false;
+    arrow.style.left = `${rect.left + Math.min(rect.width / 2, 80)}px`;
+    arrow.style.top = `${Math.max(8, rect.top - 22)}px`;
+  }
+
+  private async askRematch(): Promise<void> {
+    const slice = store.getState().game;
+    if (!slice.onlineCode || this.rematchBusy) return;
+    this.rematchBusy = true;
+    try {
+      await offerRematch(slice.onlineCode, slice.role === 'guest' ? 'guest' : 'host');
+      store.dispatch(setOnlineNote(slice.role === 'guest' ? 'Rematch offered.' : 'Waiting for the guest.'));
+    } catch (error) {
+      store.dispatch(setOnlineNote(error instanceof Error ? error.message : 'Could not offer a rematch.'));
+    } finally {
+      this.rematchBusy = false;
+    }
   }
 
   private async host(): Promise<void> {
@@ -447,6 +536,22 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
       }
       .banner { text-align: center; min-height: 1.2em; color: #f6e7a8; font-family: Cinzel, Palatino, serif; }
       .coach { margin: 0; color: #f3e6cf; font-size: 0.92rem; }
+      .exposed { color: #f6e7a8; font-size: 0.92rem; }
+      .pointer {
+        position: fixed;
+        z-index: 30;
+        width: 0;
+        height: 0;
+        border-left: 9px solid transparent;
+        border-right: 9px solid transparent;
+        border-bottom: 16px solid #f6e7a8;
+        filter: drop-shadow(0 2px 2px #000);
+        pointer-events: none;
+      }
+      button:focus-visible, a:focus-visible, select:focus-visible {
+        outline: 3px solid #f6e7a8;
+        outline-offset: 2px;
+      }
       .dock { display: none; }
       @media (max-width: 720px) {
         .play { display: flex; flex-direction: column; }
@@ -475,10 +580,14 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
     if (slice.game.status === 'menu') return this.menu(slice);
     return html`
       <div class="play">
+        <div id="coach-arrow" class="pointer" hidden></div>
         ${this.hud(slice)}
         <div class="table">
           <p class="banner">${slice.game.banner?.text ?? ''}</p>
-          <board-square></board-square>
+          <board-square
+            .coachFile=${this.coachCell().file}
+            .coachRank=${this.coachCell().rank}
+          ></board-square>
           ${slice.game.status === 'victory' ? this.victory(slice) : ''}
         </div>
       </div>
@@ -531,7 +640,7 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
       : `Wave ${game.wave} · next ${remain.toFixed(0)}s`;
     const sides: Side[] = game.mode === 'local' ? ['white', 'black'] : [playerSide(slice) ?? 'white'];
     return html`
-      <aside class="hud">
+      <aside class="hud" aria-label="Match controls">
         <div class="row">
           <button type="button" class="quiet" @click=${() => store.dispatch(togglePause())} ?disabled=${game.status === 'lobby' || game.status === 'victory'}>
             ${game.status === 'paused' ? 'Resume' : 'Pause'}
@@ -539,7 +648,8 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
           <button type="button" class="quiet" @click=${() => this.leave()}>Menu</button>
           <button type="button" class="quiet" @click=${() => store.dispatch(setMuted(!this.muted))}>${this.muted ? 'Unmute' : 'Mute'}</button>
         </div>
-        <div class="wave">${waveLabel}</div>
+        <div class="wave" data-coach="wave" aria-live="polite">${waveLabel}</div>
+        <div class="exposed">${game.tick >= SUDDEN.tick ? 'Kings exposed — hits land harder' : `Kings exposed in ${this.exposedClock(game.tick)}`}</div>
         ${(['white', 'black'] as const).filter((side) => controlsSide(slice, side)).map((side) => {
           const mark = game.waveTarget[side];
           const marked = mark ? towerAt(game, mark.file, mark.rank) : undefined;
@@ -551,18 +661,18 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
             <button
               type="button"
               class=${slice.placing === side ? '' : 'quiet'}
+              data-coach=${side === 'white' ? 'walls' : 'black-walls'}
+              aria-pressed=${slice.placing === side ? 'true' : 'false'}
               @click=${() => store.dispatch(setPlacing(slice.placing === side ? null : side))}>
-              ${side === 'white' ? 'White walls' : 'Black walls'} ${livingWalls(game, side)}/${BLOCKS.max}
+              ${side === 'white' ? 'Walls' : 'Black walls'} ${livingWalls(game, side)}/${BLOCKS.max}
             </button>
           `)}
         </div>
         ${game.mode === 'online' ? html`<div>Code <strong>${slice.onlineCode}</strong> · ${slice.role === 'host' ? 'White' : 'Black'}</div>` : ''}
         <p class="note">${slice.onlineNote}</p>
-        ${(['white', 'black'] as const).map((side) => html`
-          <div class="gold">${side === 'white' ? 'White' : 'Black'} ${Math.floor(game.gold[side])} gold · ${Math.floor(game.mana[side])} mana · Walls ${livingWalls(game, side)}/${BLOCKS.max}</div>
-        `)}
+        <div class="gold">W ${Math.floor(game.gold.white)}g ${Math.floor(game.mana.white)}m · B ${Math.floor(game.gold.black)}g ${Math.floor(game.mana.black)}m</div>
         ${this.tutorial >= 0 ? html`
-          <p class="coach">Step ${this.tutorial + 1} of ${this.steps.length}. ${this.steps[this.tutorial]}</p>
+          <p class="coach">Step ${this.tutorial + 1} of ${this.steps.length}. ${this.steps[this.tutorial]?.text}</p>
           <div class="row">
             <button type="button" @click=${() => this.advanceTutorial(false)}>Next</button>
             <button type="button" class="quiet" @click=${() => this.advanceTutorial(true)}>Skip tutorial</button>
@@ -613,12 +723,12 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
       <div>${stats.damage} damage · range ${stats.range.toFixed(1)} · every ${(stats.attackTicks / 10).toFixed(1)}s${overcharged(tower.overchargeUntil, this.slice?.game.tick ?? 0) ? ' · overcharged' : ''}</div>
       <div class="actions">
         ${mine && tower.level < 3 ? html`
-          <button type="button" @click=${() => handleUpgrade(tower.side, tower.file, tower.rank)}>Upgrade ${cost}</button>
+          <button type="button" data-coach="upgrade" @click=${() => handleUpgrade(tower.side, tower.file, tower.rank)}>Upgrade ${cost}</button>
         ` : mine ? html`<span class="level">Level 3</span>` : ''}
         ${mine ? this.repairButton(tower) : ''}
         ${mine ? this.chargeButton(tower) : ''}
         ${canAim ? html`
-          <button type="button" @click=${() => handleAim(attacker, aimed ? -1 : tower.file, aimed ? -1 : tower.rank)}>${aimed ? 'Clear target' : 'Target'}</button>
+          <button type="button" data-coach="target" @click=${() => handleAim(attacker, aimed ? -1 : tower.file, aimed ? -1 : tower.rank)}>${aimed ? 'Clear target' : 'Target'}</button>
         ` : ''}
       </div>
     `;
@@ -673,6 +783,7 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
             type="button"
             ?disabled=${!allowed || !queen || game.mana[side] < SPELLS[spell].mana}
             title=${SPELLS[spell].summary}
+            data-coach=${spell === 'blessing' && side === 'white' ? 'blessing' : ''}
             @click=${() => handleSpell(side, spell)}>
             ${side === 'black' && slice.game.mode === 'local' ? 'B ' : ''}${SPELLS[spell].label} ${SPELLS[spell].mana}
           </button>
@@ -697,7 +808,9 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
         <p>Towers left: White ${whiteLeft}, Black ${blackLeft}. Walls left: White ${livingWalls(game, 'white')}, Black ${livingWalls(game, 'black')}.</p>
         <p>Gold left: White ${Math.floor(game.gold.white)}, Black ${Math.floor(game.gold.black)}. ${saved}</p>
         <div class="row" style="justify-content:center;">
-          ${game.mode === 'online' ? '' : html`<button type="button" @click=${() => this.start(game.mode === 'local' ? 'local' : 'ai')}>Rematch</button>`}
+          ${game.mode === 'online'
+            ? html`<button type="button" @click=${() => this.askRematch()}>Rematch</button>`
+            : html`<button type="button" @click=${() => this.start(game.mode === 'local' ? 'local' : 'ai')}>Rematch</button>`}
           <button type="button" @click=${() => this.leave()}>Back to menu</button>
         </div>
       </div>

@@ -32,6 +32,7 @@ export interface MatchDoc {
   seed: number;
   status?: string;
   snapshot?: GameState;
+  rematch?: { host?: boolean; guest?: boolean };
 }
 
 export async function readMatch(code: string): Promise<MatchDoc> {
@@ -42,6 +43,18 @@ export async function readMatch(code: string): Promise<MatchDoc> {
 
 export async function closeMatch(code: string): Promise<void> {
   await updateDoc(doc(db, 'matches', code), { status: 'abandoned' });
+}
+
+export function rematchAgreed(match: { rematch?: { host?: boolean; guest?: boolean } }): boolean {
+  return match.rematch?.host === true && match.rematch?.guest === true;
+}
+
+export async function offerRematch(code: string, role: 'host' | 'guest'): Promise<void> {
+  await updateDoc(doc(db, 'matches', code), { [`rematch.${role}`]: true });
+}
+
+export async function clearRematch(code: string): Promise<void> {
+  await updateDoc(doc(db, 'matches', code), { rematch: { host: false, guest: false } });
 }
 
 export async function joinMatchDoc(code: string, guestId: string): Promise<void> {

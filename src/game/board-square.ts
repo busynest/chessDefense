@@ -1,5 +1,5 @@
 import { LitElement, css, html, type CSSResultGroup, type TemplateResult } from 'lit';
-import { customElement, state } from 'lit/decorators.js';
+import { customElement, property, state } from 'lit/decorators.js';
 import { connect } from 'pwa-helpers/connect-mixin.js';
 
 import { blockProblem } from './commands.js';
@@ -7,8 +7,8 @@ import { towerAt } from './chess.js';
 import { pieceSvg } from './glyphs.js';
 import { handleCell, handleSquare } from './input.js';
 import './one-square.js';
-import { soldierSvg } from './soldiers.js';
-import { playHit } from './sound.js';
+import type { Soldier } from './types.js';
+import { playCollapse, playHit, playStrike } from './sound.js';
 import { connectStore, type RootState } from '../store.js';
 import type { GameState, PieceKind, Side, Square } from './types.js';
 import { previewRoute } from './pathing.js';
@@ -21,12 +21,20 @@ export class BoardSquare extends connect(connectStore)(LitElement) {
   @state() private hover: Square | null = null;
   @state() private placing: 'white' | 'black' | null = null;
   @state() private ghost: SquareCell | null = null;
+  @state() private bright = false;
+  @property({ type: Number }) coachFile = -1;
+  @property({ type: Number }) coachRank = -1;
   private ruins: Ruin[] = [];
   private ashes: Ash[] = [];
   private hits: Hit[] = [];
+  private flashes = new Set<string>();
+  private shake = false;
   private ruinTimer = 0;
+  private seenShots = new Set<string>();
+  private paintWait = 0;
 
   override stateChanged(state: RootState): void {
+    this.bright = state.prefs.palette === 'bright';
     const next = state.game.game;
     if (this.game && next && this.game.status !== 'menu') {
       const ids = new Set(next.towers.map((tower) => tower.id));
@@ -35,6 +43,9 @@ export class BoardSquare extends connect(connectStore)(LitElement) {
       for (const tower of this.game.towers) {
         if (!ids.has(tower.id)) {
           this.ruins.push({ file: tower.file, rank: tower.rank, side: tower.side, kind: tower.kind, born: now });
+          this.shake = !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+          playCollapse();
+          window.setTimeout(() => { this.shake = false; this.requestUpdate(); }, 420);
         }
       }
       for (const tower of next.towers) {
@@ -48,6 +59,9 @@ export class BoardSquare extends connect(connectStore)(LitElement) {
           side: tower.side,
         });
         playHit();
+        const key = `${tower.file},${tower.rank}`;
+        this.flashes.add(key);
+        window.setTimeout(() => { this.flashes.delete(key); this.requestUpdate(); }, 280);
       }
       for (const soldier of this.game.soldiers) {
         if (!soldiers.has(soldier.id)) {
@@ -68,9 +82,51 @@ export class BoardSquare extends connect(connectStore)(LitElement) {
         this.ruinTimer = window.setTimeout(() => this.requestUpdate(), 1600);
       }
     }
+    for (const shot of next?.projectiles ?? []) {
+      if (this.seenShots.has(shot.id)) continue;
+      this.seenShots.add(shot.id);
+      playStrike(shot.kind);
+    }
+    if (this.seenShots.size > 80) this.seenShots.clear();
     this.game = next;
     this.selected = state.game.selected;
     this.placing = state.game.placing;
+  }
+
+  protected override updated(): void {
+    this.paintSoldiers();
+  }
+
+  private paintSoldiers(): void {
+    const canvas = this.renderRoot.querySelector('canvas');
+    const game = this.game;
+    if (!canvas || !game) return;
+    const width = canvas.clientWidth;
+    const height = canvas.clientHeight;
+    if (width < 2 || height < 2) {
+      if (this.paintWait < 8) {
+        this.paintWait += 1;
+        window.requestAnimationFrame(() => this.paintSoldiers());
+      }
+      return;
+    }
+    this.paintWait = 0;
+    const ratio = window.devicePixelRatio || 1;
+    const px = Math.round(width * ratio);
+    const py = Math.round(height * ratio);
+    if (canvas.width !== px || canvas.height !== py) {
+      canvas.width = px;
+      canvas.height = py;
+    }
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+    ctx.clearRect(0, 0, width, height);
+    const cell = width / 16;
+    for (const soldier of game.soldiers) {
+      const spot = exitSpot(game, soldier);
+      drawSoldier(ctx, soldier, (spot.x + 0.5) * cell, (15 - spot.y + 0.5) * cell, cell * 0.42, this.bright);
+    }
   }
 
   static override get styles(): CSSResultGroup {
@@ -86,6 +142,24 @@ export class BoardSquare extends connect(connectStore)(LitElement) {
         box-shadow:
           0 22px 30px rgba(0, 0, 0, 0.55),
           inset 0 1px 0 rgba(255, 220, 170, 0.35);
+      }
+      .frame.shake { animation: jar 0.42s linear; }
+      @keyframes jar {
+        0% { transform: translate(0, 0); }
+        20% { transform: translate(-3px, 2px); }
+        40% { transform: translate(3px, -2px); }
+        60% { transform: translate(-2px, -1px); }
+        80% { transform: translate(2px, 1px); }
+        100% { transform: translate(0, 0); }
+      }
+      .layer {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        z-index: 6;
+        pointer-events: none;
+        overflow: visible;
       }
       .frame {
         position: relative;
@@ -253,7 +327,7 @@ export class BoardSquare extends connect(connectStore)(LitElement) {
       }
       @keyframes puff { to { transform: translate(-50%, -80%) scale(1.8); opacity: 0; } }
       @media (prefers-reduced-motion: reduce) {
-        .unit, .pulse i, .pulse b, .ruin, .ash, .hit { animation: none; }
+        .unit, .pulse i, .pulse b, .ruin, .ash, .hit, .frame.shake { animation: none; }
       }
     `;
   }
@@ -297,6 +371,8 @@ export class BoardSquare extends connect(connectStore)(LitElement) {
             ?charged=${!!tower && overcharged(tower.overchargeUntil, game.tick)}
             .label=${tower ? `${tower.side} ${tower.kind}` : 'empty square'}
             .marked=${marked}
+            ?flash=${this.flashes.has(`${file},${rank}`)}
+            ?coach=${this.coachFile === file && this.coachRank === rank}
             @square-click=${(event: CustomEvent<{ file: number; rank: number }>) => handleSquare(event.detail.file, event.detail.rank)}
             @square-hover=${(event: CustomEvent<{ file: number; rank: number; on: boolean }>) => {
               this.hover = event.detail.on ? { file: event.detail.file, rank: event.detail.rank } : null;
@@ -306,7 +382,7 @@ export class BoardSquare extends connect(connectStore)(LitElement) {
       }
     }
     return html`
-      <div class="frame">
+      <div class="frame ${this.shake ? 'shake' : ''} ${this.bright ? 'bright' : ''}">
         ${squares}
         ${focusTower ? this.ring(focusTower) : ''}
         ${game.towers.filter((tower) => tower.mendedTick > 0 && game.tick - tower.mendedTick < 24).map((tower) => html`
@@ -327,16 +403,7 @@ export class BoardSquare extends connect(connectStore)(LitElement) {
               ${pieceSvg(ruin.kind, ruin.side, 0.2, 1)}
             </div>
           `)}
-          ${game.soldiers.map((soldier) => {
-            const spot = exitSpot(game, soldier);
-            return html`
-            <div
-              class="unit ${soldier.side} ${soldier.buffUntil >= game.tick ? 'buff' : ''} ${soldier.attackReadyTick - game.tick >= 6 ? 'strike' : ''}"
-              style="left:${(spot.x + 0.5) / 16 * 100}%; top:${(15 - spot.y + 0.5) / 16 * 100}%">
-              ${soldierSvg(soldier.kind, soldier.side)}
-            </div>
-          `;
-          })}
+          <canvas class="layer"></canvas>
           ${this.ashes.map((ash) => html`
             <div class="ash ${ash.side} ${ash.linked ? 'linked' : ''}" style="left:${(ash.x + 0.5) / 16 * 100}%; top:${(15 - ash.y + 0.5) / 16 * 100}%"></div>
           `)}
@@ -431,6 +498,57 @@ interface Ash {
   born: number;
   /** The parent tower fell, so this soldier faded with it. */
   linked: boolean;
+}
+
+function drawSoldier(ctx: CanvasRenderingContext2D, soldier: Soldier, x: number, y: number, size: number, bright: boolean): void {
+  const cloth = bright
+    ? (soldier.side === 'white' ? '#7ec8ff' : '#ff9a3c')
+    : (soldier.side === 'white' ? '#d5e4f2' : '#c46a55');
+  const dark = soldier.side === 'white' ? '#1d3348' : '#2a120e';
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.fillStyle = cloth;
+  ctx.strokeStyle = dark;
+  ctx.lineWidth = 1;
+  if (soldier.kind === 'knight' || soldier.kind === 'guard') {
+    ctx.beginPath();
+    ctx.moveTo(0, -size);
+    ctx.lineTo(size * 0.8, size * 0.7);
+    ctx.lineTo(-size * 0.8, size * 0.7);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+  } else if (soldier.kind === 'cannon') {
+    ctx.fillRect(-size, -size * 0.35, size * 2, size * 0.7);
+    ctx.strokeRect(-size, -size * 0.35, size * 2, size * 0.7);
+  } else if (soldier.kind === 'mage') {
+    ctx.beginPath();
+    ctx.moveTo(0, -size);
+    ctx.lineTo(size * 0.7, 0);
+    ctx.lineTo(0, size);
+    ctx.lineTo(-size * 0.7, 0);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+  } else {
+    ctx.beginPath();
+    ctx.arc(0, 0, size * 0.72, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+  }
+  ctx.fillStyle = soldier.side === 'white' ? '#7ec8ff' : '#ff9a3c';
+  if (soldier.side === 'white') {
+    ctx.beginPath();
+    ctx.arc(0, size * 0.85, size * 0.22, 0, Math.PI * 2);
+    ctx.fill();
+  } else {
+    ctx.save();
+    ctx.translate(0, size * 0.85);
+    ctx.rotate(Math.PI / 4);
+    ctx.fillRect(-size * 0.18, -size * 0.18, size * 0.36, size * 0.36);
+    ctx.restore();
+  }
+  ctx.restore();
 }
 
 function exitSpot(game: GameState, soldier: GameState['soldiers'][number]): { x: number; y: number } {

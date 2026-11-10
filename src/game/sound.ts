@@ -41,9 +41,34 @@ export function playHit(): void {
   tone(520, 0.05, 'square', 0.03);
 }
 
+export function playStrike(kind: string): void {
+  if (kind === 'shell') {
+    tone(90, 0.12, 'sawtooth', 0.05);
+    window.setTimeout(() => tone(140, 0.08, 'square', 0.03), 40);
+    return;
+  }
+  if (kind === 'arrow') {
+    tone(880, 0.06, 'sine', 0.04);
+    return;
+  }
+  if (kind === 'magic') {
+    tone(520, 0.08, 'triangle', 0.04);
+    window.setTimeout(() => tone(780, 0.1, 'sine', 0.03), 50);
+    return;
+  }
+  tone(360, 0.05, 'square', 0.035);
+}
+
+export function playCollapse(): void {
+  tone(180, 0.16, 'sawtooth', 0.06);
+  window.setTimeout(() => tone(90, 0.22, 'triangle', 0.05), 80);
+}
+
 export function playWave(): void {
-  tone(196, 0.18, 'triangle', 0.08);
-  window.setTimeout(() => tone(262, 0.22, 'triangle', 0.07), 90);
+  tone(262, 0.12, 'triangle', 0.07);
+  window.setTimeout(() => tone(330, 0.12, 'triangle', 0.07), 110);
+  window.setTimeout(() => tone(392, 0.2, 'triangle', 0.08), 220);
+  window.setTimeout(() => tone(523, 0.28, 'sine', 0.06), 340);
 }
 
 export function playVictory(): void {

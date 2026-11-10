@@ -2,17 +2,19 @@ import { LitElement, css, html, type CSSResultGroup, type TemplateResult } from 
 import { customElement, state } from 'lit/decorators.js';
 import { connect } from 'pwa-helpers/connect-mixin.js';
 
-import { setMuted, setVolume } from './prefs_state.js';
+import { setMuted, setPalette, setVolume } from './prefs_state.js';
 import { connectStore, store, type RootState } from '../store.js';
 
 @customElement('game-settings')
 export class GameSettings extends connect(connectStore)(LitElement) {
   @state() private muted = false;
   @state() private volume = 0.5;
+  @state() private palette: 'classic' | 'bright' = 'classic';
 
   override stateChanged(state: RootState): void {
     this.muted = state.prefs.muted;
     this.volume = state.prefs.volume;
+    this.palette = state.prefs.palette;
   }
 
   static override get styles(): CSSResultGroup {
@@ -46,6 +48,9 @@ export class GameSettings extends connect(connectStore)(LitElement) {
           @input=${(event: Event) => store.dispatch(setVolume(Number((event.target as HTMLInputElement).value) / 100))} />
       </label>
       <button type="button" @click=${() => store.dispatch(setMuted(!this.muted))}>${this.muted ? 'Unmute' : 'Mute'}</button>
+      <h2>Teams</h2>
+      <p>Bright uses blue and orange, with a circle on White and a diamond on Black.</p>
+      <button type="button" @click=${() => store.dispatch(setPalette(this.palette === 'bright' ? 'classic' : 'bright'))}>${this.palette === 'bright' ? 'Classic colors' : 'Bright colors'}</button>
     `;
   }
 }
