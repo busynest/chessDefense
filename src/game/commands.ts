@@ -2,7 +2,8 @@ import { towerAt } from './chess.js';
 import { chebyshev, placementSeals, towerCells } from './pathing.js';
 import type { GameState, Side, SpellId } from './types.js';
 import { reportHarm } from './telemetry.js';
-import { BLOCKS, ECONOMY, PIECES, SOLDIERS, SPELLS, combatOf, ownsHalf, squareName, upgradeCost } from './units.js';
+import { BLOCKS, ECONOMY, PIECES, REPAIR, SOLDIERS, SPELLS, combatOf, ownsHalf, repairCost, squareName, upgradeCost } from './units.js';
+import { reportRepair } from './telemetry.js';
 
 export interface MoveResult {
   state: GameState;
@@ -41,6 +42,28 @@ export function tryUpgrade(input: GameState, side: Side, file: number, rank: num
   piece.maxHp = nextHp;
   piece.hp = Math.min(nextHp, piece.hp + Math.max(0, healed));
   banner(state, `${label(side)} ${PIECES[piece.kind].label} on ${squareName(file, rank)} is now level ${piece.level}.`);
+  return { state, ok: true, reason: '' };
+}
+
+/** Pay gold to restore a wounded tower. A cooldown stops mid-wave spam. */
+export function tryRepair(input: GameState, side: Side, file: number, rank: number): MoveResult {
+  if (input.status !== 'playing') return { state: input, ok: false, reason: 'The match is not running.' };
+  const tower = towerAt(input, file, rank);
+  if (!tower || tower.side !== side) return { state: input, ok: false, reason: 'That is not your tower.' };
+  const missing = tower.maxHp - tower.hp;
+  if (missing <= 0) return { state: input, ok: false, reason: 'That tower is already whole.' };
+  if (input.tick < tower.repairReadyTick) return { state: input, ok: false, reason: 'That tower was just repaired.' };
+  const cost = repairCost(missing);
+  if (input.gold[side] < cost) return { state: input, ok: false, reason: 'Not enough gold to repair.' };
+
+  const state = fresh(input);
+  const piece = towerAt(state, file, rank)!;
+  state.gold[side] -= cost;
+  piece.hp = piece.maxHp;
+  piece.repairReadyTick = state.tick + REPAIR.ticks;
+  piece.mendedTick = state.tick;
+  reportRepair({ side, kind: piece.kind });
+  banner(state, `${label(side)} repairs the ${PIECES[piece.kind].label} on ${squareName(file, rank)}.`);
   return { state, ok: true, reason: '' };
 }
 

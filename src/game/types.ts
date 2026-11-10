@@ -27,6 +27,10 @@ export interface Tower {
   /** 1, 2, or 3. Gold raises this. Towers never leave their square. */
   level: number;
   attackReadyTick: number;
+  /** Next tick this tower may be repaired. */
+  repairReadyTick: number;
+  /** Tick of the last repair, for the mend flash. 0 if never. */
+  mendedTick: number;
   hurtBy: Side | null;
 }
 
@@ -97,6 +101,8 @@ export interface GameState {
   winner: Side | 'draw' | null;
   seed: number;
   rng: number;
+  /** Black's own random stream, so White acting first does not spend Black's rolls. */
+  rngBlack: number;
   nextId: number;
   wave: number;
   nextWaveTick: number;
@@ -112,6 +118,13 @@ export interface GameState {
 
 export interface UpgradeCommand {
   type: 'upgrade';
+  side: Side;
+  file: number;
+  rank: number;
+}
+
+export interface RepairCommand {
+  type: 'repair';
   side: Side;
   file: number;
   rank: number;
@@ -137,4 +150,4 @@ export interface UnblockCommand {
   y: number;
 }
 
-export type PlayerCommand = UpgradeCommand | SpellCommand | BlockCommand | UnblockCommand;
+export type PlayerCommand = UpgradeCommand | RepairCommand | SpellCommand | BlockCommand | UnblockCommand;

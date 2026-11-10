@@ -2,12 +2,12 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import { towerAt } from './chess.js';
-import { tryPlaceBlock, tryRemoveBlock, trySpell, tryUpgrade } from './commands.js';
+import { tryPlaceBlock, tryRemoveBlock, tryRepair, trySpell, tryUpgrade } from './commands.js';
 import { pathToward } from './pathing.js';
 import { createMatch } from './setup.js';
 import { step } from './simulate.js';
 import type { GameState, Soldier, Tower } from './types.js';
-import { BLOCKS, PIECES, WAVES, upgradeCost } from './units.js';
+import { BLOCKS, KING_LEAK, PIECES, SOLDIERS, WAVES, repairCost, upgradeCost } from './units.js';
 
 function playing(): GameState {
   return createMatch({ mode: 'local', difficulty: 'normal', seed: 7 });
@@ -35,6 +35,8 @@ function place(state: GameState, partial: Pick<Tower, 'side' | 'kind' | 'file' |
     maxHp: def.hp,
     level: 1,
     attackReadyTick: 9999,
+    repairReadyTick: 0,
+    mendedTick: 0,
     hurtBy: null,
   };
   state.towers.push(tower);
@@ -56,6 +58,49 @@ function fighter(partial: Pick<Soldier, 'id' | 'side' | 'kind' | 'x' | 'y' | 'hp
     ...partial,
   };
 }
+
+test('repair spends gold for the missing life and then waits', () => {
+  const state = bare();
+  const pawn = place(state, { side: 'white', kind: 'pawn', file: 0, rank: 1 });
+  pawn.hp = 20;
+  const missing = pawn.maxHp - pawn.hp;
+  const cost = repairCost(missing);
+  const healed = tryRepair(state, 'white', 0, 1);
+  assert.equal(healed.ok, true);
+  assert.equal(towerAt(healed.state, 0, 1)?.hp, pawn.maxHp);
+  assert.equal(healed.state.gold.white, 80 - cost);
+  const again = tryRepair(healed.state, 'white', 0, 1);
+  assert.equal(again.ok, false);
+  const hot = structuredClone(healed.state);
+  towerAt(hot, 0, 1)!.hp = 10;
+  assert.equal(tryRepair(hot, 'white', 0, 1).ok, false);
+  const cooled = structuredClone(healed.state);
+  const piece = towerAt(cooled, 0, 1)!;
+  piece.hp = 10;
+  piece.repairReadyTick = cooled.tick;
+  const second = tryRepair(cooled, 'white', 0, 1);
+  assert.equal(second.ok, true);
+});
+
+test('a leaked soldier wounds the King instead of striking at full strength', () => {
+  const state = bare();
+  const king = place(state, { side: 'black', kind: 'king', file: 4, rank: 7, hp: 40 });
+  const pawn = place(state, { side: 'black', kind: 'pawn', file: 0, rank: 6, hp: 40 });
+  state.soldiers = [
+    fighter({ id: 'on-king', side: 'white', kind: 'cannon', x: 8, y: 14, hp: 40, maxHp: 40 }),
+    fighter({ id: 'on-pawn', side: 'white', kind: 'cannon', x: 0, y: 12, hp: 40, maxHp: 40 }),
+  ];
+  const next = step(state);
+  const kingLeft = towerAt(next, 4, 7);
+  const pawnLeft = towerAt(next, 0, 6);
+  const full = SOLDIERS.cannon.strength;
+  assert.ok(kingLeft);
+  assert.equal(kingLeft.hp, 40 - Math.max(1, Math.round(full * KING_LEAK)));
+  assert.ok(kingLeft.hp > 40 - full);
+  assert.equal(pawnLeft?.hp, 40 - full);
+  assert.equal(king.kind, 'king');
+  assert.equal(pawn.kind, 'pawn');
+});
 
 test('an upgrade spends gold, raises the level, and stops at level 3', () => {
   const state = bare();

@@ -155,7 +155,7 @@ export const PIECES: Record<PieceKind, PieceDef> = {
     label: 'King',
     role: 'Crowned keep. High life, a modest shot, and a damage aura for nearby towers.',
     soldier: 'guard',
-    hp: 300,
+    hp: 720,
     range: 3,
     rangeGrow: 0.25,
     damage: 4,
@@ -204,6 +204,30 @@ export function upgradeCost(kind: PieceKind, level: number): number {
   return level <= 1 ? base : Math.round(base * 1.6);
 }
 
+/**
+ * Soldiers chip the King instead of deleting it.
+ * A full hit on any other tower is unchanged. One leaker wounds the keep.
+ */
+export const KING_LEAK = 0.15;
+
+export function leakDamage(kind: PieceKind, amount: number): number {
+  if (kind !== 'king') return amount;
+  return Math.max(1, Math.round(amount * KING_LEAK));
+}
+
+/** Gold to restore a wounded tower, and how long before it can be repaired again. */
+export const REPAIR = {
+  /** 8 seconds. Stops a player from mending on every hit of a wave. */
+  ticks: 80,
+  perHp: 0.12,
+  minimum: 4,
+};
+
+export function repairCost(missing: number): number {
+  if (missing <= 0) return 0;
+  return Math.max(REPAIR.minimum, Math.ceil(missing * REPAIR.perHp));
+}
+
 /** Soldier stats. Every unit has strength, life, speed, plus range and an attack cooldown. */
 export const SOLDIERS: Record<SoldierKind, SoldierDef> = {
   peasant: { label: 'Peasant', strength: 5, hp: 24, speed: 2.2, range: 1, attackTicks: 8, bounty: 3 },
@@ -246,7 +270,7 @@ export const SPELLS: Record<SpellId, SpellDef> = {
   blast: {
     label: 'Blast',
     mana: 36,
-    radius: 4,
+    radius: 6,
     durationTicks: 8,
     strength: 0,
     speed: 1,

@@ -1,7 +1,7 @@
-import { tryPlaceBlock, trySpell, tryUpgrade } from './commands.js';
+import { tryPlaceBlock, tryRepair, trySpell, tryUpgrade } from './commands.js';
 import { chebyshev } from './pathing.js';
-import type { GameState, PieceKind, Side } from './types.js';
-import { AI_PERIOD, BLOCKS, SPELLS, upgradeCost } from './units.js';
+import type { GameState, PieceKind, Side, Tower } from './types.js';
+import { AI_PERIOD, BLOCKS, SPELLS, repairCost, upgradeCost } from './units.js';
 
 /**
  * One decision for the computer side. Towers do not move.
@@ -13,12 +13,15 @@ export function aiAct(state: GameState): void {
   const period = AI_PERIOD[state.difficulty];
   if (state.tick % period !== 0) return;
   const side: Side = state.humanSide === 'white' ? 'black' : 'white';
-  if (state.difficulty === 'easy' && roll(state) < 0.5) return;
+  if (state.difficulty === 'easy' && roll(state, side) < 0.5) return;
   const building = state.nextWaveTick - state.tick > 30;
   const buys = state.difficulty === 'hard' ? 2 : 1;
-  const hesitate = state.difficulty === 'normal' && roll(state) < 0.4;
+  const hesitate = state.difficulty === 'normal' && roll(state, side) < 0.4;
+  if (state.difficulty !== 'easy' && blastNow(state, side)) return;
+  if (mend(state, side, true)) return;
   if (!hesitate && state.difficulty !== 'easy' && improve(state, side, buys)) return;
-  if (state.difficulty === 'easy' && roll(state) < 0.22 && improve(state, side, 1)) return;
+  if (state.difficulty === 'easy' && roll(state, side) < 0.22 && improve(state, side, 1)) return;
+  if (mend(state, side, false)) return;
   if (building && layBlock(state, side)) return;
   cast(state, side);
 }
@@ -57,11 +60,34 @@ function improve(state: GameState, side: Side, buys: number): boolean {
   return bought;
 }
 
+function mend(state: GameState, side: Side, urgent: boolean): boolean {
+  const wounded = state.towers.filter((tower) => {
+    if (tower.side !== side || tower.hp <= 0 || tower.hp >= tower.maxHp) return false;
+    if (state.tick < tower.repairReadyTick) return false;
+    if (state.gold[side] < repairCost(tower.maxHp - tower.hp)) return false;
+    if (!urgent) return true;
+    const ratio = tower.hp / tower.maxHp;
+    if (tower.kind === 'king') return ratio < 0.85;
+    return ratio < (state.difficulty === 'hard' ? 0.6 : state.difficulty === 'normal' ? 0.4 : 0.28);
+  });
+  if (wounded.length === 0) return false;
+  const pick = [...wounded].sort((a, b) => woundScore(a) - woundScore(b))[0]!;
+  const mended = tryRepair(state, side, pick.file, pick.rank);
+  if (!mended.ok) return false;
+  apply(state, mended.state);
+  return true;
+}
+
+function woundScore(tower: Tower): number {
+  const ratio = tower.hp / tower.maxHp;
+  return tower.kind === 'king' ? ratio - 1 : ratio;
+}
+
 function layBlock(state: GameState, side: Side): boolean {
   const budget = state.difficulty === 'easy' ? 2 : state.difficulty === 'normal' ? 4 : 5;
   const owned = state.blocks.filter((block) => block.side === side && block.hp > 0).length;
   if (owned >= budget || state.gold[side] < BLOCKS.cost) return false;
-  const gap = 3 + Math.floor(roll(state) * 10);
+  const gap = 3 + Math.floor(roll(state, side) * 10);
   const rows = side === 'white' ? [6, 7, 5, 4] : [9, 8, 10, 11];
   for (const y of rows) {
     for (let x = 0; x < 16; x += 1) {
@@ -76,15 +102,31 @@ function layBlock(state: GameState, side: Side): boolean {
   return false;
 }
 
+function enemiesNearQueen(state: GameState, side: Side): number {
+  const queen = state.towers.find((tower) => tower.side === side && tower.kind === 'queen' && tower.hp > 0);
+  if (!queen) return 0;
+  return state.soldiers.filter((soldier) => {
+    if (soldier.side === side || soldier.hp <= 0) return false;
+    return chebyshev(soldier.x, soldier.y, queen.file * 2 + 0.5, queen.rank * 2 + 0.5) <= SPELLS.blast.radius;
+  }).length;
+}
+
+/** Blast before spending gold, so a wave in the camp is answered. */
+function blastNow(state: GameState, side: Side): boolean {
+  const need = state.difficulty === 'hard' ? 1 : 2;
+  if (enemiesNearQueen(state, side) < need || state.mana[side] < SPELLS.blast.mana) return false;
+  const casted = trySpell(state, side, 'blast');
+  if (!casted.ok) return false;
+  apply(state, casted.state);
+  return true;
+}
+
 function cast(state: GameState, side: Side): boolean {
   const queen = state.towers.find((tower) => tower.side === side && tower.kind === 'queen' && tower.hp > 0);
   if (!queen) return false;
   const mana = state.mana[side];
-  const nearEnemies = state.soldiers.filter((soldier) => {
-    if (soldier.side === side || soldier.hp <= 0) return false;
-    return chebyshev(soldier.x, soldier.y, queen.file * 2 + 0.5, queen.rank * 2 + 0.5) <= 5;
-  }).length;
-  const blastAt = state.difficulty === 'easy' ? 4 : 2;
+  const nearEnemies = enemiesNearQueen(state, side);
+  const blastAt = state.difficulty === 'easy' ? 3 : 2;
   if (nearEnemies >= blastAt && mana >= SPELLS.blast.mana) {
     return apply(state, trySpell(state, side, 'blast').state);
   }
@@ -93,7 +135,7 @@ function cast(state: GameState, side: Side): boolean {
     return apply(state, trySpell(state, side, 'heal').state);
   }
   const friends = state.soldiers.filter((soldier) => soldier.side === side && soldier.hp > 0).length;
-  if (state.difficulty !== 'easy' && friends >= 2 && mana >= SPELLS.blessing.mana && roll(state) < 0.65) {
+  if (state.difficulty !== 'easy' && friends >= 2 && mana >= SPELLS.blessing.mana && roll(state, side) < 0.65) {
     return apply(state, trySpell(state, side, 'blessing').state);
   }
   return false;
@@ -114,7 +156,9 @@ function apply(state: GameState, next: GameState): boolean {
   return true;
 }
 
-function roll(state: GameState): number {
-  state.rng = (Math.imul(state.rng, 1664525) + 1013904223) >>> 0;
-  return state.rng / 4294967296;
+function roll(state: GameState, side: Side): number {
+  const next = (Math.imul(side === 'white' ? state.rng : state.rngBlack, 1664525) + 1013904223) >>> 0;
+  if (side === 'white') state.rng = next;
+  else state.rngBlack = next;
+  return next / 4294967296;
 }

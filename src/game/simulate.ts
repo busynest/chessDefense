@@ -2,7 +2,7 @@ import { resolveKings, sweepDead } from './commands.js';
 import { distToTower, isBlockedCell, pathToward, towerCells, blockedSet } from './pathing.js';
 import type { GameState, Projectile, Side, Soldier, Tower } from './types.js';
 import { reportHarm } from './telemetry.js';
-import { ECONOMY, PIECES, SOLDIERS, TICK_SECONDS, WAVES, combatOf } from './units.js';
+import { ECONOMY, PIECES, SOLDIERS, TICK_SECONDS, WAVES, combatOf, leakDamage } from './units.js';
 import { aiAct } from './ai.js';
 
 interface Strike {
@@ -269,7 +269,8 @@ function soldiersAct(state: GameState, shots: Strike[]): void {
         lethal: foe.soldier.hp <= 0,
       });
     } else if (foe?.tower) {
-      foe.tower.hp -= stats.strength;
+      const dealt = leakDamage(foe.tower.kind, stats.strength);
+      foe.tower.hp -= dealt;
       foe.tower.hurtBy = soldier.side;
       reportHarm({
         source: 'soldier',
@@ -277,7 +278,7 @@ function soldiersAct(state: GameState, shots: Strike[]): void {
         side: soldier.side,
         target: 'tower',
         targetKind: foe.tower.kind,
-        amount: stats.strength,
+        amount: dealt,
         lethal: foe.tower.hp <= 0,
       });
     } else if (wall) {

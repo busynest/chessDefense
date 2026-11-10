@@ -19,6 +19,8 @@ export function createMatch(options: { mode: Mode; difficulty: Difficulty; seed:
       maxHp: def.hp,
       level: 1,
       attackReadyTick: 4 + (stagger % 5),
+      repairReadyTick: 0,
+      mendedTick: 0,
       hurtBy: null,
     });
     nextId += 1;
@@ -38,6 +40,7 @@ export function createMatch(options: { mode: Mode; difficulty: Difficulty; seed:
     winner: null,
     seed,
     rng: seed,
+    rngBlack: (Math.imul(seed, 1664525) ^ 0x9e3779b9) >>> 0 || 1,
     nextId,
     wave: 0,
     nextWaveTick: WAVES.firstWaveTick,

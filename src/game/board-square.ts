@@ -99,6 +99,16 @@ export class BoardSquare extends connect(connectStore)(LitElement) {
         transform: translate(-50%, -50%);
         pointer-events: none;
       }
+      .mend {
+        position: absolute;
+        width: 12%;
+        height: 12%;
+        border-radius: 50%;
+        transform: translate(-50%, -50%);
+        background: radial-gradient(circle, rgba(160, 255, 190, 0.55), transparent 70%);
+        box-shadow: 0 0 16px rgba(120, 255, 170, 0.8);
+        pointer-events: none;
+      }
       .unit, .shot, .pulse, .ruin {
         position: absolute;
         transform: translate(-50%, -50%);
@@ -218,6 +228,9 @@ export class BoardSquare extends connect(connectStore)(LitElement) {
       <div class="frame">
         ${squares}
         ${focusTower ? this.ring(focusTower) : ''}
+        ${game.towers.filter((tower) => tower.mendedTick > 0 && game.tick - tower.mendedTick < 24).map((tower) => html`
+          <div class="mend" style="left:${(tower.file + 0.5) / 8 * 100}%; top:${(7 - tower.rank + 0.5) / 8 * 100}%"></div>
+        `)}
         <div class="actors">
           ${game.effects.map((effect) => {
             const size = effect.spell === 'heal' ? effect.radius * 2 / 8 * 100 : effect.radius * 2 / 16 * 100;

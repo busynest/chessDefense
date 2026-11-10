@@ -1,41 +1,37 @@
 # Playtest report
 
-The towers no longer move. This pass replaces the chess-move game with fixed tower-defense towers and remeasures it. 108 AI-vs-AI games, 12 seeds, every pairing of easy, normal, and hard. White acts before Black on a shared tick. Nothing unfinished, nothing thrown, and three repeated Normal mirrors matched. A human Normal game in Chrome confirmed the new panel.
+108 AI-vs-AI games after the King, repair, and Blast pass. 12 seeds, every pairing of easy, normal, and hard. Each side rolls on its own random stream, so White no longer spends Black's rolls by acting first. On a tick when both sides act, who goes first alternates. Nothing unfinished, nothing thrown, no desync on the repeated Normal mirrors.
 
-## What a match feels like
+## What changed
 
-Equal armies cancel in the middle, so a mirror is not a one-minute king snipe. Easy mirrors average **157 seconds, wave 9.5**. Normal mirrors average **138 seconds, wave 8.3**. Hard mirrors average **143 seconds, wave 8.7**. A mismatch is shorter because the side that upgrades pushes a wave through: Normal beats Easy in **76–81 seconds (wave 4–5)**, and Hard beats Normal in **123–127 seconds (wave 7–8)**. Hard against Easy is the short one, about **74 seconds**.
+- The King has 720 life. A soldier's hit on the King is 15% of a normal hit (`KING_LEAK`), rounded, and at least 1. Other towers still take the full hit. In a Hard-vs-Easy trace the losing King dropped to 645 of 720 on wave 5, was still standing on wave 7, and fell at 117 seconds.
+- Repair sits beside Upgrade. Cost is `ceil(missing life × 0.12)`, at least 4 gold. The tower then cannot be repaired for 8 seconds. A green flash marks the mend. The guest sends a repair command; the host applies it. Every difficulty repairs. Hard mends the King below 85% and any tower below 60% before it buys another upgrade. Easy and Normal wait until the wound is deeper. Once upgrades are done, any difficulty mends whatever is damaged, which is the gold sink at level 3.
+- Blast's radius is 6 cells, up from 4, so it reaches the pawn line. Normal and Hard cast it before spending gold when enemies are already in that circle (1 enemy for Hard, 2 for Normal).
+- The old shared random stream was the first-player bias: White's roll changed Black's next roll. Each side now has its own stream.
 
-That mismatch is decisive. The winner of Normal vs Easy still has every tower (16) and the loser has about 4. The fight ends when the first real leak reaches the King, not after a long siege.
+## Batch
 
-## Difficulty and sides
-
-| Matchup | Result | Mean length |
+| Matchup | Wins | Mean length |
 | --- | --- | --- |
-| Easy vs Easy | White 6, Black 6 | 157s, wave 9.5 |
-| Normal vs Normal | White 5, Black 7 | 138s, wave 8.3 |
-| Hard vs Hard | White 8, Black 4 | 143s, wave 8.7 |
-| Normal vs Easy, both seats | Normal 24, Easy 0 | 76–81s |
-| Hard vs Normal, both seats | Hard 21, Normal 3 | 123–127s |
-| Hard vs Easy, both seats | Hard 24, Easy 0 | 74s |
+| Easy vs Easy | White 8, Black 4 | 187s (3.1 min), wave 11.7 |
+| Normal vs Normal | White 8, Black 4 | 246s (4.1 min), wave 15.7 |
+| Hard vs Hard | White 4, Black 8 | 257s (4.3 min), wave 16.3 |
+| Normal vs Easy, both seats | Normal 24, Easy 0 | 114–115s, wave 6.8 |
+| Hard vs Easy, both seats | Hard 24, Easy 0 | 113–114s, wave 6.7 |
+| Hard vs Normal, both seats | Hard 21, Normal 3 | 237–251s, wave 15–16 |
 
-Hard beats Normal in 21 of 24 games. Normal beats Easy in all 24. Easy mirrors are even. Normal mirrors are close (5–7). Hard mirrors lean White, 8–4.
+Hard vs Easy was about 74 seconds before this pass. It is now about 114 seconds, and the King lives through the first leak. Mirror games sit at 3.1, 4.1, and 4.3 minutes. Normal and Hard mirrors are just past the 4 minute mark.
 
-## Towers, gold, spells
+Gold spent is 93% of gold gained (182,516 of 195,761). Repairs: **1,430** in 108 games, **13.2 per game**. Mana spent is 87%. Spells: Blessing 2,490, Blast **221** (2.0 per game, up from 81 / 0.75), Heal 49. Heal dropped because Blast now fires first when the camp is touched. All six tower types still land hits. Bishop towers remain the highest tower damage because they shoot farthest.
 
-Every tower type lands hits. Bishop towers do the most tower damage because they shoot farthest (147,780). Queen 50,213, Rook 34,463, Knight 12,104, Pawn 8,741, King 3,947 direct. The King's larger effect is the damage aura, which is not in that last number. Soldier damage is still led by Iron Cannons, then archers, then peasants.
+About **49%** of side-ticks are at the 120 gold cap. Repair is used, and it does not keep up with 3 gold a second once a town is mostly level 3 and only one tower is wounded. The 8 second cooldown is longer than it takes to refill the cap.
 
-Gold spent is **91%** of gold gained. About **20%** of all side-ticks are spent at the 120 cap. Easy causes most of that: it rarely buys, so the gold sits. Normal and Hard spend on the best tower they can afford, and Hard buys twice when it has the gold. Mana spent is 85% of mana gained. Blessing is the common spell (1,427 casts). Heal 254. Blast 81.
+## Sides
 
-Walls stay up. 789 were placed and 4 were destroyed. Pawns are still the first tower to fall, in every game that loses one.
-
-## Human game
-
-Versus Normal, desktop. The banner says the towers are fixed and names the King tower. The coach line says to tap a tower for its range and Upgrade. Tapping the a1 rook draws a dashed range ring and opens the panel: role, damage, range, cooldown, and Upgrade 34. The button spends gold and the banner announces the new level. A level 3 rook reads 14 damage, range 6.1, every 2.0s, with a gold trim and a cannon barrel. Wave 1 shows soldiers, shells, and arrows. Frame rate held at 61. The only console error is the known Firebase API-key 400. On a phone the board is above the panel, and the same level 3 stats remain readable.
+Mirrors are 8–4 White, 8–4 White, and 4–8 Black. Together that is 20 White and 16 Black. The old Hard-mirror result was 8–4 White when both sides shared one random stream and White always rolled first. That specific White advantage is gone: Hard mirrors now lean Black by the same 8–4 margin. On 12 games that split is still noise-sized, and it is no longer the same side every difficulty.
 
 ## For Jack
 
-- **Mismatch length.** Equal games land around two and a half minutes. A one-step difficulty gap can still end near 80 seconds, and the winner has not lost a tower. If that feels like a blowout, more King life makes the first leak a wound instead of the end. Left as a pace choice.
-- **Hard mirrors lean White, 8–4.** Easy is 6–6 and Normal is 5–7. White acts first and spends the shared random draw first. Worth another look only if Hard-vs-Hard should be as flat as Easy.
-- **Gold still reaches 120** for about a fifth of the match, mostly because Easy does not buy and because a winning side eventually runs out of towers to upgrade. A repair, paid in gold after level 3, would be a sink. It is a new verb, so it is not in this pass.
-- **Blast stays the rare spell.** The Queen is on the back rank, so enemies enter Blast range only after they have already reached the camp.
+- Gold still reaches 120 for about half the match. The next sink that would matter is either slower income or a repeatable level-3 spend that is not gated on missing life (a brace, or a shorter repair cooldown on Hard only). Left alone so this batch stays the measurement.
+- Normal and Hard mirrors run a little past 4 minutes. If that is too long, a slightly higher King leak (toward 0.2) shortens them without bringing Hard vs Easy back to a one-minute end.
+- Heal is now the rare spell, because Blast answers the camp first. That is the trade for making Blast a real choice.

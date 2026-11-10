@@ -1,5 +1,5 @@
 import { towerAt } from './chess.js';
-import { controlsSide, playBlock, playSpell, playUnblock, playUpgrade, selectSquare } from './game_state.js';
+import { controlsSide, playBlock, playRepair, playSpell, playUnblock, playUpgrade, selectSquare } from './game_state.js';
 import { sendCommand, signedInUid } from './online.js';
 import { store } from '../store.js';
 import type { PlayerCommand, Side, SpellId } from './types.js';
@@ -24,6 +24,18 @@ export function handleUpgrade(side: Side, file: number, rank: number): void {
     return;
   }
   store.dispatch(playUpgrade({ side, file, rank }));
+}
+
+export function handleRepair(side: Side, file: number, rank: number): void {
+  const slice = store.getState().game;
+  if (!controlsSide(slice, side)) return;
+  const command: PlayerCommand = { type: 'repair', side, file, rank };
+  if (slice.role === 'guest') {
+    const uid = signedInUid();
+    if (uid) void sendCommand(slice.onlineCode, uid, command);
+    return;
+  }
+  store.dispatch(playRepair({ side, file, rank }));
 }
 
 export function handleSpell(side: Side, spell: SpellId): void {

@@ -72,7 +72,7 @@ export class HowToPage extends PageViewElement {
       <section>
         <h2>Controls</h2>
         <ul>
-          <li>Tap a tower to see its range and stats. Upgrade spends gold and stops at level 3.</li>
+          <li>Tap a tower to see its range and stats. Upgrade spends gold and stops at level 3. Repair spends gold to restore missing life, then waits 8 seconds.</li>
           <li>The wall button shades your half. Tap an empty cell to build. A green ghost is legal and a red ghost is not. Tap your own wall to sell it.</li>
           <li>Spell buttons sit in the panel. They stay quiet until you can afford them.</li>
           <li>Pause freezes the armies. Menu leaves the match.</li>

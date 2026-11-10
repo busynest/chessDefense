@@ -7,7 +7,7 @@ import { writeFile } from 'node:fs/promises';
 import { aiAct } from '../out/game/ai.js';
 import { createMatch } from '../out/game/setup.js';
 import { step } from '../out/game/simulate.js';
-import { listenHarm } from '../out/game/telemetry.js';
+import { listenHarm, listenRepair } from '../out/game/telemetry.js';
 import { ECONOMY, TICK_SECONDS } from '../out/game/units.js';
 
 const MAX_TICKS = 6000;
@@ -61,8 +61,10 @@ function play(seed, whiteDiff, blackDiff) {
   const towerKind = new Map(state.towers.map((tower) => [tower.id, `${tower.side}:${tower.kind}`]));
   let blocksPlaced = { white: 0, black: 0 };
   let blocksDestroyed = { white: 0, black: 0 };
+  let repairs = 0;
   let error = '';
   listenHarm((event) => harm.push(event));
+  listenRepair(() => { repairs += 1; });
   try {
     while (state.status === 'playing' && state.tick < MAX_TICKS) {
       const goldBefore = { ...state.gold };
@@ -77,7 +79,12 @@ function play(seed, whiteDiff, blackDiff) {
         if (goldDelta > 0) economy[side].gained += goldDelta;
         if (manaDelta > 0) economy[side].manaGained += manaDelta;
       }
-      for (const side of ['white', 'black']) {
+      const periods = { easy: 50, normal: 25, hard: 12 };
+      const whiteDue = state.tick % periods[whiteDiff] === 0;
+      const blackDue = state.tick % periods[blackDiff] === 0;
+      const blackFirst = whiteDue && blackDue && Math.floor(state.tick / periods[whiteDiff]) % 2 === 1;
+      const order = blackFirst ? ['black', 'white'] : ['white', 'black'];
+      for (const side of order) {
         const beforeGold = state.gold[side];
         const beforeMana = state.mana[side];
         const beforeBlocks = new Set(state.blocks.filter((block) => block.side === side).map((block) => `${block.x}:${block.y}`));
@@ -111,6 +118,7 @@ function play(seed, whiteDiff, blackDiff) {
     error = caught instanceof Error ? caught.stack ?? caught.message : String(caught);
   } finally {
     listenHarm(null);
+    listenRepair(null);
   }
   const towersLeft = { white: 0, black: 0 };
   for (const tower of state.towers) towersLeft[tower.side] += 1;
@@ -128,6 +136,7 @@ function play(seed, whiteDiff, blackDiff) {
     towersLeft,
     economy,
     spells,
+    repairs,
     blocksPlaced,
     blocksDestroyed,
     firstDeath: firstDeaths[0] ?? null,
@@ -168,6 +177,7 @@ function summarize(games) {
   let manaSpent = 0;
   let blocksPlaced = 0;
   let blocksDestroyed = 0;
+  let repairs = 0;
   const spells = { blessing: 0, heal: 0, blast: 0 };
   for (const game of games) {
     const key = `${game.white}-vs-${game.black}`;
@@ -202,6 +212,7 @@ function summarize(games) {
     spells.blessing += game.spells.blessing;
     spells.heal += game.spells.heal;
     spells.blast += game.spells.blast;
+    repairs += game.repairs;
   }
   const table = {};
   for (const [key, row] of Object.entries(byMatchup)) {
@@ -238,6 +249,7 @@ function summarize(games) {
     },
     blocksPlaced,
     blocksDestroyed,
+    repairs,
     spells,
     firstTowerDeath: firstDeath,
     harm,

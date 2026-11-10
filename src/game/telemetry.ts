@@ -20,3 +20,18 @@ export function listenHarm(sink: ((harm: Harm) => void) | null): void {
 export function reportHarm(harm: Harm): void {
   harmSink?.(harm);
 }
+
+export interface Mend {
+  side: Side;
+  kind: string;
+}
+
+let repairSink: ((mend: Mend) => void) | null = null;
+
+export function listenRepair(sink: ((mend: Mend) => void) | null): void {
+  repairSink = sink;
+}
+
+export function reportRepair(mend: Mend): void {
+  repairSink?.(mend);
+}

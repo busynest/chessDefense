@@ -15,7 +15,7 @@ There are two layers.
 | Bishop | Piercing bolt that slows | 4 damage, range 6.4, every 1.4s, 2 targets | 26, then 42 |
 | Rook | Cannon splash | 9 damage, range 5.4, every 2.2s | 34, then 54 |
 | Queen | Area magic, and the spell anchor | 5 damage, range 4.6, every 1.6s | 40, then 64 |
-| King | Keep, modest shot, damage aura within 2 squares | 4 damage, range 3, every 1.2s. 300 life | 30, then 48 |
+| King | Keep, modest shot, damage aura within 2 squares | 4 damage, range 3, every 1.2s. 720 life | 30, then 48 |
 
 A level adds a quarter more damage, a little range, more life, and slightly stronger soldiers. Level 3 is the top. The King's aura adds 12% damage to friendly towers within two chess squares, and more after an upgrade. Corner rooks stand outside that aura.
 
@@ -31,7 +31,9 @@ Soldiers march toward the enemy King, route around towers and blocks, fight enem
 
 - **Blessing** (24 mana). Friendly soldiers within 5 cells gain 4 strength and 35% speed, plus 6 life, for 6 seconds.
 - **Heal** (28 mana). Friendly towers within 2 chess squares regain 30 life.
-- **Blast** (36 mana). Enemy soldiers within 4 cells take 16 damage. Enemy towers within 2 squares take 10.
+- **Blast** (36 mana). Enemy soldiers within 6 cells take 16 damage. Enemy towers within 2 squares take 10.
+
+**Repair.** Tap a wounded tower and spend gold for the life it is missing, about one gold per eight life, at least 4. The tower cannot be repaired again for 8 seconds. Soldiers that reach the King deal 15% of a normal hit, so one leaker wounds the keep.
 
 **Win.** Destroy the enemy King tower, with soldiers or with a chess capture. If both King towers fall on the same step, the match is a draw.
 
@@ -44,7 +46,7 @@ Soldiers march toward the enemy King, route around towers and blocks, fight enem
 | Bishop | Archer | 64 |
 | Rook | Iron Cannon | 120 |
 | Queen | Mage | 100 |
-| King | Royal Guard | 300 |
+| King | Royal Guard | 720 |
 
 The shot table above is the tower's own attack. The soldier table is the army it sends.
 

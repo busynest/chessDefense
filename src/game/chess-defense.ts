@@ -11,6 +11,7 @@ import {
   openOnline,
   playBlock,
   playUpgrade,
+  playRepair,
   playSpell,
   playUnblock,
   playerSide,
@@ -22,13 +23,13 @@ import {
   togglePause,
   type GameSliceState,
 } from './game_state.js';
-import { handleSpell, handleUpgrade } from './input.js';
+import { handleRepair, handleSpell, handleUpgrade } from './input.js';
 import { createMatchDoc, joinMatchDoc, matchCode, publishSnapshot, readMatch, signedInUid, watchInputs, watchMatch } from './online.js';
 import { loadCareer, recordResult } from './record.js';
 import './board-square.js';
 import { connectStore, store, type RootState } from '../store.js';
 import type { Difficulty, GameState, PlayerCommand, Side, SpellId } from './types.js';
-import { PIECES, SPELLS, combatOf, squareName, upgradeCost } from './units.js';
+import { PIECES, SPELLS, combatOf, repairCost, squareName, upgradeCost } from './units.js';
 import type { Unsubscribe } from 'firebase/firestore';
 
 @customElement('chess-defense')
@@ -149,6 +150,8 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
     if (store.getState().game.role !== 'host' || command.side !== 'black') return;
     if (command.type === 'upgrade') {
       store.dispatch(playUpgrade({ file: command.file, rank: command.rank, side: 'black' }));
+    } else if (command.type === 'repair') {
+      store.dispatch(playRepair({ file: command.file, rank: command.rank, side: 'black' }));
     } else if (command.type === 'spell') {
       store.dispatch(playSpell({ side: 'black', spell: command.spell }));
     } else if (command.type === 'block') {
@@ -254,6 +257,7 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
         align-items: center;
       }
       button.quiet, .link { background: linear-gradient(#3d4e68, #243044); }
+      button.repair { background: linear-gradient(#2f6b45, #1c4630); }
       button:disabled { opacity: 0.45; cursor: default; }
       label { display: grid; gap: 4px; font-size: 0.9rem; }
       select, input {
@@ -373,7 +377,7 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
         ${(['white', 'black'] as const).map((side) => html`
           <div class="gold">${side === 'white' ? 'White' : 'Black'} ${Math.floor(game.gold[side])} gold · ${Math.floor(game.mana[side])} mana</div>
         `)}
-        ${game.wave === 0 ? html`<p class="coach">Towers stay on their squares. Tap one for its range and Upgrade. The wall button shades your half: green can be built, red cannot.</p>` : ''}
+        ${game.wave === 0 ? html`<p class="coach">Towers stay on their squares. Tap one for its range, Upgrade, or Repair. The wall button shades your half: green can be built, red cannot.</p>` : ''}
         ${selected ? this.inspect(selected) : html`<div>Tap one of your towers to upgrade it.</div>`}
         ${sides.map((side) => this.spells(slice, side))}
       </aside>
@@ -393,9 +397,29 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
       </div>
       <div>${piece.role}</div>
       <div>${stats.damage} damage · range ${stats.range.toFixed(1)} · every ${(stats.attackTicks / 10).toFixed(1)}s</div>
-      ${tower.level < 3 ? html`
-        <button type="button" @click=${() => handleUpgrade(tower.side, tower.file, tower.rank)}>Upgrade ${cost}</button>
-      ` : html`<div>Level 3</div>`}
+      <div class="row">
+        ${tower.level < 3 ? html`
+          <button type="button" @click=${() => handleUpgrade(tower.side, tower.file, tower.rank)}>Upgrade ${cost}</button>
+        ` : html`<div>Level 3</div>`}
+        ${this.repairButton(tower)}
+      </div>
+    `;
+  }
+
+  private repairButton(tower: GameState['towers'][number]): TemplateResult {
+    const slice = this.slice;
+    const missing = Math.max(0, tower.maxHp - tower.hp);
+    const cost = repairCost(missing);
+    const wait = slice ? Math.max(0, tower.repairReadyTick - slice.game.tick) : 0;
+    const label = missing <= 0 ? 'Whole' : wait > 0 ? `Repair ${(wait / 10).toFixed(0)}s` : `Repair ${cost}`;
+    return html`
+      <button
+        type="button"
+        class="repair"
+        ?disabled=${missing <= 0 || wait > 0}
+        @click=${() => handleRepair(tower.side, tower.file, tower.rank)}>
+        ${label}
+      </button>
     `;
   }
 
