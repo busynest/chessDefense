@@ -60,6 +60,7 @@ export function createMatch(options: { mode: Mode; difficulty: Difficulty; seed:
     navHash: 0,
     navStamp: 0,
     ledger: emptyLedger(),
+    initiative: seed % 2 === 0 ? 'white' : 'black',
   };
 }
 

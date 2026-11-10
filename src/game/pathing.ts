@@ -12,6 +12,17 @@ export function towerCells(tower: Tower): Cell[] {
   ];
 }
 
+/**
+ * Nearest cell. A point halfway between two cells steps toward the board's
+ * center, so a soldier and its mirror pick mirrored cells.
+ */
+export function cellIndex(value: number): number {
+  const floor = Math.floor(value + 1e-9);
+  const frac = value - floor;
+  if (Math.abs(frac - 0.5) > 1e-6) return Math.round(value);
+  return value < 7.5 ? floor + 1 : floor;
+}
+
 export function chebyshev(ax: number, ay: number, bx: number, by: number): number {
   return Math.max(Math.abs(ax - bx), Math.abs(ay - by));
 }
@@ -294,7 +305,10 @@ export function fallbackAim(state: GameState, side: Side, x: number, y: number):
     return distToTower(tower.file * 2 + 0.5, tower.rank * 2 + 0.5, king) < kingDist - 0.5;
   });
   if (ahead.length === 0) return null;
-  ahead.sort((a, b) => distToTower(x, y, a) - distToTower(x, y, b) || a.file - b.file || a.rank - b.rank);
+  const forward = side === 'white' ? 1 : -1;
+  ahead.sort((a, b) => distToTower(x, y, a) - distToTower(x, y, b)
+    || a.file - b.file
+    || (b.rank - a.rank) * forward);
   const pick = ahead[0]!;
   return { file: pick.file, rank: pick.rank };
 }
@@ -364,9 +378,9 @@ export function flowToTower(state: GameState, tower: Tower, range: number): Int1
  * by `lane` so a wave does not stack on one file. Already in range returns
  * an empty path. Deterministic for the same grid, tower, range, and lane.
  */
-export function pathToTower(state: GameState, x: number, y: number, tower: Tower, range: number, lane: number): Cell[] {
+export function pathToTower(state: GameState, x: number, y: number, tower: Tower, range: number, lane: number, compass: 'symmetric' | 'north' | 'south' = 'symmetric'): Cell[] {
   const field = flowToTower(state, tower, range);
-  let cursor = Math.round(y) * 16 + Math.round(x);
+  let cursor = cellIndex(y) * 16 + cellIndex(x);
   if (cursor < 0 || cursor > 255 || (field[cursor] ?? -1) <= 0) return [];
   const cells: Cell[] = [];
   for (let step = 0; step < 10 && (field[cursor] ?? -1) > 0; step += 1) {
@@ -384,12 +398,34 @@ export function pathToTower(state: GameState, x: number, y: number, tower: Tower
       }
     }
     if (options.length === 0) break;
-    options.sort((a, b) => a - b);
-    const pick = options[(lane + step) % options.length]!;
+    const tx = tower.file * 2 + 0.5;
+    const ty = tower.rank * 2 + 0.5;
+    const goalNorth = ty >= cy ? 1 : -1;
+    options.sort((a, b) => {
+      const north = (((b / 16) | 0) - ((a / 16) | 0)) * goalNorth;
+      const forward = lane < 0 || compass === 'south' ? -north : north;
+      if (compass === 'symmetric' && lane >= 0) return compareStep(a, b, cx, cy, tx, ty);
+      return forward || compareStep(a, b, cx, cy, tx, ty);
+    });
+    const pick = options[(Math.abs(lane) + step) % options.length]!;
     cells.push({ x: pick % 16, y: (pick / 16) | 0 });
     cursor = pick;
   }
   return cells;
+}
+
+/** Equal steps prefer the one closer to the tower, then the one nearer its file. A west tie-break is the same for both colors. */
+function compareStep(a: number, b: number, cx: number, cy: number, tx: number, ty: number): number {
+  const ax = a % 16;
+  const ay = (a / 16) | 0;
+  const bx = b % 16;
+  const by = (b / 16) | 0;
+  return chebyshev(ax, ay, tx, ty) - chebyshev(bx, by, tx, ty)
+    || Math.abs(ax - tx) - Math.abs(bx - tx)
+    || Math.abs(ay - ty) - Math.abs(by - ty)
+    || Math.abs(ax - cx) - Math.abs(bx - cx)
+    || Math.abs(ay - cy) - Math.abs(by - cy)
+    || ax - bx;
 }
 
 /**

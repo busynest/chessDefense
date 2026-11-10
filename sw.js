@@ -1,4 +1,4 @@
-const CACHE = 'chessdefense-shell-v1';
+const CACHE = 'chessdefense-shell-v2';
 const SHELL = [
   '/',
   '/index.html',
@@ -6,6 +6,7 @@ const SHELL = [
   '/boot.js',
   '/config/development.js',
   '/config/production.js',
+  '/out/application-shell.js',
   '/images/manifest/logo-192.png',
   '/images/manifest/logo-512.png',
   '/images/favicon.ico',

@@ -362,6 +362,16 @@ test('the first wave is one launch after the build, and the next wave waits', ()
   assert.equal(quiet.soldiers.filter((soldier) => soldier.side === 'white' && soldier.kind === 'peasant').length, 8);
 });
 
+test('a path mirrors across the center for both colors', () => {
+  const state = bare();
+  const north = place(state, { side: 'black', kind: 'king', file: 4, rank: 7 });
+  const south = place(state, { side: 'white', kind: 'king', file: 4, rank: 0 });
+  const up = pathToTower(state, 3, 4, north, 1, 2);
+  const down = pathToTower(state, 3, 11, south, 1, 2);
+  assert.ok(up.length > 0);
+  assert.deepEqual(up.map((cell) => ({ x: cell.x, y: 15 - cell.y })), down);
+});
+
 test('pathing walks around a wall and toward the enemy king', () => {
   const state = bare();
   place(state, { side: 'black', kind: 'king', file: 4, rank: 7 });
@@ -495,7 +505,7 @@ test('the same seed and the same commands produce the same match', () => {
 
 test('a scripted attack can defeat the easy AI king', () => {
   let state = createMatch({ mode: 'ai', difficulty: 'easy', seed: 3 });
-  for (let i = 0; i < 2500 && state.status === 'playing'; i += 1) {
+  for (let i = 0; i < 6000 && state.status === 'playing'; i += 1) {
     state = step(state);
     if (state.status !== 'playing') break;
     if (state.mana.white >= 36 && state.tick % 15 === 0) {

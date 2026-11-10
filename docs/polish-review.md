@@ -118,11 +118,21 @@ The simulation did not change, so the 108-game batch matches the hunt numbers ab
 
 **Overall now: 8.** The match can be learned, heard, resumed, and read back. It is still not a 10.
 
+## Fairness pass
+
+| Category | Was | Now | What changed |
+| --- | --- | --- | --- |
+| AI / difficulty curve | 8 | 8 | Mirror games no longer belong to one color. Rusher 12–12, Fortress 14–10, Tactician 13–11, each over 24 seeds. Nothing unfinished. Tactician still sweeps the cross matches. |
+| Accessibility | 6 | 7 | Tab lands on one square. Arrow keys move across the board, and the focused square draws a gold ring. |
+| Balance | 7 | 8 | The path tie-break was the color edge. Equal steps now face the target, and even seeds give the direct steps to White, odd seeds to Black. |
+
+**Overall stays 8.** The mirrors are fair. A 10 still wants a Tactician that can be beaten, tower art as rich as the soldiers, and a rematch sat through on a real network.
+
 108 games with the three personalities. Nothing unfinished, no draws. Longest game 386 seconds. Rusher vs Rusher is Black 12–0, mean 194s. Fortress vs Fortress is White 9–3, mean 306s. Tactician vs Tactician is White 4–8, mean 302s. Tactician beats Fortress 24–0 and Rusher 24–0. Fortress beats Rusher in 18 of 24. Eighteen games pass five minutes. Overcharge is 7.7 per game.
 
 ## Still left for a 10
 
-- The soldier atlas is original and readable, and it is still flatter than the tower illustrations.
+- Tactician still beats Fortress and Rusher in every cross game. Slowing its think made the hard mirrors lopsided, so the 1.2 second think stayed.
+- The soldier atlas is still flatter than the tower illustrations.
 - Online rematch has no ready check, and the 30-second resume has not been sat through in two browsers on a real network.
-- Focus order on the board squares is the browser default.
-- Rusher mirrors all go to Black, the side that spends on the first shared decision.
+- A phone can install the app after one visit. The service worker caches the shell and then every same-origin file it fetches. A cold offline install, before that first visit, still has nothing to show.

@@ -122,6 +122,24 @@ export class BoardSquare extends connect(connectStore)(LitElement) {
     this.paintSoldiers();
   }
 
+  private keyedSquare(file: number, rank: number): boolean {
+    if (this.selected) return this.selected.file === file && this.selected.rank === rank;
+    return file === 0 && rank === 0;
+  }
+
+  private moveKey(file: number, rank: number): void {
+    handleSquare(file, rank);
+    void this.updateComplete.then(() => {
+      const squares = this.renderRoot.querySelectorAll('one-square');
+      for (const square of squares) {
+        const tile = square as HTMLElement & { file: number; rank: number };
+        if (tile.file !== file || tile.rank !== rank) continue;
+        tile.shadowRoot?.querySelector('button')?.focus();
+        return;
+      }
+    });
+  }
+
   private paintSoldiers(): void {
     const canvas = this.renderRoot.querySelector('canvas');
     const game = this.game;
@@ -451,7 +469,9 @@ export class BoardSquare extends connect(connectStore)(LitElement) {
             .marked=${marked}
             ?flash=${this.flashes.has(`${file},${rank}`)}
             ?coach=${this.coachFile === file && this.coachRank === rank}
+            ?keyed=${this.keyedSquare(file, rank)}
             @square-click=${(event: CustomEvent<{ file: number; rank: number }>) => handleSquare(event.detail.file, event.detail.rank)}
+            @square-key=${(event: CustomEvent<{ file: number; rank: number }>) => this.moveKey(event.detail.file, event.detail.rank)}
             @square-hover=${(event: CustomEvent<{ file: number; rank: number; on: boolean }>) => {
               this.hover = event.detail.on ? { file: event.detail.file, rank: event.detail.rank } : null;
             }}

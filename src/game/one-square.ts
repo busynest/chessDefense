@@ -31,6 +31,8 @@ export class OneSquare extends LitElement {
   @property({ type: String }) marked: Side | '' = '';
   @property({ type: Boolean, reflect: true }) flash = false;
   @property({ type: Boolean, reflect: true }) coach = false;
+  /** One square is in the tab order. Arrow keys move across the grid. */
+  @property({ type: Boolean }) keyed = false;
 
   static override get styles(): CSSResultGroup {
     return css`
@@ -114,6 +116,10 @@ export class OneSquare extends LitElement {
         cursor: pointer;
         touch-action: manipulation;
       }
+      button:focus-visible {
+        outline: 3px solid #f6e7a8;
+        outline-offset: -5px;
+      }
       .coord {
         position: absolute;
         z-index: 3;
@@ -161,6 +167,26 @@ export class OneSquare extends LitElement {
     }));
   }
 
+  private onKey(event: KeyboardEvent): void {
+    const step: Record<string, [number, number]> = {
+      arrowright: [1, 0],
+      arrowleft: [-1, 0],
+      arrowup: [0, 1],
+      arrowdown: [0, -1],
+    };
+    const move = step[event.key.toLowerCase()];
+    if (!move) return;
+    const file = this.file + move[0];
+    const rank = this.rank + move[1];
+    if (file < 0 || rank < 0 || file > 7 || rank > 7) return;
+    event.preventDefault();
+    this.dispatchEvent(new CustomEvent('square-key', {
+      detail: { file, rank },
+      bubbles: true,
+      composed: true,
+    }));
+  }
+
   protected override render(): TemplateResult {
     const ratio = this.maxHp > 0 ? Math.max(0, Math.min(1, this.hp / this.maxHp)) : 0;
     const showRank = this.file === 0;
@@ -179,8 +205,10 @@ export class OneSquare extends LitElement {
       ${showFile ? html`<span class="coord file">${'abcdefgh'[this.file]}</span>` : ''}
       <button
         type="button"
+        tabindex=${this.keyed ? '0' : '-1'}
         aria-label=${this.label || 'square'}
         @click=${this.choose}
+        @keydown=${this.onKey}
         @pointerenter=${() => this.hover(true)}
         @pointerleave=${() => this.hover(false)}
       ></button>

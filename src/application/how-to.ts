@@ -40,7 +40,7 @@ export class HowToPage extends PageViewElement {
         <h1>How to play</h1>
         <p>Two medieval kings defend their towns on one board. The 8×8 squares are towers. Each square is split into four, and those 256 cells are where the armies march.</p>
         <p><a href="/">Back to the match</a> · <button type="button" @click=${() => { store.dispatch(navigate('/')); window.dispatchEvent(new Event('chessdefense-tour')); }}>Replay the tour</button></p>
-        <p>The first match is a skippable tour against an opponent that waits. It walks through towers and soldiers, walls (your two ranks, the open center, and the gap in every row), targeting, upgrade and repair, the Queen's spells, and the five-minute exposure. Replay it here any time. When you skip or finish, that opponent starts to play.</p>
+        <p>The first match is a skippable tour against an opponent that waits. It walks through towers and soldiers, walls (your two ranks, the open center, and the gap in every row), targeting, upgrade and repair, the Queen's spells, and the five-minute exposure. Replay it here any time. When you skip or finish, that opponent starts to play. Tab to the board and use the arrow keys to move between squares.</p>
         <p>At ${SUDDEN.tick / 10} seconds the kings are exposed. The HUD counts down. Soldier hits on a King become full hits, hits on other towers double, and a soldier in range of a tower strikes it before dueling.</p>
       </section>
       <section>

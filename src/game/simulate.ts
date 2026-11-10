@@ -1,5 +1,5 @@
 import { refreshAims, resolveKings, sweepDead } from './commands.js';
-import { blockedSet, distToTower, fallbackAim, isBlockedCell, pathToTower, towerCells } from './pathing.js';
+import { blockedSet, cellIndex, distToTower, fallbackAim, isBlockedCell, pathToTower, towerCells } from './pathing.js';
 import { towerAt } from './chess.js';
 import type { GameState, Projectile, Side, Soldier, Tower } from './types.js';
 import { reportHarm } from './telemetry.js';
@@ -171,7 +171,8 @@ function spawnCell(state: GameState, tower: Tower, n: number): { x: number; y: n
 
 function towersShoot(state: GameState, shots: Strike[]): void {
   const hits: Array<{ tower: Tower; foe: Soldier; amount: number; control: number; controlKind: 'root' | 'slow' | 'none' }> = [];
-  for (const tower of state.towers) {
+  const towers = [...state.towers].sort((a, b) => Math.abs(a.rank - 3.5) - Math.abs(b.rank - 3.5) || a.file - b.file);
+  for (const tower of towers) {
     if (tower.hp <= 0 || tower.attackReadyTick > state.tick) continue;
     const stats = combatOf(tower.kind, tower.level);
     const origin = towerCenter(tower);
@@ -232,7 +233,10 @@ function kingAura(state: GameState, tower: Tower): number {
 function soldiersInRange(state: GameState, origin: { x: number; y: number }, side: Side, range: number): Soldier[] {
   return state.soldiers
     .filter((soldier) => soldier.side !== side && soldier.hp > 0 && chebyshevPoint(soldier, origin) <= range)
-    .sort((a, b) => chebyshevPoint(a, origin) - chebyshevPoint(b, origin));
+    .sort((a, b) => chebyshevPoint(a, origin) - chebyshevPoint(b, origin)
+      || Math.abs(a.x - origin.x) - Math.abs(b.x - origin.x)
+      || Math.abs(a.y - origin.y) - Math.abs(b.y - origin.y)
+      || a.x - b.x);
 }
 
 function strikeSoldier(state: GameState, tower: Tower, foe: Soldier, amount: number, control: number, controlKind: 'root' | 'slow' | 'none'): void {
@@ -289,7 +293,8 @@ function soldiersAct(state: GameState, shots: Strike[]): void {
   const blocked = blockedSet(state);
   const attacks: Array<{ soldier: Soldier; foe: ReturnType<typeof nearestFoe>; wall: GameState['blocks'][number] | null; stats: ReturnType<typeof statsOf> }> = [];
   const movers: Soldier[] = [];
-  for (const soldier of state.soldiers) {
+  const soldiers = [...state.soldiers].sort((a, b) => Math.abs(a.y - 7.5) - Math.abs(b.y - 7.5) || a.x - b.x);
+  for (const soldier of soldiers) {
     if (soldier.hp <= 0 || soldier.rootedUntil > state.tick) continue;
     const stats = statsOf(soldier, state.tick);
     if (state.tick >= SUDDEN.tick) {
@@ -326,12 +331,12 @@ function soldiersAct(state: GameState, shots: Strike[]): void {
     }
     if (soldier.navStamp !== state.navStamp || soldier.path.length === 0) {
       soldier.path = focus
-        ? pathToTower(state, soldier.x, soldier.y, focus, stats.range, laneOf(soldier))
+        ? pathToTower(state, soldier.x, soldier.y, focus, stats.range, laneOf(state, soldier))
         : [];
       if (soldier.path.length === 0 && focus) {
         const blocker = nearestTower(state, soldier);
         if (blocker && blocker.id !== focus.id) {
-          soldier.path = pathToTower(state, soldier.x, soldier.y, blocker, stats.range, laneOf(soldier));
+          soldier.path = pathToTower(state, soldier.x, soldier.y, blocker, stats.range, laneOf(state, soldier));
         }
       }
       soldier.navStamp = state.navStamp;
@@ -349,7 +354,7 @@ function soldiersAct(state: GameState, shots: Strike[]): void {
       const wall = nearestBlock(state, soldier);
       if (wall && soldier.attackReadyTick <= state.tick) attacks.push({ soldier, foe: null, wall, stats });
       soldier.path = focus
-        ? pathToTower(state, soldier.x, soldier.y, focus, stats.range, laneOf(soldier))
+        ? pathToTower(state, soldier.x, soldier.y, focus, stats.range, laneOf(state, soldier))
         : [];
       soldier.navStamp = state.navStamp;
       continue;
@@ -418,15 +423,15 @@ function soldiersAct(state: GameState, shots: Strike[]): void {
 }
 
 function onFriendlyTower(state: GameState, soldier: Soldier): boolean {
-  const x = Math.round(soldier.x);
-  const y = Math.round(soldier.y);
+  const x = cellIndex(soldier.x);
+  const y = cellIndex(soldier.y);
   return state.towers.some((tower) => tower.side === soldier.side && tower.hp > 0 && towerCells(tower).some((cell) => cell.x === x && cell.y === y));
 }
 
 function exitStep(state: GameState, soldier: Soldier, blocked: Set<number>): { x: number; y: number } | null {
   const dir = soldier.side === 'white' ? 1 : -1;
-  const x = Math.round(soldier.x);
-  const y = Math.round(soldier.y);
+  const x = cellIndex(soldier.x);
+  const y = cellIndex(soldier.y);
   let best: { x: number; y: number } | null = null;
   let bestScore = Infinity;
   for (let dy = -1; dy <= 1; dy += 1) {
@@ -463,10 +468,20 @@ function stepToward(soldier: Soldier, next: { x: number; y: number }, speed: num
   return false;
 }
 
-function laneOf(soldier: Soldier): number {
-  let lane = 0;
-  for (let i = 0; i < soldier.id.length; i += 1) lane = (lane + soldier.id.charCodeAt(i) * (i + 1)) % 97;
-  return lane;
+function preferSoldier(next: Soldier, current: Soldier, origin: { x: number; y: number }): boolean {
+  const lateral = Math.abs(next.x - origin.x) - Math.abs(current.x - origin.x);
+  if (lateral !== 0) return lateral < 0;
+  const depth = Math.abs(next.y - origin.y) - Math.abs(current.y - origin.y);
+  if (depth !== 0) return depth < 0;
+  return next.x < current.x;
+}
+
+function laneOf(state: GameState, soldier: Soldier): number {
+  const home = state.towers.find((tower) => tower.id === soldier.originId);
+  const file = home ? home.file : Math.max(0, Math.min(7, Math.floor(cellIndex(soldier.x) / 2)));
+  const slot = Math.abs(cellIndex(soldier.x)) % 2;
+  const lane = file * 2 + slot;
+  return state.initiative === soldier.side ? lane : -1 - lane;
 }
 
 function bury(state: GameState): void {
@@ -500,12 +515,16 @@ function nearestSoldier(state: GameState, origin: { x: number; y: number }, side
   for (const soldier of state.soldiers) {
     if (soldier.side === side || soldier.hp <= 0) continue;
     const dist = Math.max(Math.abs(soldier.x - origin.x), Math.abs(soldier.y - origin.y));
-    if (dist < bestDist) {
+    if (dist < bestDist || (dist === bestDist && best && preferSoldier(soldier, best, origin))) {
       best = soldier;
       bestDist = dist;
     }
   }
   return best;
+}
+
+function nearerTower(next: Tower, current: Tower): boolean {
+  return next.file < current.file || (next.file === current.file && next.rank < current.rank);
 }
 
 function nearestTower(state: GameState, soldier: Soldier): Tower | null {
@@ -514,7 +533,7 @@ function nearestTower(state: GameState, soldier: Soldier): Tower | null {
   for (const tower of state.towers) {
     if (tower.side === soldier.side || tower.hp <= 0) continue;
     const dist = distToTower(soldier.x, soldier.y, tower);
-    if (dist < bestDist) {
+    if (dist < bestDist || (dist === bestDist && best && nearerTower(tower, best))) {
       best = tower;
       bestDist = dist;
     }
@@ -528,7 +547,7 @@ function nearestBlock(state: GameState, soldier: Soldier): GameState['blocks'][n
   for (const block of state.blocks) {
     if (block.hp <= 0) continue;
     const dist = Math.max(Math.abs(block.x - soldier.x), Math.abs(block.y - soldier.y));
-    if (dist < bestDist) {
+    if (dist < bestDist || (dist === bestDist && best && (block.x < best.x || (block.x === best.x && block.y < best.y)))) {
       best = block;
       bestDist = dist;
     }
@@ -544,7 +563,7 @@ function nearestFoe(state: GameState, soldier: Soldier, range: number): { soldie
   for (const tower of state.towers) {
     if (tower.side === soldier.side || tower.hp <= 0) continue;
     const dist = distToTower(soldier.x, soldier.y, tower);
-    if (dist < bestDist) {
+    if (dist < bestDist || (dist === bestDist && best && nearerTower(tower, best))) {
       best = tower;
       bestDist = dist;
     }

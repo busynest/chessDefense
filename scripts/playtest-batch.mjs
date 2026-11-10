@@ -12,6 +12,7 @@ import { ECONOMY, TICK_SECONDS } from '../out/game/units.js';
 
 const MAX_TICKS = 6000;
 const SEEDS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+const MIRROR_SEEDS = Array.from({ length: 24 }, (_, index) => index + 1);
 const KINDS = ['pawn', 'knight', 'bishop', 'rook', 'queen', 'king'];
 const SOLDIERS = ['peasant', 'knight', 'archer', 'cannon', 'mage', 'guard'];
 
@@ -40,6 +41,10 @@ function act(state, side, difficulty) {
   state.humanSide = saved.humanSide;
   state.difficulty = saved.difficulty;
   state.mode = saved.mode;
+}
+
+function blockKey(block) {
+  return `${block.x}:${block.y}`;
 }
 
 function fingerprint(state) {
@@ -81,22 +86,19 @@ function play(seed, whiteDiff, blackDiff) {
         if (goldDelta > 0) economy[side].gained += goldDelta;
         if (manaDelta > 0) economy[side].manaGained += manaDelta;
       }
-      const periods = { easy: 50, normal: 25, hard: 12 };
-      const whiteDue = state.tick % periods[whiteDiff] === 0;
-      const blackDue = state.tick % periods[blackDiff] === 0;
-      const blackFirst = whiteDue && blackDue && Math.floor(state.tick / periods[whiteDiff]) % 2 === 1;
-      const order = blackFirst ? ['black', 'white'] : ['white', 'black'];
+      const order = state.tick % 2 === 1 ? ['black', 'white'] : ['white', 'black'];
       for (const side of order) {
         const beforeGold = state.gold[side];
         const beforeMana = state.mana[side];
-        const beforeBlocks = new Set(state.blocks.filter((block) => block.side === side).map((block) => `${block.x}:${block.y}`));
+        const beforeBlocks = new Set(state.blocks.filter((block) => block.side === side).map(blockKey));
         act(state, side, side === 'white' ? whiteDiff : blackDiff);
         const spent = beforeGold - state.gold[side];
         const manaSpent = beforeMana - state.mana[side];
         if (spent > 0) economy[side].spent += spent;
         if (manaSpent > 0) economy[side].manaSpent += manaSpent;
-        const afterBlocks = new Set(state.blocks.filter((block) => block.side === side).map((block) => `${block.x}:${block.y}`));
-        for (const key of afterBlocks) if (!beforeBlocks.has(key)) blocksPlaced[side] += 1;
+        for (const block of state.blocks) {
+          if (block.side === side && !beforeBlocks.has(blockKey(block))) blocksPlaced[side] += 1;
+        }
       }
       for (const key of blocksBefore) {
         const [side, x, y] = key.split(':');
@@ -266,7 +268,8 @@ function summarize(games) {
 
 const games = [];
 for (const [white, black] of MATCHUPS) {
-  for (const seed of SEEDS) {
+  const seeds = white === black ? MIRROR_SEEDS : SEEDS;
+  for (const seed of seeds) {
     const game = play(seed, white, black);
     games.push(game);
     process.stderr.write(`${white} vs ${black} seed ${seed}: ${game.winner ?? 'unfinished'} wave ${game.wave} ${game.seconds}s\n`);
@@ -286,7 +289,9 @@ const report = {
   maxTicks: MAX_TICKS,
   tickSeconds: TICK_SECONDS,
   seeds: SEEDS,
-  note: 'Both sides are AI. White acts before Black on a shared tick. Mode is local so the engine does not add a third decision. There is no stalemate status; a match still playing at the tick cap is unfinished.',
+  note: 'Both sides are AI. Who spends first alternates each tick. Damage in a step is chosen before it is applied. Even seeds give White the direct paths and odd seeds give them to Black. Mirror matchups use 24 seeds. A match still playing at the tick cap is unfinished.',
+  mirrorSeeds: MIRROR_SEEDS,
+  crossSeeds: SEEDS,
   summary: summarize(games),
   desyncs,
   games: games.map(({ harm, fingerprint, ...rest }) => rest),

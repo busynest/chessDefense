@@ -56,7 +56,7 @@ function tactician(state: GameState, side: Side): void {
   const building = state.nextWaveTick - state.tick > 30;
   if (blastNow(state, side)) return;
   if (mend(state, side, true)) return;
-  if (roll(state, side) >= 0.25 && improve(state, side, 2)) return;
+  if (roll(state, side) >= 0.25 && improve(state, side, 1)) return;
   if (mend(state, side, false)) return;
   if (surge(state, side)) return;
   if (building && layBlock(state, side)) return;
@@ -214,7 +214,7 @@ function layBlock(state: GameState, side: Side): boolean {
   const budget = Math.min(BLOCKS.max, state.difficulty === 'easy' ? 6 : state.difficulty === 'hard' ? 14 : BLOCKS.max);
   const owned = state.blocks.filter((block) => block.side === side && block.hp > 0).length;
   if (owned >= budget || state.gold[side] < BLOCKS.cost) return false;
-  const gap = 4 + (state.seed + (side === 'black' ? 3 : 0)) % 7;
+  const gap = 4 + (state.seed % 7);
   const rows = buildableRows(side).sort((a, b) => side === 'white' ? b - a : a - b);
   for (const y of rows) {
     for (let x = 0; x < 16; x += 1) {
@@ -267,7 +267,7 @@ function holdMana(state: GameState, side: Side): boolean {
 
 function prepareWave(state: GameState, side: Side): boolean {
   const until = state.nextWaveTick - state.tick;
-  const window = state.difficulty === 'hard' ? 50 : 32;
+  const window = state.difficulty === 'hard' ? 28 : 32;
   if (until < 0 || until > window) return false;
   if (until > 18 && state.mana[side] >= SPELLS.blessing.mana) {
     const casted = trySpell(state, side, 'blessing');

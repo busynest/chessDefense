@@ -144,6 +144,12 @@ export interface GameState {
   ledger: Ledger;
   /** While true, a versus-AI match does not take a computer turn. The tour uses this. */
   holdAi?: boolean;
+  /**
+   * The side that steps off one tick sooner. Even seeds give it to White,
+   * odd seeds to Black, so a mirrored match still has a winner and neither
+   * color is the one that always moves first.
+   */
+  initiative: Side;
 }
 
 export interface UpgradeCommand {

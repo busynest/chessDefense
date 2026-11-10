@@ -97,3 +97,25 @@ Easy is a Rusher (pawns and knights, then a few walls). Normal is a Fortress (wa
 | Hard vs Normal | Tactician vs Fortress | White 12, Black 0 | 130s, wave 7.9 | 22% |
 
 Tactician beats Fortress in all 24 cross games and Rusher in all 24. Fortress beats Rusher in 18 of 24. Rusher mirrors all go to Black, the side that spends on the first shared decision. Eighteen games pass five minutes and end in the exposed minute. Overcharge is 7.7 per game. Repairs are 10.7 per game. No game reached the 10 minute cutoff.
+
+## Side fairness
+
+The lopsided mirrors came from the path tie-break. Equal steps were sorted by cell index, which prefers moving south, so Black walked straight at the enemy and White took the long step. Soldier ids also spread the lanes differently because White's soldiers are created first. Who spent gold first alternated, and that was not the cause.
+
+Equal steps now prefer the step that moves toward the target. A point halfway between two cells rounds toward the center, so a soldier and its mirror choose mirrored cells. Targets at the same distance prefer the one nearer the shooter's file, then the west one, for both colors. Both sides open the same gap column. Even seeds give White the direct steps and odd seeds give them to Black, so a mirrored match still has a winner. Who spends first still alternates each tick. Damage is chosen for the whole step before it is applied.
+
+24 seeds for each mirror, 12 for each cross match. 144 games. Nothing unfinished. Longest game 513 seconds.
+
+| Matchup | Games | Wins | White share | Mean |
+| --- | --- | --- | --- | --- |
+| Rusher vs Rusher | 24 | 12–12 | 50% | 292s |
+| Fortress vs Fortress | 24 | 14–10 | 58% | 294s |
+| Tactician vs Tactician | 24 | 13–11 | 54% | 323s |
+| Rusher vs Fortress | 12 | 3–9 | 25% | 259s |
+| Fortress vs Rusher | 12 | 12–0 | 100% | 222s |
+| Rusher vs Tactician | 12 | 0–12 | 0% | 143s |
+| Tactician vs Rusher | 12 | 12–0 | 100% | 142s |
+| Fortress vs Tactician | 12 | 0–12 | 0% | 139s |
+| Tactician vs Fortress | 12 | 12–0 | 100% | 131s |
+
+Every mirror is inside 40–60%. Tactician still beats Fortress and Rusher in all 24 cross games. Slowing Tactician's think from 1.2 seconds to 1.6 made the hard mirrors lopsided again, so the think rate stayed. Tactician now buys one upgrade at a time and blesses a shorter window before the launch.
