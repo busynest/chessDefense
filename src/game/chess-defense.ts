@@ -634,8 +634,8 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
       h1 { margin: 0; text-align: center; font-size: 2.4rem; color: #f6e7a8; text-shadow: 0 2px 0 #2a160c; }
       .lede { text-align: center; margin: 6px 0 0; color: #e6d3b4; }
       .menu, .play { display: grid; gap: 14px; }
-      .tabs { display: flex; gap: 4px; }
-      .tabs button { flex: 1; min-height: 36px; padding: 0 8px; }
+      .tabs { display: flex; flex-wrap: wrap; gap: 4px; }
+      .tabs button { flex: 1 1 calc(50% - 4px); min-height: 36px; padding: 0 6px; }
       .tabs button[aria-selected="true"] { outline: 2px solid #f6e7a8; }
       .tab-body { min-height: 44px; }
       .recap { width: 100%; border-collapse: collapse; font-size: 0.88rem; margin: 8px 0; }
@@ -698,7 +698,7 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
       .note { min-height: 1.2em; color: #f6e7a8; }
       .play { align-items: start; }
       @media (min-width: 960px) {
-        .play { grid-template-columns: 250px minmax(0, 1fr); }
+        .play { grid-template-columns: minmax(280px, 320px) minmax(0, 1fr); }
       }
       .hud { display: grid; gap: 8px; }
       .gold { font-variant-numeric: tabular-nums; }
@@ -735,7 +735,7 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
         .table { order: -2; }
         .hud { order: 0; padding: 10px; }
         .hud .spells { display: none; }
-        .tabs button { font-size: 0.78rem; padding: 0 4px; }
+        .tabs button { flex: 1 1 22%; font-size: 0.78rem; padding: 0 4px; }
         .role, .inspect-stats { display: none; }
         h1 { font-size: 1.7rem; }
         .dock {

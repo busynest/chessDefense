@@ -102,11 +102,27 @@ Easy's gold-cap time fell from 74% to 52%. The longest game is 385s, down from 4
 
 The simulation did not change, so the 108-game batch matches the hunt numbers above. Overall stays 7. The atlas reads at board size, and it is still flatter than the tower illustrations.
 
+## Finish pass
+
+| Category | Was | Now | What changed |
+| --- | --- | --- | --- |
+| Clarity / onboarding | 8 | 8 | The first match is a skippable tour against a passive opponent. It covers towers, soldiers, wall ranks, the open center, gaps, targeting, upgrade, repair, spells, and the exposure. How to play replays it. |
+| Game feel / juice | 7 | 8 | Each soldier has an attack voice. Walls, spells, a collapse, and the fallen king are separate tones. Sound stays off until the first click or key. |
+| Visual polish | 8 | 8 | The soldier atlas is unchanged. |
+| UI / HUD, desktop | 7 | 8 | The tower panel is Upgrade, Repair, Target, and Spells on the queen. |
+| UI / HUD, phone | 7 | 8 | Those tabs sit in one row. The dock is still under the board. |
+| AI / difficulty curve | 7 | 8 | Easy rushes, Normal fortifies, Hard aims and times the burst. |
+| Online | 7 | 8 | A stale pulse pauses the match for 30 seconds under Reconnecting…, then the missing side forfeits. Commands replay once. The emulator delays them 150ms ±50ms and drops 2%. |
+| Completeness | 7 | 8 | The result lists damage by tower and soldier, walls built, and spells cast, and it can play the last 30 seconds. |
+| Performance | 7 | 7 | At 4× CPU, wave 12, 64 soldiers, idle frames were 17.5–17.9ms and a step plus paint was 17.5–20.0ms. The previous sprite pass was 17.6ms idle and 20.6ms stressed. One canvas, no soldier elements. |
+
+**Overall now: 8.** The match can be learned, heard, resumed, and read back. It is still not a 10.
+
+108 games with the three personalities. Nothing unfinished, no draws. Longest game 386 seconds. Rusher vs Rusher is Black 12–0, mean 194s. Fortress vs Fortress is White 9–3, mean 306s. Tactician vs Tactician is White 4–8, mean 302s. Tactician beats Fortress 24–0 and Rusher 24–0. Fortress beats Rusher in 18 of 24. Eighteen games pass five minutes. Overcharge is 7.7 per game.
+
 ## Still left for a 10
 
 - The soldier atlas is original and readable, and it is still flatter than the tower illustrations.
-- The desktop panel is shorter and still lists every system once a tower is selected.
-- Online rematch has no ready check and has not been sat through in two browsers under latency.
+- Online rematch has no ready check, and the 30-second resume has not been sat through in two browsers on a real network.
 - Focus order on the board squares is the browser default.
-- Hard and Normal now time a blessing and an Overcharge to the launch and defend a tower under attack. They are still one script.
-- No replay, and the result still has no damage breakdown.
+- Rusher mirrors all go to Black, the side that spends on the first shared decision.

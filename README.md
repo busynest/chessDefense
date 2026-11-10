@@ -86,7 +86,7 @@ These are the calls the brief left open.
 - Soldiers attack in waves, not a stream. Eighteen seconds of building, then a launch, then fifteen seconds until the next one.
 - Soldiers do not occupy cells. A lane can stack. Towers occupy their four cells, and player blocks occupy one.
 - Soldiers step off the front of the tower that launched them and walk through their own pieces until they reach open ground. After that, every tower blocks. They path to the attack ring of their marked tower, not into its footprint. Ranged soldiers stop at their range. Equal shortest steps are spread by soldier so a wave is not one file. Paths are recomputed when a wall or a tower changes. Walls sit on the two ranks in front of each side's towers. The center rows stay open, every build row keeps a gap, and a block that cuts every route from one home rank to the other is rejected. Each side may own 36 living walls. A maze may add at most 8 steps to the open-board route from any tower to any enemy attack ring. Soldiers can also break a block they are standing against, so a maze is not permanent.
-- Aiming the next wave is free. Easy marks the closest enemy pawn, then the King once the pawns are gone. Normal marks the weakest exposed enemy tower, and a tower that still has soldiers on the board counts as weaker. Hard marks a non-king tower with three or more of its soldiers still out, then the Queen, then a rook.
+- Aiming the next wave is free. Easy is a Rusher: it marks the closest enemy pawn, then the King, and it spends on pawns and knights before a short wall. Normal is a Fortress: it marks the weakest exposed tower, fills its legal lanes, repairs, and saves mana for Heal and Blast. Hard is a Tactician: it marks a non-king tower with three or more soldiers still out, then the Queen, then a rook, and it blesses and Overcharges the wave it is about to launch.
 - Each side is capped at 40 soldiers. A tower that would launch past that cap loses those soldiers for the wave. They are not queued.
 - The opening has no neutral stones. The maze is whatever the players, or the AI, pay for.
 - The clock is a fixed 100ms step, drawn from `requestAnimationFrame`. The simulation never reads the frame delta except to decide how many steps are due. A long hitch applies at most 200ms.
@@ -94,7 +94,7 @@ These are the calls the brief left open.
 - Queen spells are self-centered so a phone can cast without a second targeting gesture.
 - The King sends a royal guard. The King tower does not move. A soldier dies with the tower that launched it, and that death pays no bounty. Soldiers that could not leave because the side was already at 40 are not kept for a later wave.
 - Local play is simultaneous. A hot-seat turn would freeze one town while its armies were still the thing that loses.
-- Online play is host-authoritative rather than lockstep. Firestore latency is a poor shared clock, and one simulator cannot drift from itself. Guest commands are checked against that side's towers, so a guest cannot command White. The host publishes the position every half second, and once more when the match ends, so the guest sees the same King fall. A listener that starts again does not replay commands it already had, so a reconnect does not spend the gold twice.
+- Online play is host-authoritative rather than lockstep. Firestore latency is a poor shared clock, and one simulator cannot drift from itself. Guest commands are checked against that side's towers, so a guest cannot command White. The host publishes the position every half second, and once more when the match ends, so the guest sees the same King fall. Each command id is applied once. If a peer's pulse goes stale, the match pauses under a Reconnecting banner. They can return for 30 seconds and resume from the host snapshot. After that the side that left forfeits. The emulator test delays commands by 150ms ±50ms and drops 2% of them.
 - Match history is per signed-in user. Versus AI and online write `users/{uid}` and `users/{uid}/history`. Local matches do not.
 - The same seed and the same commands replay the same match. The AI reads a stored random state, not `Math.random`.
 
@@ -104,7 +104,7 @@ Display type is [Cinzel](https://fonts.google.com/specimen/Cinzel) and body type
 
 The stack is Lit 3, Redux Toolkit 2, pwa-auth, and Firebase 12. TypeScript is compiled with `tsc`. Development uses `@web/dev-server`. Production uses Rollup. There is no Vite and no Polymer.
 
-Sound is original synthesis in the browser (oscillators only). No sampled recordings are shipped. Volume and mute are saved in this browser with the last difficulty and whether the first-match tutorial has been seen.
+Sound is original synthesis in the browser (oscillators only). No sampled recordings are shipped. Each soldier, shot, spell, wall, collapse, and the fallen king has its own voice. A quiet drone is optional in Settings. The page stays silent until the first click or key, then the saved volume and mute apply. Difficulty, the tutorial flag, and the palette are saved in this browser too.
 
 To play on this machine, emulators and the dev server together:
 
@@ -113,7 +113,7 @@ npm install
 npm run dev:emulators
 ```
 
-Open http://127.0.0.1:8080 . That host selects the development Firebase config. Sign in from the Login button with any email and password if you want a saved record or an online match. Versus AI and local 2 player work signed out. The first versus-AI match shows a short tutorial. Pause is P or Space. Menu is M.
+Open http://127.0.0.1:8080 . That host selects the development Firebase config. Sign in from the Login button with any email and password if you want a saved record or an online match. Versus AI and local 2 player work signed out. The first versus-AI match is a skippable tour against an opponent that waits: towers, soldiers, wall ranks, the open center, gaps, targeting, upgrade, repair, the Queen's spells, and the five-minute exposure. How to play can replay it. When it ends, the chosen personality starts. The result lists damage, walls, and spells, and can play the last 30 seconds. Pause is P or Space. Menu is M.
 
 ```bash
 npm test
