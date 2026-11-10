@@ -139,6 +139,19 @@ test('overcharge spends gold on a level 3 tower and then waits', () => {
   assert.ok(boostedHit < normalHit);
 });
 
+test('a guided tour keeps the opponent from spending', () => {
+  const state = playing();
+  state.mode = 'ai';
+  state.difficulty = 'easy';
+  state.humanSide = 'white';
+  state.holdAi = true;
+  state.tick = 49;
+  state.gold.black = 90;
+  const next = step(state);
+  assert.ok(next.towers.filter((tower) => tower.side === 'black' && tower.kind === 'pawn').every((tower) => tower.level === 1));
+  assert.ok(next.gold.black > 90);
+});
+
 test('easy spends gold on a pawn once the bank is high', () => {
   const state = playing();
   state.mode = 'ai';

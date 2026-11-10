@@ -87,6 +87,9 @@ const gameSlice = createSlice({
     setLink(state, action: PayloadAction<LinkPhase>) {
       state.link = action.payload;
     },
+    setHoldAi(state, action: PayloadAction<boolean>) {
+      state.game.holdAi = action.payload;
+    },
     setPlacing(state, action: PayloadAction<Side | null>) {
       state.placing = action.payload;
       state.selected = null;
@@ -184,6 +187,7 @@ export const {
   openOnline,
   resumeOnline,
   setLink,
+  setHoldAi,
   applySnapshot,
   togglePause,
   selectSquare,

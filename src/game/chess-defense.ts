@@ -8,6 +8,7 @@ import {
   beginOnline,
   resumeOnline,
   setLink,
+  setHoldAi,
   controlsSide,
   markRecord,
   openOnline,
@@ -69,13 +70,14 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
   @state() private muted = false;
 
   private readonly steps: { text: string; coach: string }[] = [
-    { text: 'This pawn is yours. The ring is its range. Towers never move.', coach: 'pawn' },
-    { text: 'Upgrade spends gold. Level 3 is as high as a tower goes.', coach: 'upgrade' },
-    { text: 'Walls go on the two ranks in front of your towers. The gold center stays open. Each side can own 36.', coach: 'walls' },
-    { text: 'When the timer ends, each tower sends its soldier out of its own square. If the tower falls, those soldiers fade.', coach: 'wave' },
-    { text: 'That is the enemy King. Target sends the next wave there. Clear sends them back.', coach: 'target' },
-    { text: 'Overcharge is on a level 3 tower. It spends gold for a short stronger burst, and the price rises each time.', coach: 'upgrade' },
-    { text: 'Blessing, Heal, and Blast belong to the Queen. At five minutes the kings are exposed and hits land harder.', coach: 'blessing' },
+    { text: 'These towers never move and never capture. This pawn is yours. The ring is its range.', coach: 'pawn' },
+    { text: 'Each tower sends its soldier out of its own square. If the tower falls, those soldiers fade with it.', coach: 'wave' },
+    { text: 'Walls go on the two ranks in front of your towers. The gold center stays open. Every row keeps a gap. Each side can own 36.', coach: 'walls' },
+    { text: 'Tap an enemy tower, then Target. The next wave marches there. Clear sends it back to the King.', coach: 'target' },
+    { text: 'Upgrade spends gold. Level 3 is as high as a tower goes. Overcharge is the short burst on a level 3 tower.', coach: 'upgrade' },
+    { text: 'Repair spends gold to refill a wounded tower, then that tower has to cool down.', coach: 'repair' },
+    { text: 'Blessing, Heal, and Blast belong to the Queen. They are on her Spells tab.', coach: 'blessing' },
+    { text: 'At five minutes the kings are exposed. Hits land harder, and a soldier in range strikes the tower before dueling. The opponent has been waiting. Skip or finish and it starts to play.', coach: 'sudden' },
   ];
   private rematchBusy = false;
   private presence = new Presence();
@@ -129,9 +131,10 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
   };
 
   private onTour = (): void => {
-    this.tutorial = 0;
     this.start('ai');
     this.tutorial = 0;
+    store.dispatch(setHoldAi(true));
+    this.aimCoach();
   };
 
   protected override updated(changed: PropertyValues): void {
@@ -487,6 +490,7 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
     store.dispatch(startLocal({ mode, difficulty: this.difficulty, seed }));
     if (mode === 'ai') store.dispatch(selectSquare({ file: 3, rank: 1 }));
     this.tutorial = mode === 'ai' && !seen ? 0 : -1;
+    if (this.tutorial === 0) store.dispatch(setHoldAi(true));
     this.heardWave = -1;
     this.heardEnd = false;
     this.film = [];
@@ -499,6 +503,7 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
   private advanceTutorial(skip: boolean): void {
     if (skip || this.tutorial >= this.steps.length - 1) {
       this.tutorial = -1;
+      store.dispatch(setHoldAi(false));
       store.dispatch(markTutorial());
       return;
     }
@@ -515,9 +520,10 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
 
   private coachCell(): { file: number; rank: number } {
     const step = this.tutorial >= 0 ? this.steps[this.tutorial] : undefined;
-    if (step?.coach === 'pawn' || step?.coach === 'upgrade') return { file: 3, rank: 1 };
+    if (step?.coach === 'pawn' || step?.coach === 'upgrade' || step?.coach === 'repair') return { file: 3, rank: 1 };
     if (step?.coach === 'walls') return { file: 4, rank: 2 };
     if (step?.coach === 'target') return { file: 4, rank: 7 };
+    if (step?.coach === 'blessing') return { file: 3, rank: 0 };
     return { file: -1, rank: -1 };
   }
 
@@ -525,8 +531,19 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
     if (this.tutorial < 0) return;
     const step = this.steps[this.tutorial];
     if (!step) return;
-    if (step.coach === 'target') store.dispatch(selectSquare({ file: 4, rank: 7 }));
-    else if (step.coach !== 'wave' && step.coach !== 'blessing') store.dispatch(selectSquare({ file: 3, rank: 1 }));
+    if (step.coach === 'target') {
+      this.panelTab = 'target';
+      store.dispatch(selectSquare({ file: 4, rank: 7 }));
+    } else if (step.coach === 'blessing') {
+      this.panelTab = 'spells';
+      store.dispatch(selectSquare({ file: 3, rank: 0 }));
+    } else if (step.coach === 'repair') {
+      this.panelTab = 'repair';
+      store.dispatch(selectSquare({ file: 3, rank: 1 }));
+    } else if (step.coach === 'upgrade' || step.coach === 'pawn') {
+      this.panelTab = 'upgrade';
+      store.dispatch(selectSquare({ file: 3, rank: 1 }));
+    }
   }
 
   private placeCoach(): void {
@@ -813,7 +830,7 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
           <button type="button" class="quiet" @click=${() => { this.armOnce(); store.dispatch(setMuted(!this.muted)); }}>${this.muted ? 'Unmute' : 'Mute'}</button>
         </div>
         <div class="wave" data-coach="wave" aria-live="polite">${waveLabel}</div>
-        <div class="exposed">${game.tick >= SUDDEN.tick ? 'Kings exposed — hits land harder' : `Kings exposed in ${this.exposedClock(game.tick)}`}</div>
+        <div class="exposed" data-coach="sudden">${game.tick >= SUDDEN.tick ? 'Kings exposed — hits land harder' : `Kings exposed in ${this.exposedClock(game.tick)}`}</div>
         ${(['white', 'black'] as const).filter((side) => controlsSide(slice, side)).map((side) => {
           const mark = game.waveTarget[side];
           const marked = mark ? towerAt(game, mark.file, mark.rank) : undefined;
