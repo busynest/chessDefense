@@ -1,4 +1,5 @@
 import type { Cell, GameState, Side, Tower } from './types.js';
+import { BLOCKS } from './units.js';
 
 export function towerCells(tower: Tower): Cell[] {
   const x = tower.file * 2;
@@ -79,6 +80,204 @@ export function blockedSet(state: GameState): Set<number> {
 export function isBlockedCell(blocked: Set<number>, x: number, y: number): boolean {
   if (x < 0 || y < 0 || x > 15 || y > 15) return true;
   return blocked.has(y * 16 + x);
+}
+
+export interface WallCell {
+  x: number;
+  y: number;
+  hp: number;
+}
+
+/**
+ * '' when every living tower can still reach every enemy attack ring
+ * without adding more than BLOCKS.extraSteps to the open-board route.
+ * 'cut' when a ring cannot be reached. 'long' when the detour is too far.
+ * The walk starts on the tower's own front cell and may cross friendly
+ * towers, matching the way a soldier leaves home.
+ */
+export function mazeVerdict(towers: Tower[], blocks: WallCell[], extra?: { x: number; y: number }): '' | 'cut' | 'long' {
+  const key = mazeKey(towers, blocks, extra);
+  const cached = MAZE.get(key);
+  if (cached !== undefined) return cached;
+  const verdict = judgeMaze(towers, blocks, extra);
+  if (MAZE.size > 64) MAZE.clear();
+  MAZE.set(key, verdict);
+  return verdict;
+}
+
+/** Longest soldier route, in steps, from any living tower to any enemy ring. */
+export function longestRoute(towers: Tower[], blocks: WallCell[]): number {
+  const survey = surveyRoutes(living(towers), wallMask(blocks, null));
+  return survey.cut ? Infinity : survey.longest;
+}
+
+const MAZE = new Map<string, '' | 'cut' | 'long'>();
+
+function mazeKey(towers: Tower[], blocks: WallCell[], extra?: { x: number; y: number }): string {
+  let towersKey = '';
+  for (const tower of towers) {
+    if (tower.hp <= 0) continue;
+    towersKey += tower.id;
+    towersKey += ',';
+  }
+  const mask = wallMask(blocks, extra ?? null);
+  let wallsKey = '';
+  for (let i = 0; i < 256; i += 1) {
+    if (mask[i] !== 1) continue;
+    wallsKey += i.toString(16);
+    wallsKey += '.';
+  }
+  return `${towersKey}|${wallsKey}`;
+}
+
+function living(towers: Tower[]): Tower[] {
+  return towers.filter((tower) => tower.hp > 0);
+}
+
+function wallMask(blocks: WallCell[], extra: { x: number; y: number } | null): Uint8Array {
+  const mask = new Uint8Array(256);
+  for (const block of blocks) {
+    if (block.hp <= 0) continue;
+    mask[block.y * 16 + block.x] = 1;
+  }
+  if (extra) mask[extra.y * 16 + extra.x] = 1;
+  return mask;
+}
+
+function judgeMaze(towers: Tower[], blocks: WallCell[], extra?: { x: number; y: number }): '' | 'cut' | 'long' {
+  const pieces = living(towers);
+  if (pieces.length === 0) return '';
+  const towerBlocked = towerMask(pieces);
+  const walled = mergeMasks(towerBlocked, wallMask(blocks, extra ?? null));
+  const nearest = nearestOf(pieces, towerBlocked);
+  for (const source of pieces) {
+    const openDist = openDistances(pieces, source, towerBlocked);
+    const wallDist = distancesFrom(source, pieces, walled);
+    for (const target of pieces) {
+      if (target.side === source.side) continue;
+      const limit = nearest.get(target.id) ?? Infinity;
+      const openBest = ringDistance(openDist, towerBlocked, target, limit);
+      const wallBest = ringDistance(wallDist, walled, target, limit);
+      if (!Number.isFinite(openBest) || !Number.isFinite(wallBest)) return 'cut';
+      if (wallBest > openBest + BLOCKS.extraSteps) return 'long';
+    }
+  }
+  return '';
+}
+
+const OPEN_DIST = new Map<string, Int16Array>();
+
+function openDistances(pieces: Tower[], source: Tower, towerBlocked: Uint8Array): Int16Array {
+  const key = `${pieces.map((tower) => tower.id).join(',')}:${source.id}`;
+  const cached = OPEN_DIST.get(key);
+  if (cached) return cached;
+  const dist = distancesFrom(source, pieces, towerBlocked);
+  if (OPEN_DIST.size > 64) OPEN_DIST.clear();
+  OPEN_DIST.set(key, dist);
+  return dist;
+}
+
+function surveyRoutes(pieces: Tower[], walls: Uint8Array): { longest: number; cut: boolean } {
+  const towerBlocked = towerMask(pieces);
+  const blocked = mergeMasks(towerBlocked, walls);
+  const nearest = nearestOf(pieces, towerBlocked);
+  let longest = 0;
+  for (const source of pieces) {
+    const dist = distancesFrom(source, pieces, blocked);
+    for (const target of pieces) {
+      if (target.side === source.side) continue;
+      const best = ringDistance(dist, blocked, target, nearest.get(target.id) ?? Infinity);
+      if (!Number.isFinite(best)) return { longest, cut: true };
+      if (best > longest) longest = best;
+    }
+  }
+  return { longest, cut: false };
+}
+
+function towerMask(pieces: Tower[]): Uint8Array {
+  const mask = new Uint8Array(256);
+  for (const tower of pieces) {
+    for (const cell of towerCells(tower)) mask[cell.y * 16 + cell.x] = 1;
+  }
+  return mask;
+}
+
+function nearestOf(pieces: Tower[], blocked: Uint8Array): Map<string, number> {
+  const nearest = new Map<string, number>();
+  for (const tower of pieces) nearest.set(tower.id, nearestOpen(tower, blocked));
+  return nearest;
+}
+
+function ringDistance(dist: Int16Array, blocked: Uint8Array, target: Tower, limit: number): number {
+  let best = Infinity;
+  for (let i = 0; i < 256; i += 1) {
+    if (blocked[i] !== 0 || dist[i] < 0) continue;
+    const gap = distToTower(i % 16, (i / 16) | 0, target);
+    if (gap <= 0 || gap > limit) continue;
+    if (dist[i]! < best) best = dist[i]!;
+  }
+  return best;
+}
+
+function mergeMasks(towers: Uint8Array, walls: Uint8Array): Uint8Array {
+  const mask = new Uint8Array(256);
+  for (let i = 0; i < 256; i += 1) mask[i] = towers[i] || walls[i] ? 1 : 0;
+  return mask;
+}
+
+function nearestOpen(tower: Tower, blocked: Uint8Array): number {
+  let nearest = Infinity;
+  for (let i = 0; i < 256; i += 1) {
+    if (blocked[i] !== 0) continue;
+    const gap = distToTower(i % 16, (i / 16) | 0, tower);
+    if (gap < nearest) nearest = gap;
+  }
+  return nearest;
+}
+
+function frontKey(tower: Tower): number {
+  const x = tower.file * 2;
+  const y = tower.side === 'white' ? tower.rank * 2 + 1 : tower.rank * 2;
+  return y * 16 + x;
+}
+
+function distancesFrom(source: Tower, pieces: Tower[], blocked: Uint8Array): Int16Array {
+  const friendly = new Uint8Array(256);
+  for (const tower of pieces) {
+    if (tower.side !== source.side) continue;
+    for (const cell of towerCells(tower)) friendly[cell.y * 16 + cell.x] = 1;
+  }
+  const dist = new Int16Array(256);
+  dist.fill(-1);
+  const start = frontKey(source);
+  dist[start] = 0;
+  const queue = [start];
+  let head = 0;
+  while (head < queue.length) {
+    const current = queue[head]!;
+    head += 1;
+    const x = current % 16;
+    const y = (current / 16) | 0;
+    const base = dist[current] ?? 0;
+    const onFriend = friendly[current] === 1;
+    for (let dy = -1; dy <= 1; dy += 1) {
+      for (let dx = -1; dx <= 1; dx += 1) {
+        if (dx === 0 && dy === 0) continue;
+        const nx = x + dx;
+        const ny = y + dy;
+        if (nx < 0 || ny < 0 || nx > 15 || ny > 15) continue;
+        const next = ny * 16 + nx;
+        if (dist[next] !== -1) continue;
+        const open = blocked[next] === 0;
+        if (onFriend) {
+          if (!open && friendly[next] !== 1) continue;
+        } else if (!open) continue;
+        dist[next] = base + 1;
+        queue.push(next);
+      }
+    }
+  }
+  return dist;
 }
 
 /**

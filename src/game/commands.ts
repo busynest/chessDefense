@@ -1,5 +1,5 @@
 import { towerAt } from './chess.js';
-import { chebyshev, placementSeals, towerCells } from './pathing.js';
+import { chebyshev, mazeVerdict, placementSeals, towerCells } from './pathing.js';
 import type { GameState, Side, SpellId } from './types.js';
 import { reportHarm } from './telemetry.js';
 import { BLOCKS, ECONOMY, OVERCHARGE, PIECES, REPAIR, SOLDIERS, SPELLS, combatOf, inBuildZone, isCenterRow, overchargeCost, repairCost, squareName, upgradeCost } from './units.js';
@@ -258,8 +258,13 @@ export function blockProblem(input: GameState, side: Side, x: number, y: number)
   if (input.blocks.some((block) => block.x === x && block.y === y && block.hp > 0)) return 'A block is already there.';
   const occupied = input.towers.some((tower) => tower.hp > 0 && towerCells(tower).some((cell) => cell.x === x && cell.y === y));
   if (occupied) return 'A tower stands on that cell.';
+  const owned = input.blocks.filter((block) => block.side === side && block.hp > 0).length;
+  if (owned >= BLOCKS.max) return `Wall limit reached (${owned}/${BLOCKS.max})`;
   if (rowWouldClose(input, x, y)) return 'Each row must keep a gap';
   if (placementSeals(input.blocks, x, y)) return 'That would seal every path to a King.';
+  const verdict = mazeVerdict(input.towers, input.blocks, { x, y });
+  if (verdict === 'cut') return 'That would cut a tower off from the enemy';
+  if (verdict === 'long') return 'That maze runs too long';
   return '';
 }
 

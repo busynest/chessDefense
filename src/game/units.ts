@@ -355,6 +355,19 @@ export const BLOCKS = {
   /** Gold returned when the owner picks the wall back up. */
   refund: 6,
   /**
+   * Living walls one side may own. 36 is four open lanes on each of the
+   * three build rows (columns 1, 5, 9, and 13). That is the minimum cover
+   * of every pawn's melee ring, repeated on the rows behind it.
+   * A full-width zigzag with one gap per row cuts every route. This cap
+   * is the even lane, and `extraSteps` rejects a longer maze even sooner.
+   */
+  max: 36,
+  /**
+   * Most steps a maze may add to the open-board route from any living
+   * tower to any enemy tower's attack ring. The 36-wall lane adds 7.
+   */
+  extraSteps: 8,
+  /**
    * Army rows of the two front ranks. White ranks 3–4 are y 4–7.
    * Black ranks 5–6 are y 8–11. The center rows below are inside
    * this span and are not buildable.

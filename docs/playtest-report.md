@@ -73,3 +73,9 @@ Nothing unfinished. Easy still loses every game to Normal and Hard. Hard still b
 | Hard vs Normal, both seats | Hard 17, Normal 7 | 265s | 39% |
 
 Nothing unfinished. Easy still loses every game to Normal and Hard. Hard beats Normal 17–7. Sixteen games passed five minutes. The longest was an Easy mirror at 481 seconds. Cap time is 42%. Overcharge is 15.6 per game. Mirrors run longer because a fallen tower takes its soldiers with it, so a pawn kill also removes the soldiers that pawn had sent.
+
+## Wall cap
+
+108 games after each side was limited to 36 living walls, with a route check that rejects a wall cutting any tower off from an enemy attack ring or adding more than 8 steps to the open-board path. Easy still buys at most 4 walls, Normal 4, and Hard 5, so none of them reach the cap. Every wall they did buy was already a straight lane, which the new check allows. The batch is the same as the one above: nothing unfinished, Hard beats Normal 17–7, Easy loses every cross match, longest game 481 seconds.
+
+On an empty board the longest route from any tower to any enemy attack ring is 13 steps. With both sides on the 36-wall lane (open columns 1, 5, 9, and 13) it is 17 steps. A peasant takes 5.9 seconds versus 7.7. An iron cannon takes 11.8 versus 15.5. Wave 1's first meeting in the center is 2.1 seconds after launch either way. A one-gap zigzag across the three rows is rejected before it can seal the board.

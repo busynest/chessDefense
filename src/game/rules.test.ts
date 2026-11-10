@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import { aiAct } from './ai.js';
 import { towerAt } from './chess.js';
 import { tryAim, tryOvercharge, tryPlaceBlock, tryRemoveBlock, tryRepair, trySpell, tryUpgrade } from './commands.js';
-import { fallbackAim, pathToTower, pathToward } from './pathing.js';
+import { fallbackAim, longestRoute, pathToTower, pathToward } from './pathing.js';
 import { createMatch } from './setup.js';
 import { step } from './simulate.js';
 import type { GameState, Soldier, Tower } from './types.js';
@@ -699,6 +699,137 @@ test('a full side does not save unreleased soldiers for later', () => {
   pawnLeft.hp = 0;
   state = step(state);
   assert.equal(state.soldiers.some((soldier) => soldier.originId === pawn.id), false);
+});
+
+const LANES = [1, 5, 9, 13];
+
+function layLanes(state: GameState): GameState {
+  state.gold.white = 8000;
+  state.gold.black = 8000;
+  for (const side of ['white', 'black'] as const) {
+    for (const y of buildableRows(side)) {
+      for (let x = 0; x < 16; x += 1) {
+        if (LANES.includes(x)) continue;
+        const placed = tryPlaceBlock(state, side, x, y);
+        assert.equal(placed.ok, true, `${side} ${x},${y} ${placed.reason}`);
+        state = placed.state;
+      }
+    }
+  }
+  return state;
+}
+
+test('each side stops at 36 walls, and selling or breaking one frees the slot', () => {
+  let state = layLanes(playing());
+  const count = (side: 'white' | 'black') => state.blocks.filter((block) => block.side === side && block.hp > 0).length;
+  assert.equal(count('white'), BLOCKS.max);
+  assert.equal(count('black'), BLOCKS.max);
+  const capped = tryPlaceBlock(state, 'white', 1, 4);
+  assert.equal(capped.ok, false);
+  assert.equal(capped.reason, `Wall limit reached (${BLOCKS.max}/${BLOCKS.max})`);
+  const sold = tryRemoveBlock(state, 'white', 0, 4);
+  assert.equal(sold.ok, true);
+  state = sold.state;
+  assert.equal(count('white'), BLOCKS.max - 1);
+  const again = tryPlaceBlock(state, 'white', 0, 4);
+  assert.equal(again.ok, true);
+  state = again.state;
+  const wall = state.blocks.find((block) => block.side === 'black' && block.hp > 0);
+  assert.ok(wall);
+  wall.hp = 0;
+  state = step(state);
+  assert.equal(state.blocks.filter((block) => block.side === 'black' && block.hp > 0).length, BLOCKS.max - 1);
+  const freed = tryPlaceBlock(state, 'black', wall.x, wall.y);
+  assert.equal(freed.ok, true, freed.reason);
+});
+
+test('both sides at the wall cap still leave a route from every tower', () => {
+  const open = playing();
+  const openRoute = longestRoute(open.towers, open.blocks);
+  const walled = layLanes(playing());
+  const walledRoute = longestRoute(walled.towers, walled.blocks);
+  assert.ok(Number.isFinite(openRoute) && Number.isFinite(walledRoute));
+  assert.ok(walledRoute <= openRoute + BLOCKS.extraSteps, `${walledRoute} vs ${openRoute}`);
+  const snake = playing();
+  snake.gold.white = 8000;
+  let bent = snake;
+  let rejected = '';
+  for (let x = 0; x < 16; x += 1) {
+    if (x === 0) continue;
+    const placed = tryPlaceBlock(bent, 'white', x, 4);
+    if (!placed.ok) {
+      rejected = placed.reason;
+      break;
+    }
+    bent = placed.state;
+  }
+  for (let x = 0; x < 16 && rejected === ''; x += 1) {
+    if (x === 15) continue;
+    const placed = tryPlaceBlock(bent, 'white', x, 5);
+    if (!placed.ok) {
+      rejected = placed.reason;
+      break;
+    }
+    bent = placed.state;
+  }
+  assert.ok(rejected === 'That maze runs too long' || rejected === 'That would cut a tower off from the enemy', rejected);
+});
+
+test('random legal walls from both sides stay inside the path bound', () => {
+  let seed = 11;
+  const roll = () => {
+    seed = (seed * 1664525 + 1013904223) >>> 0;
+    return seed / 4294967296;
+  };
+  for (let trial = 0; trial < 8; trial += 1) {
+    let state = playing();
+    state.gold.white = 8000;
+    state.gold.black = 8000;
+    for (const side of ['white', 'black'] as const) {
+      const rows = buildableRows(side);
+      let misses = 0;
+      while (misses < 60) {
+        const owned = state.blocks.filter((block) => block.side === side && block.hp > 0).length;
+        if (owned >= BLOCKS.max) break;
+        const y = rows[Math.floor(roll() * rows.length)]!;
+        const x = Math.floor(roll() * 16);
+        const placed = tryPlaceBlock(state, side, x, y);
+        if (!placed.ok) {
+          misses += 1;
+          continue;
+        }
+        state = placed.state;
+        misses = 0;
+      }
+    }
+    const route = longestRoute(state.towers, state.blocks);
+    const open = longestRoute(state.towers, []);
+    assert.ok(Number.isFinite(route));
+    assert.ok(route <= open + BLOCKS.extraSteps, `trial ${trial} ${route} vs ${open}`);
+    assert.ok(state.blocks.filter((block) => block.side === 'white' && block.hp > 0).length <= BLOCKS.max);
+    assert.ok(state.blocks.filter((block) => block.side === 'black' && block.hp > 0).length <= BLOCKS.max);
+  }
+});
+
+test('wave 1 still meets the enemy when both walls are maxed', () => {
+  const reach = (state: GameState) => {
+    state.nextWaveTick = 1;
+    let steps = 0;
+    while (steps < 400) {
+      state = step(state);
+      steps += 1;
+      const meet = state.soldiers.some((soldier) => soldier.side === 'white' && soldier.hp > 0 && state.soldiers.some((other) => (
+        other.side === 'black' && other.hp > 0 && Math.max(Math.abs(soldier.x - other.x), Math.abs(soldier.y - other.y)) <= 1
+      )));
+      if (meet) return state.tick - 1;
+    }
+    return -1;
+  };
+  const empty = reach(playing());
+  const crowded = reach(layLanes(playing()));
+  assert.ok(empty > 0, `empty ${empty}`);
+  assert.ok(crowded > 0, `crowded ${crowded}`);
+  assert.ok(crowded <= empty + 15, `contact empty ${empty}, walled ${crowded}`);
 });
 
 test('a fallen mark falls back toward the King', () => {

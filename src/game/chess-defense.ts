@@ -35,7 +35,7 @@ import './board-square.js';
 import { markTutorial, setDifficulty, setMuted } from '../prefs/prefs_state.js';
 import { connectStore, store, type RootState } from '../store.js';
 import type { Difficulty, GameState, PlayerCommand, Side, SpellId } from './types.js';
-import { PIECES, SPELLS, combatOf, overchargeCost, overcharged, repairCost, squareName, upgradeCost } from './units.js';
+import { BLOCKS, PIECES, SPELLS, combatOf, overchargeCost, overcharged, repairCost, squareName, upgradeCost } from './units.js';
 import type { Unsubscribe } from 'firebase/firestore';
 
 @customElement('chess-defense')
@@ -65,7 +65,7 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
   private readonly steps = [
     'Tap one of your pawns. The ring is its range. Towers never move.',
     'Upgrade spends gold. Level 3 is as high as a tower goes.',
-    'White walls shades the two ranks in front of your towers. The gold strip in the middle stays open. A green cell can take a block, and a red cell cannot. Each row keeps a gap.',
+    'White walls shades the two ranks in front of your towers. The gold strip in the middle stays open. Each side can own 36 walls. A maze that cuts a tower off, or bends the path too far, turns red.',
     'When the build timer ends, each living tower sends its soldier out of its own gate. If the tower falls, those soldiers fade with it.',
     'Tap an enemy tower and press T. The next wave marches on it. Clear sends them back to the King.',
     'Spell buttons belong to the Queen. Pause freezes the clock. Menu leaves the match.',
@@ -536,14 +536,14 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
               type="button"
               class=${slice.placing === side ? '' : 'quiet'}
               @click=${() => store.dispatch(setPlacing(slice.placing === side ? null : side))}>
-              ${side === 'white' ? 'White walls' : 'Black walls'}
+              ${side === 'white' ? 'White walls' : 'Black walls'} ${livingWalls(game, side)}/${BLOCKS.max}
             </button>
           `)}
         </div>
         ${game.mode === 'online' ? html`<div>Code <strong>${slice.onlineCode}</strong> · ${slice.role === 'host' ? 'White' : 'Black'}</div>` : ''}
         <p class="note">${slice.onlineNote}</p>
         ${(['white', 'black'] as const).map((side) => html`
-          <div class="gold">${side === 'white' ? 'White' : 'Black'} ${Math.floor(game.gold[side])} gold · ${Math.floor(game.mana[side])} mana</div>
+          <div class="gold">${side === 'white' ? 'White' : 'Black'} ${Math.floor(game.gold[side])} gold · ${Math.floor(game.mana[side])} mana · Walls ${livingWalls(game, side)}/${BLOCKS.max}</div>
         `)}
         ${this.tutorial >= 0 ? html`
           <p class="coach">Step ${this.tutorial + 1} of ${this.steps.length}. ${this.steps[this.tutorial]}</p>
@@ -551,7 +551,7 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
             <button type="button" @click=${() => this.advanceTutorial(false)}>Next</button>
             <button type="button" class="quiet" @click=${() => this.advanceTutorial(true)}>Skip tutorial</button>
           </div>
-        ` : game.wave === 0 ? html`<p class="coach">Towers stay on their squares. Each tower sends its soldiers out of its own gate, and those soldiers fade if the tower falls. Tap an enemy tower and press T to aim the next wave. Keys: P pause, T target, W walls, U upgrade, R repair, O overcharge, B H L spells.</p>` : ''}
+        ` : game.wave === 0 ? html`<p class="coach">Towers stay on their squares. Each tower sends its soldiers out of its own gate, and those soldiers fade if the tower falls. Each side may place ${BLOCKS.max} walls. Tap an enemy tower and press T to aim the next wave.</p>` : ''}
         ${selected ? this.inspect(selected) : html`<div>Tap one of your towers to upgrade it.</div>`}
         ${sides.map((side) => this.spells(slice, side))}
       </aside>
@@ -667,4 +667,8 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
       </div>
     `;
   }
+}
+
+function livingWalls(game: GameState, side: Side): number {
+  return game.blocks.filter((block) => block.side === side && block.hp > 0).length;
 }

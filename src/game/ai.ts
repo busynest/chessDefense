@@ -167,7 +167,7 @@ function chooseAim(state: GameState, side: Side): void {
 }
 
 function layBlock(state: GameState, side: Side): boolean {
-  const budget = state.difficulty === 'easy' ? 4 : state.difficulty === 'normal' ? 4 : 5;
+  const budget = Math.min(BLOCKS.max, state.difficulty === 'easy' ? 4 : state.difficulty === 'normal' ? 4 : 5);
   const owned = state.blocks.filter((block) => block.side === side && block.hp > 0).length;
   if (owned >= budget || state.gold[side] < BLOCKS.cost) return false;
   const gap = 3 + Math.floor(roll(state, side) * 10);

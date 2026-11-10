@@ -25,7 +25,7 @@ import {
 import { tryOvercharge, tryPlaceBlock, tryRepair, trySpell, tryUpgrade } from '../out/game/commands.js';
 import { createMatch } from '../out/game/setup.js';
 import { step } from '../out/game/simulate.js';
-import { overchargeCost } from '../out/game/units.js';
+import { BLOCKS, overchargeCost } from '../out/game/units.js';
 
 const config = {
   apiKey: 'demo-contractors-centre',
@@ -189,6 +189,23 @@ const walled = applyGuest(state, wall);
 assert.equal(walled.ok, true);
 state = walled.state;
 assert.equal(state.blocks.filter((block) => block.side === 'black' && block.hp > 0).length, 1);
+state.blocks = state.blocks.filter((block) => block.side !== 'black');
+state.gold.black = 8000;
+const lanes = [1, 5, 9, 13];
+for (const y of [9, 10, 11]) {
+  for (let x = 0; x < 16; x += 1) {
+    if (lanes.includes(x)) continue;
+    const placed = tryPlaceBlock(state, 'black', x, y);
+    if (!placed.ok) throw new Error(placed.reason);
+    state = placed.state;
+  }
+}
+assert.equal(state.blocks.filter((block) => block.side === 'black' && block.hp > 0).length, BLOCKS.max);
+await send(guest.db, guestUser.uid, { type: 'block', side: 'black', x: 1, y: 9 });
+const overCap = await inputs.next();
+const refused = applyGuest(state, overCap);
+assert.equal(refused.ok, false);
+assert.equal(refused.state.blocks.filter((block) => block.side === 'black' && block.hp > 0).length, BLOCKS.max);
 
 const wounded = tower(state, 'black', 'pawn');
 wounded.hp = Math.max(1, wounded.hp - 40);
