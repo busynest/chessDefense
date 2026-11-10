@@ -88,6 +88,7 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
   @state() private replay = -1;
   @state() private replayPlaying = false;
   @state() private replaySpeed = 1;
+  @state() private panelTab: 'upgrade' | 'repair' | 'target' | 'spells' = 'upgrade';
   private replayTimer = 0;
 
   override stateChanged(state: RootState): void {
@@ -606,6 +607,10 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
       h1 { margin: 0; text-align: center; font-size: 2.4rem; color: #f6e7a8; text-shadow: 0 2px 0 #2a160c; }
       .lede { text-align: center; margin: 6px 0 0; color: #e6d3b4; }
       .menu, .play { display: grid; gap: 14px; }
+      .tabs { display: flex; gap: 4px; }
+      .tabs button { flex: 1; min-height: 36px; padding: 0 8px; }
+      .tabs button[aria-selected="true"] { outline: 2px solid #f6e7a8; }
+      .tab-body { min-height: 44px; }
       .recap { width: 100%; border-collapse: collapse; font-size: 0.88rem; margin: 8px 0; }
       .recap td { padding: 2px 8px 2px 0; }
       .replay { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
@@ -703,6 +708,8 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
         .table { order: -2; }
         .hud { order: 0; padding: 10px; }
         .hud .spells { display: none; }
+        .tabs button { font-size: 0.78rem; padding: 0 4px; }
+        .role, .inspect-stats { display: none; }
         h1 { font-size: 1.7rem; }
         .dock {
           display: flex;
@@ -825,8 +832,7 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
             <button type="button" class="quiet" @click=${() => this.advanceTutorial(true)}>Skip tutorial</button>
           </div>
         ` : game.wave === 0 ? html`<p class="coach">Towers stay on their squares. Each tower sends its soldiers out of its own gate, and those soldiers fade if the tower falls. Each side may place ${BLOCKS.max} walls. Tap an enemy tower and press T to aim the next wave.</p>` : ''}
-        ${selected ? this.inspect(selected) : html`<div>Tap one of your towers to upgrade it.</div>`}
-        ${sides.map((side) => this.spells(slice, side))}
+        ${selected ? this.inspect(selected) : html`<div>Tap a tower. Upgrade, repair, and target sit on separate tabs.</div>`}
       </aside>
       ${this.dock(slice)}
     `;
@@ -859,6 +865,7 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
     const canAim = slice ? controlsSide(slice, attacker) : false;
     const marked = slice?.game.waveTarget[attacker];
     const aimed = !!marked && marked.file === tower.file && marked.rank === tower.rank;
+    const tab = this.panelTab === 'spells' && tower.kind !== 'queen' ? 'upgrade' : this.panelTab;
     return html`
       <div>
         <strong>${tower.side} ${piece.label}</strong>
@@ -866,17 +873,32 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
         · level ${tower.level}
         · ${Math.ceil(tower.hp)}/${tower.maxHp}
       </div>
-      <p class="role">${piece.role}</p>
-      <div>${stats.damage} damage · range ${stats.range.toFixed(1)} · every ${(stats.attackTicks / 10).toFixed(1)}s${overcharged(tower.overchargeUntil, this.slice?.game.tick ?? 0) ? ' · overcharged' : ''}</div>
-      <div class="actions">
-        ${mine && tower.level < 3 ? html`
-          <button type="button" data-coach="upgrade" @click=${() => handleUpgrade(tower.side, tower.file, tower.rank)}>Upgrade ${cost}</button>
-        ` : mine ? html`<span class="level">Level 3</span>` : ''}
-        ${mine ? this.repairButton(tower) : ''}
-        ${mine ? this.chargeButton(tower) : ''}
-        ${canAim ? html`
-          <button type="button" data-coach="target" @click=${() => handleAim(attacker, aimed ? -1 : tower.file, aimed ? -1 : tower.rank)}>${aimed ? 'Clear target' : 'Target'}</button>
+      <div class="tabs" role="tablist" aria-label="Tower actions">
+        <button type="button" role="tab" aria-selected=${tab === 'upgrade' ? 'true' : 'false'} data-coach="upgrade" @click=${() => { this.panelTab = 'upgrade'; }}>Upgrade</button>
+        <button type="button" role="tab" aria-selected=${tab === 'repair' ? 'true' : 'false'} data-coach="repair" @click=${() => { this.panelTab = 'repair'; }}>Repair</button>
+        <button type="button" role="tab" aria-selected=${tab === 'target' ? 'true' : 'false'} data-coach="target" @click=${() => { this.panelTab = 'target'; }}>Target</button>
+        ${tower.kind === 'queen' ? html`<button type="button" role="tab" aria-selected=${tab === 'spells' ? 'true' : 'false'} data-coach="blessing" @click=${() => { this.panelTab = 'spells'; }}>Spells</button>` : ''}
+      </div>
+      <div class="tab-body">
+        ${tab === 'upgrade' ? html`
+          <p class="role">${piece.role}</p>
+          <div class="inspect-stats">${stats.damage} damage · range ${stats.range.toFixed(1)} · every ${(stats.attackTicks / 10).toFixed(1)}s${overcharged(tower.overchargeUntil, this.slice?.game.tick ?? 0) ? ' · overcharged' : ''}</div>
+          <div class="actions">
+            ${mine && tower.level < 3 ? html`
+              <button type="button" @click=${() => handleUpgrade(tower.side, tower.file, tower.rank)}>Upgrade ${cost}</button>
+            ` : mine ? html`<span class="level">Level 3</span>` : html`<span>Not your tower.</span>`}
+            ${mine ? this.chargeButton(tower) : ''}
+          </div>
         ` : ''}
+        ${tab === 'repair' ? html`<div class="actions">${mine ? this.repairButton(tower) : html`<span>Not your tower.</span>`}</div>` : ''}
+        ${tab === 'target' ? html`
+          <div class="actions">
+            ${canAim ? html`
+              <button type="button" @click=${() => handleAim(attacker, aimed ? -1 : tower.file, aimed ? -1 : tower.rank)}>${aimed ? 'Clear target' : 'Target'}</button>
+            ` : html`<span>Select an enemy tower to aim the next wave.</span>`}
+          </div>
+        ` : ''}
+        ${tab === 'spells' && slice ? this.spells(slice, tower.side) : ''}
       </div>
     `;
   }
