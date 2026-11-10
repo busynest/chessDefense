@@ -230,6 +230,20 @@ while (state.wave < 1 && guard < 400) {
 assert.ok(state.soldiers.length > 0);
 assert.ok(state.wave >= 1);
 await publish(host.db, state);
+const bound = state.towers.find((piece) => piece.side === 'black' && piece.kind === 'pawn' && state.soldiers.some((soldier) => soldier.originId === piece.id));
+assert.ok(bound);
+const linked = state.soldiers.filter((soldier) => soldier.originId === bound.id).map((soldier) => soldier.id);
+assert.ok(linked.length > 0);
+const kept = state.soldiers.find((soldier) => soldier.side === 'white' && soldier.hp > 0);
+assert.ok(kept);
+bound.hp = 0;
+state = step(state);
+assert.equal(state.soldiers.some((soldier) => linked.includes(soldier.id)), false);
+assert.equal(state.soldiers.some((soldier) => soldier.id === kept.id), true);
+await publish(host.db, state);
+await guestView.until((data) => data.snapshot
+  && data.snapshot.soldiers.every((soldier) => !linked.includes(soldier.id))
+  && data.snapshot.soldiers.some((soldier) => soldier.id === kept.id));
 
 guestView.stop();
 const droppedTick = state.tick;

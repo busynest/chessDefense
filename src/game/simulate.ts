@@ -101,6 +101,8 @@ function launchWave(state: GameState): void {
         hurtBy: null,
         aim: aimOf(state, tower.side),
         navStamp: state.navStamp,
+        originId: tower.id,
+        born: state.tick,
       });
     }
   }
@@ -129,25 +131,33 @@ function sideCount(state: GameState, side: Side): number {
 
 function spawnCell(state: GameState, tower: Tower, n: number): { x: number; y: number } | null {
   const dir = tower.side === 'white' ? 1 : -1;
-  const forwardY = tower.side === 'white' ? tower.rank * 2 + 2 : tower.rank * 2 - 1;
   const homeX = tower.file * 2;
-  const blocked = new Set(state.blocks.map((block) => block.y * 16 + block.x));
+  const frontY = tower.side === 'white' ? tower.rank * 2 + 1 : tower.rank * 2;
+  const gateY = tower.side === 'white' ? tower.rank * 2 + 2 : tower.rank * 2 - 1;
+  const preferred = n % 2 === 0 ? homeX : homeX + 1;
+  const otherX = preferred === homeX ? homeX + 1 : homeX;
+  const walls = new Set(state.blocks.map((block) => block.y * 16 + block.x));
+  const foreign = new Set<number>();
   for (const other of state.towers) {
-    if (other.hp <= 0) continue;
-    for (const cell of towerCells(other)) blocked.add(cell.y * 16 + cell.x);
+    if (other.hp <= 0 || other.id === tower.id) continue;
+    for (const cell of towerCells(other)) foreign.add(cell.y * 16 + cell.x);
   }
+  const walled = (x: number, y: number) => x < 0 || y < 0 || x > 15 || y > 15 || walls.has(y * 16 + x);
+  if (!walled(preferred, frontY)) return { x: preferred, y: frontY };
+  if (!walled(otherX, frontY)) return { x: otherX, y: frontY };
   let best: { x: number; y: number } | null = null;
   let bestScore = Infinity;
-  for (let y = 0; y < 16; y += 1) {
-    const forward = (y - forwardY) * dir;
-    if (forward < 0 || forward > 6) continue;
-    for (let x = 0; x < 16; x += 1) {
-      if (blocked.has(y * 16 + x)) continue;
-      const side = Math.min(Math.abs(x - homeX), Math.abs(x - (homeX + 1)));
-      const score = forward * 3 + side + Math.abs(x - 7.5) * 0.01 + n * 0.001;
-      if (score < bestScore) {
-        best = { x, y };
-        bestScore = score;
+  for (let forward = 0; forward <= 3; forward += 1) {
+    const y = gateY + forward * dir;
+    for (let lateral = 0; lateral <= 2; lateral += 1) {
+      const files = lateral === 0 ? [preferred, otherX] : [homeX - lateral, homeX + 1 + lateral];
+      for (const x of files) {
+        if (walled(x, y) || foreign.has(y * 16 + x)) continue;
+        const score = forward * 8 + lateral * 3 + Math.abs(x - preferred);
+        if (score < bestScore) {
+          best = { x, y };
+          bestScore = score;
+        }
       }
     }
   }
@@ -312,6 +322,13 @@ function soldiersAct(state: GameState, shots: Strike[]): void {
       soldier.navStamp = state.navStamp;
       soldier.repathTick = state.tick + 12;
     }
+    if (onFriendlyTower(state, soldier)) {
+      const out = exitStep(state, soldier, blocked);
+      if (out) stepToward(soldier, out, stats.speed);
+      soldier.path = [];
+      soldier.navStamp = -1;
+      continue;
+    }
     const next = soldier.path[0];
     if (!next || isBlockedCell(blocked, next.x, next.y)) {
       const wall = nearestBlock(state, soldier);
@@ -381,19 +398,54 @@ function soldiersAct(state: GameState, shots: Strike[]): void {
     const stats = statsOf(soldier, state.tick);
     const next = soldier.path[0];
     if (!next || isBlockedCell(blocked, next.x, next.y)) continue;
-    const dx = next.x - soldier.x;
-    const dy = next.y - soldier.y;
-    const dist = Math.hypot(dx, dy);
-    const travel = stats.speed * TICK_SECONDS;
-    if (dist <= travel || dist < 0.04) {
-      soldier.x = next.x;
-      soldier.y = next.y;
-      soldier.path.shift();
-    } else {
-      soldier.x += (dx / dist) * travel;
-      soldier.y += (dy / dist) * travel;
+    if (stepToward(soldier, next, stats.speed)) soldier.path.shift();
+  }
+}
+
+function onFriendlyTower(state: GameState, soldier: Soldier): boolean {
+  const x = Math.round(soldier.x);
+  const y = Math.round(soldier.y);
+  return state.towers.some((tower) => tower.side === soldier.side && tower.hp > 0 && towerCells(tower).some((cell) => cell.x === x && cell.y === y));
+}
+
+function exitStep(state: GameState, soldier: Soldier, blocked: Set<number>): { x: number; y: number } | null {
+  const dir = soldier.side === 'white' ? 1 : -1;
+  const x = Math.round(soldier.x);
+  const y = Math.round(soldier.y);
+  let best: { x: number; y: number } | null = null;
+  let bestScore = Infinity;
+  for (let dy = -1; dy <= 1; dy += 1) {
+    for (let dx = -1; dx <= 1; dx += 1) {
+      if (dx === 0 && dy === 0) continue;
+      const nx = x + dx;
+      const ny = y + dy;
+      if (nx < 0 || ny < 0 || nx > 15 || ny > 15) continue;
+      const friendly = state.towers.some((tower) => tower.side === soldier.side && tower.hp > 0 && towerCells(tower).some((cell) => cell.x === nx && cell.y === ny));
+      const open = !blocked.has(ny * 16 + nx);
+      if (!open && !friendly) continue;
+      const score = (open ? 0 : 8) - dy * dir * 3 + Math.abs(dx);
+      if (score < bestScore) {
+        best = { x: nx, y: ny };
+        bestScore = score;
+      }
     }
   }
+  return best;
+}
+
+function stepToward(soldier: Soldier, next: { x: number; y: number }, speed: number): boolean {
+  const dx = next.x - soldier.x;
+  const dy = next.y - soldier.y;
+  const dist = Math.hypot(dx, dy);
+  const travel = speed * TICK_SECONDS;
+  if (dist <= travel || dist < 0.04) {
+    soldier.x = next.x;
+    soldier.y = next.y;
+    return true;
+  }
+  soldier.x += (dx / dist) * travel;
+  soldier.y += (dy / dist) * travel;
+  return false;
 }
 
 function laneOf(soldier: Soldier): number {

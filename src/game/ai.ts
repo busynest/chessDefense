@@ -141,13 +141,20 @@ function chooseAim(state: GameState, side: Side): void {
     }
   }
   const exposed = (tower: Tower) => (side === 'white' ? tower.rank : 7 - tower.rank);
+  const deployed = (tower: Tower) => state.soldiers.filter((soldier) => soldier.hp > 0 && soldier.originId === tower.id).length;
   const pool = state.difficulty === 'easy' ? foes.filter((tower) => tower.kind === 'pawn') : foes;
-  const weakest = [...pool].sort((a, b) => (a.hp / a.maxHp) - (b.hp / b.maxHp) || exposed(a) - exposed(b) || a.file - b.file)[0]!;
+  const weakest = [...pool].sort((a, b) => (
+    (a.hp / a.maxHp - deployed(a) * 0.25) - (b.hp / b.maxHp - deployed(b) * 0.25)
+    || exposed(a) - exposed(b)
+    || a.file - b.file
+  ))[0]!;
   let pick = weakest;
   if (state.difficulty === 'hard') {
+    const crowded = [...foes].filter((tower) => tower.kind !== 'king' && deployed(tower) >= 3)
+      .sort((a, b) => deployed(b) - deployed(a) || a.file - b.file)[0];
     const queen = foes.find((tower) => tower.kind === 'queen' && tower.hp / tower.maxHp > 0.25);
     const rook = foes.filter((tower) => tower.kind === 'rook' && tower.hp > 0).sort((a, b) => b.hp - a.hp)[0];
-    pick = queen ?? rook ?? weakest;
+    pick = crowded ?? queen ?? rook ?? weakest;
   } else if (pick.kind === 'king') {
     const other = foes.find((tower) => tower.kind !== 'king');
     if (other) pick = other;

@@ -37,7 +37,13 @@ export class BoardSquare extends connect(connectStore)(LitElement) {
       }
       for (const soldier of this.game.soldiers) {
         if (!soldiers.has(soldier.id)) {
-          this.ashes.push({ x: soldier.x, y: soldier.y, side: soldier.side, born: now });
+          this.ashes.push({
+            x: soldier.x,
+            y: soldier.y,
+            side: soldier.side,
+            born: now,
+            linked: soldier.originId !== '' && !ids.has(soldier.originId),
+          });
         }
       }
       this.ruins = this.ruins.filter((ruin) => now - ruin.born < 1500);
@@ -186,6 +192,12 @@ export class BoardSquare extends connect(connectStore)(LitElement) {
         background: radial-gradient(circle, rgba(255, 220, 160, 0.9), rgba(80, 40, 20, 0.2) 70%, transparent);
         animation: puff 0.65s ease-out forwards;
       }
+      .ash.linked {
+        width: 4.4%;
+        height: 4.4%;
+        background: radial-gradient(circle, rgba(255, 244, 220, 0.95), rgba(180, 80, 40, 0.35) 60%, transparent);
+        animation: puff 0.9s ease-out forwards;
+      }
       @keyframes march { 50% { transform: translate(-50%, -80%); } }
       @keyframes ring { to { transform: scale(1.28); opacity: 0; } }
       @keyframes crumble {
@@ -269,15 +281,18 @@ export class BoardSquare extends connect(connectStore)(LitElement) {
               ${pieceSvg(ruin.kind, ruin.side, 0.2, 1)}
             </div>
           `)}
-          ${game.soldiers.map((soldier) => html`
+          ${game.soldiers.map((soldier) => {
+            const spot = exitSpot(game, soldier);
+            return html`
             <div
               class="unit ${soldier.side} ${soldier.buffUntil >= game.tick ? 'buff' : ''} ${soldier.attackReadyTick - game.tick >= 6 ? 'strike' : ''}"
-              style="left:${(soldier.x + 0.5) / 16 * 100}%; top:${(15 - soldier.y + 0.5) / 16 * 100}%">
+              style="left:${(spot.x + 0.5) / 16 * 100}%; top:${(15 - spot.y + 0.5) / 16 * 100}%">
               ${soldierSvg(soldier.kind, soldier.side)}
             </div>
-          `)}
+          `;
+          })}
           ${this.ashes.map((ash) => html`
-            <div class="ash ${ash.side}" style="left:${(ash.x + 0.5) / 16 * 100}%; top:${(15 - ash.y + 0.5) / 16 * 100}%"></div>
+            <div class="ash ${ash.side} ${ash.linked ? 'linked' : ''}" style="left:${(ash.x + 0.5) / 16 * 100}%; top:${(15 - ash.y + 0.5) / 16 * 100}%"></div>
           `)}
           ${game.projectiles.map((shot) => {
             const t = Math.min(1, (game.tick - shot.born) / Math.max(1, shot.life));
@@ -357,6 +372,21 @@ interface Ash {
   y: number;
   side: Side;
   born: number;
+  /** The parent tower fell, so this soldier faded with it. */
+  linked: boolean;
+}
+
+function exitSpot(game: GameState, soldier: GameState['soldiers'][number]): { x: number; y: number } {
+  const age = game.tick - soldier.born;
+  const parent = game.towers.find((tower) => tower.id === soldier.originId);
+  if (!parent || age < 0 || age >= 8) return { x: soldier.x, y: soldier.y };
+  const blend = age / 8;
+  const ox = parent.file * 2 + 0.5;
+  const oy = parent.rank * 2 + 0.5;
+  return {
+    x: ox + (soldier.x - ox) * blend,
+    y: oy + (soldier.y - oy) * blend,
+  };
 }
 
 function wallRatio(game: GameState, x: number, y: number): number {

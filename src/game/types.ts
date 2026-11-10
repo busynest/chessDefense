@@ -63,6 +63,10 @@ export interface Soldier {
   aim: Square | null;
   /** Path cache. A new value means walls or towers changed. */
   navStamp: number;
+  /** Tower that released this soldier. When that tower falls, the soldier falls with it. */
+  originId: string;
+  /** Tick the soldier left its tower, for the exit. */
+  born: number;
 }
 
 export interface Projectile {

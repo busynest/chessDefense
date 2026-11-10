@@ -9,7 +9,7 @@ import { createMatch } from './setup.js';
 import { step } from './simulate.js';
 import type { GameState, Soldier, Tower } from './types.js';
 import { shouldPublish } from './publish.js';
-import { BLOCKS, KING_LEAK, OVERCHARGE, PIECES, SOLDIERS, WAVES, buildableRows, overchargeCost, repairCost, upgradeCost } from './units.js';
+import { BLOCKS, ECONOMY, KING_LEAK, OVERCHARGE, PIECES, SOLDIERS, WAVES, buildableRows, overchargeCost, repairCost, upgradeCost } from './units.js';
 
 function playing(): GameState {
   return createMatch({ mode: 'local', difficulty: 'normal', seed: 7 });
@@ -62,6 +62,8 @@ function fighter(partial: Pick<Soldier, 'id' | 'side' | 'kind' | 'x' | 'y' | 'hp
     hurtBy: null,
     aim: null,
     navStamp: 0,
+    originId: '',
+    born: 0,
     ...partial,
   };
 }
@@ -253,7 +255,9 @@ test('the first wave is one launch after the build, and the next wave waits', ()
   assert.equal(state.tick, WAVES.firstWaveTick);
   const peasants = state.soldiers.filter((soldier) => soldier.kind === 'peasant' && soldier.side === 'white');
   assert.equal(peasants.length, 8);
-  assert.ok(peasants.every((soldier) => soldier.y >= 4));
+  const files = peasants.map((soldier) => Math.floor(soldier.x / 2)).sort((a, b) => a - b);
+  assert.deepEqual(files, [0, 1, 2, 3, 4, 5, 6, 7]);
+  assert.ok(peasants.every((soldier) => soldier.y >= 2.5 && soldier.y < 5));
   const quiet = step(state);
   assert.equal(quiet.wave, 1);
   assert.equal(quiet.soldiers.filter((soldier) => soldier.side === 'white' && soldier.kind === 'peasant').length, 8);
@@ -296,6 +300,8 @@ test('melee combat damages a soldier and removes it at zero life', () => {
     hurtBy: null,
     aim: null,
     navStamp: 0,
+    originId: '',
+    born: 0,
   };
   const defender: Soldier = { ...attacker, id: 'b', side: 'black', kind: 'peasant', x: 1, y: 2, hp: 5, maxHp: 16 };
   state.soldiers = [attacker, defender];
@@ -328,6 +334,8 @@ test('destroying the enemy king ends the match', () => {
     hurtBy: null,
     aim: null,
     navStamp: 0,
+    originId: '',
+    born: 0,
   }];
   const next = step(state);
   assert.equal(next.status, 'victory');
@@ -360,6 +368,8 @@ test('a queen blessing buffs a nearby friendly soldier and spends mana', () => {
     hurtBy: null,
     aim: null,
     navStamp: 0,
+    originId: '',
+    born: 0,
   }];
   const cast = trySpell(state, 'white', 'blessing');
   assert.equal(cast.ok, true);
@@ -468,6 +478,8 @@ test('a tower at zero life is removed and no longer blocks its cells', () => {
     hurtBy: null,
     aim: null,
     navStamp: 0,
+    originId: '',
+    born: 0,
   }];
   const next = step(state);
   assert.equal(next.towers.some((tower) => tower.id === pawn.id), false);
@@ -490,7 +502,7 @@ test('a tower still deploys when a wall covers its own file', () => {
   state = step(state);
   const spawned = state.soldiers.filter((soldier) => soldier.side === 'white');
   assert.equal(spawned.length, 1);
-  assert.ok(spawned[0]!.x >= 2, `spawned on the walled file at x ${spawned[0]!.x}`);
+  assert.ok(spawned[0]!.x <= 1 && spawned[0]!.y >= 2 && spawned[0]!.y <= 4, `left its own square at ${spawned[0]!.x},${spawned[0]!.y}`);
 });
 
 test('a soldier walks a one-cell gap instead of chewing the wall beside it', () => {
@@ -521,6 +533,8 @@ test('a soldier walks a one-cell gap instead of chewing the wall beside it', () 
     hurtBy: null,
     aim: null,
     navStamp: 0,
+    originId: '',
+    born: 0,
   }];
   let cursor = state;
   for (let i = 0; i < 90; i += 1) cursor = step(cursor);
@@ -555,6 +569,8 @@ test('a soldier breaks a wall when every route is closed', () => {
     hurtBy: null,
     aim: null,
     navStamp: 0,
+    originId: '',
+    born: 0,
   }];
   let cursor = state;
   for (let i = 0; i < 20; i += 1) cursor = step(cursor);
@@ -624,6 +640,65 @@ test('a ranged soldier stops at range and a new wall changes the path', () => {
   assert.ok(around.length > 0);
   assert.ok(around.every((cell) => !(cell.y === 6 && cell.x !== 15)));
   assert.notDeepEqual(open, around);
+});
+
+test('each tower releases its soldiers from its own gate', () => {
+  let state = bare();
+  const pawn = place(state, { side: 'white', kind: 'pawn', file: 0, rank: 1 });
+  const rook = place(state, { side: 'white', kind: 'rook', file: 7, rank: 0 });
+  place(state, { side: 'black', kind: 'king', file: 4, rank: 7 });
+  state.nextWaveTick = state.tick + 1;
+  state = step(state);
+  const fromPawn = state.soldiers.find((soldier) => soldier.originId === pawn.id);
+  const fromRook = state.soldiers.find((soldier) => soldier.originId === rook.id);
+  assert.ok(fromPawn);
+  assert.ok(fromRook);
+  assert.ok(fromPawn.x <= 1.5 && fromPawn.y >= 2.5 && fromPawn.y <= 4.5, `${fromPawn.x},${fromPawn.y}`);
+  assert.ok(fromRook.x >= 13.5 && fromRook.y <= 2.5, `${fromRook.x},${fromRook.y}`);
+});
+
+test('destroying a tower fades its soldiers and pays no bounty', () => {
+  const state = bare();
+  state.gold.white = 10;
+  const pawn = place(state, { side: 'black', kind: 'pawn', file: 0, rank: 6, hp: 4 });
+  const other = place(state, { side: 'black', kind: 'knight', file: 1, rank: 7 });
+  const whiteKing = place(state, { side: 'white', kind: 'king', file: 4, rank: 0 });
+  place(state, { side: 'black', kind: 'king', file: 4, rank: 7 });
+  state.soldiers = [
+    fighter({ id: 'mine', side: 'black', kind: 'peasant', x: 3, y: 8, hp: 20, maxHp: 20, originId: pawn.id }),
+    fighter({ id: 'theirs', side: 'black', kind: 'knight', x: 6, y: 8, hp: 20, maxHp: 20, originId: other.id }),
+  ];
+  state.soldiers.push(fighter({ id: 'axe', side: 'white', kind: 'peasant', x: 0, y: 11, hp: 40, maxHp: 40, originId: whiteKing.id }));
+  const next = step(state);
+  assert.equal(next.soldiers.some((soldier) => soldier.id === 'mine'), false);
+  assert.equal(next.soldiers.some((soldier) => soldier.id === 'theirs'), true);
+  assert.equal(next.gold.white, 10 + ECONOMY.goldPerTick + PIECES.pawn.bounty);
+});
+
+test('a full side does not save unreleased soldiers for later', () => {
+  let state = bare();
+  const pawn = place(state, { side: 'white', kind: 'pawn', file: 0, rank: 1 });
+  place(state, { side: 'white', kind: 'king', file: 4, rank: 0 });
+  place(state, { side: 'black', kind: 'king', file: 4, rank: 7 });
+  state.soldiers = Array.from({ length: WAVES.soldierCap }, (_, index) => fighter({
+    id: `held-${index}`,
+    side: 'white',
+    kind: 'peasant',
+    x: index % 16,
+    y: 3,
+    hp: 10,
+    maxHp: 10,
+    originId: pawn.id,
+  }));
+  state.nextWaveTick = state.tick + 1;
+  state = step(state);
+  assert.equal(state.soldiers.filter((soldier) => soldier.originId === pawn.id).length, WAVES.soldierCap);
+  state.nextWaveTick = state.tick + 1;
+  const pawnLeft = state.towers.find((tower) => tower.id === pawn.id);
+  assert.ok(pawnLeft);
+  pawnLeft.hp = 0;
+  state = step(state);
+  assert.equal(state.soldiers.some((soldier) => soldier.originId === pawn.id), false);
 });
 
 test('a fallen mark falls back toward the King', () => {

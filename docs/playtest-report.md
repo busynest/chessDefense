@@ -58,3 +58,18 @@ Ordering holds. Means stay inside the previous band. Cap time is 34% and Overcha
 | Hard vs Normal, both seats | Hard 14, Normal 10 | 218–238s | 34–38% |
 
 Nothing unfinished. Easy still loses every game to Normal and Hard. Hard still beats Normal, 14–10, closer than the 23–1 from before waves could be aimed. Three games passed five minutes. The longest was an Easy mirror at 373 seconds. Cap time is 38%. Overcharge is 13 per game.
+
+## Soldiers leave their tower
+
+108 games after each soldier steps off the front of the tower that launched it, and dies with that tower. Nobody is paid for those soldiers. A side already at 40 does not keep the extras for a later wave. Normal treats a tower with soldiers still out as a softer target. Hard prefers a non-king tower that has three or more soldiers out. No balance numbers were changed. Letting soldiers walk through friendly towers for the whole march left an Easy mirror unfinished at 10 minutes, so the march through friendly pieces stops once the soldier reaches open ground.
+
+| Matchup | Wins | Mean length | Gold at cap |
+| --- | --- | --- | --- |
+| Easy vs Easy | White 6, Black 6 | 305s, wave 19.4 | 74% |
+| Normal vs Normal | White 6, Black 6 | 240s, wave 15.2 | 40% |
+| Hard vs Hard | White 7, Black 5 | 293s, wave 18.6 | 36% |
+| Normal vs Easy, both seats | Normal 24, Easy 0 | 123–125s | 31% |
+| Hard vs Easy, both seats | Hard 24, Easy 0 | 121–130s | 29–30% |
+| Hard vs Normal, both seats | Hard 17, Normal 7 | 265s | 39% |
+
+Nothing unfinished. Easy still loses every game to Normal and Hard. Hard beats Normal 17–7. Sixteen games passed five minutes. The longest was an Easy mirror at 481 seconds. Cap time is 42%. Overcharge is 15.6 per game. Mirrors run longer because a fallen tower takes its soldiers with it, so a pawn kill also removes the soldiers that pawn had sent.

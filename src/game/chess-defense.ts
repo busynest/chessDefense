@@ -66,7 +66,7 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
     'Tap one of your pawns. The ring is its range. Towers never move.',
     'Upgrade spends gold. Level 3 is as high as a tower goes.',
     'White walls shades the two ranks in front of your towers. The gold strip in the middle stays open. A green cell can take a block, and a red cell cannot. Each row keeps a gap.',
-    'When the build timer ends, every living tower sends its soldier at once.',
+    'When the build timer ends, each living tower sends its soldier out of its own gate. If the tower falls, those soldiers fade with it.',
     'Tap an enemy tower and press T. The next wave marches on it. Clear sends them back to the King.',
     'Spell buttons belong to the Queen. Pause freezes the clock. Menu leaves the match.',
   ];
@@ -551,7 +551,7 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
             <button type="button" @click=${() => this.advanceTutorial(false)}>Next</button>
             <button type="button" class="quiet" @click=${() => this.advanceTutorial(true)}>Skip tutorial</button>
           </div>
-        ` : game.wave === 0 ? html`<p class="coach">Towers stay on their squares. Tap an enemy tower and press T to aim the next wave. Walls go on the two ranks in front of your towers. Keys: P pause, T target, W walls, U upgrade, R repair, O overcharge, B H L spells.</p>` : ''}
+        ` : game.wave === 0 ? html`<p class="coach">Towers stay on their squares. Each tower sends its soldiers out of its own gate, and those soldiers fade if the tower falls. Tap an enemy tower and press T to aim the next wave. Keys: P pause, T target, W walls, U upgrade, R repair, O overcharge, B H L spells.</p>` : ''}
         ${selected ? this.inspect(selected) : html`<div>Tap one of your towers to upgrade it.</div>`}
         ${sides.map((side) => this.spells(slice, side))}
       </aside>

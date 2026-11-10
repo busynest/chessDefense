@@ -171,6 +171,12 @@ export function trySpell(input: GameState, side: Side, spell: SpellId): MoveResu
 }
 
 export function sweepDead(state: GameState): void {
+  const standing = new Set(state.towers.filter((tower) => tower.hp > 0).map((tower) => tower.id));
+  for (const soldier of state.soldiers) {
+    if (soldier.hp <= 0 || !soldier.originId || standing.has(soldier.originId)) continue;
+    soldier.hp = 0;
+    soldier.hurtBy = null;
+  }
   for (const soldier of state.soldiers) {
     if (soldier.hp > 0 || !soldier.hurtBy) continue;
     const bounty = SOLDIERS[soldier.kind].bounty;
