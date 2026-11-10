@@ -1,6 +1,6 @@
 {
   "name": "chessdefense",
-  "version": "2.0.0",
+  "version": "3.0.0",
   "description": "ChessDefense is a new type of game, a cross between chess and tower defense.",
   "type": "module",
   "repository": "https://www.chessdefense.com",
@@ -10,7 +10,8 @@
   "scripts": {
     "start": "tsc && concurrently -k -n tsc,web \"tsc --watch --preserveWatchOutput\" \"web-dev-server --config web-dev-server.config.mjs\"",
     "build": "tsc && rollup -c",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "tsc && node --test out/game/rules.test.js"
   },
   "dependencies": {
     "@reduxjs/toolkit": "^2.12.0",

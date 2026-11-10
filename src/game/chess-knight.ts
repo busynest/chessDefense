@@ -1,24 +1,22 @@
-import { LitElement, css, html, type CSSResultGroup, type TemplateResult } from 'lit';
-import { customElement } from 'lit/decorators.js';
+import { LitElement, css, type CSSResultGroup } from 'lit';
+import { customElement, property } from 'lit/decorators.js';
+
+import { pieceSvg } from './glyphs.js';
+import type { Side } from './types.js';
 
 @customElement('chess-knight')
 export class ChessKnight extends LitElement {
+  @property({ type: String, reflect: true }) side: Side = 'white';
+
   static override get styles(): CSSResultGroup {
     return css`
-      svg {
-        width: 100%;
-        height: 100%;
-      }
+      :host { display: grid; place-items: center; width: 100%; height: 100%; pointer-events: none; }
+      :host([side='black']) svg { transform: scaleX(-1); }
+      svg { width: 78%; height: 78%; }
     `;
   }
 
-  protected override render(): TemplateResult {
-    return html`
-      <div>
-        <svg viewBox="0 0 100 100" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
-          <circle cx="50" cy="50" r="15" stroke="green" stroke-width="4" fill="yellow" />
-        </svg>
-      </div>
-    `;
+  protected override render() {
+    return pieceSvg('knight', this.side);
   }
 }

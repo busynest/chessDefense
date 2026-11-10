@@ -1,399 +1,140 @@
-import { css, html, type CSSResultGroup, type TemplateResult } from 'lit';
-import { customElement, property } from 'lit/decorators.js';
-import { PageViewElement } from '../lazy-loader.js';
-import './four-square.js';
-import './chess-bishop.js';
-import './chess-king.js';
-import './chess-knight.js';
-import './chess-pawn.js';
-import './chess-queen.js';
-import './chess-rook.js';
+import { LitElement, css, html, type CSSResultGroup, type TemplateResult } from 'lit';
+import { customElement, state } from 'lit/decorators.js';
+import { connect } from 'pwa-helpers/connect-mixin.js';
+
+import { legalMoves, towerAt } from './chess.js';
+import { handleSquare } from './input.js';
+import './one-square.js';
+import { connectStore, type RootState } from '../store.js';
+import type { GameState, Square } from './types.js';
 
 @customElement('board-square')
-export class BoardSquare extends PageViewElement {
+export class BoardSquare extends connect(connectStore)(LitElement) {
+  @state() private game: GameState | null = null;
+  @state() private selected: Square | null = null;
 
-  @property({ type: Number })
-  widthThis = 0;
-
-
-  constructor() {
-    super();
+  override stateChanged(state: RootState): void {
+    this.game = state.game.game;
+    this.selected = state.game.selected;
   }
-
-  firstUpdated() {
-   
-  }
-
-  _rook() {
-
-  }
-
-  _block() {
-
-  }
-
-
 
   static override get styles(): CSSResultGroup {
     return css`
-
-    :host {
-    }
-
-    .grid {
-
-      height: 100%;
-      max-width: min(800px, 100%);
-      box-sizing: border-box;
-      margin: auto;
-      display: grid;
-      grid-gap: 2px;
-      grid-template-columns:  1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr;
-      grid-template-rows:     1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr;
-    }
-
-    four-square {
- 
-    }
-
-    chess-pawn, chess-rook, chess-knight, chess-bishop, chess-king, chess-queen {
-
-     
-   
-    }
-
-    @media only screen and (min-width: 800px) { .grid { height: 700px; width: 700px; } }
-    @media only screen and (max-width: 800px) { .grid { height: 700px; width: 700px; } }
-    @media only screen and (max-width: 700px) { .grid { height: 600px; width: 600px; } }
-    @media only screen and (max-width: 600px) { .grid { height: 500px; width: 500px; } }
-    @media only screen and (max-width: 500px) { .grid { height: 400px; width: 400px; } }
-    @media only screen and (max-width: 400px) { .grid { height: 300px; width: 300px; } }
-    @media only screen and (max-width: 300px) { .grid { height: 260px; width: 260px; } }
-
-
-        `
-    }
-
-  protected override render(): TemplateResult {
-    return html`
-
-     
-
-     <!--
-
-            position:   absolute;
-          z-index:    3;
-
-     width:      100%;
-     height:     100%;
-
-     -->
-
-     <!-- Chess Defense Game -->
-     <div id="grid" class="grid">
-    	
-     <!-- 1 -->
-     <four-square id="a1">
-        <chess-rook id="RLB" @click=${this._rook} new="pop"></chess-rook>
-     </four-square>
-
-     <!-- 2 -->
-     <four-square id="b1">
-       <chess-knight></chess-knight>
-     </four-square>
-
-     <!-- 3 -->
-     <four-square id="c1">
-       <chess-bishop .myWidth=${this.widthThis}></chess-bishop>
-     </four-square>
-
-     <!-- 4 -->
-     <four-square id="d1">
-       <chess-king></chess-king>
-     </four-square>
-
-     <!-- 5 -->
-     <four-square id="e1">
-       <chess-queen></chess-queen>
-     </four-square>
-
-     <!-- 6 -->
-     <four-square id="f1">
-       <chess-bishop></chess-bishop>
-     </four-square>
-
-     <!-- 7 -->
-     <four-square id="g1">
-       <chess-knight></chess-knight>
-     </four-square>
-
-     <!-- 8 -->
-     <four-square id="h1">
-       <chess-rook @click=${this._rook}></chess-rook>
-     </four-square>
-     
-
-     
-     <!-- 9 -->
-     <four-square id="a2">
-       <chess-pawn></chess-pawn>
-     </four-square>
-
-     <!-- 10 -->
-     <four-square id="b2">
-       <chess-pawn></chess-pawn>
-     </four-square>
-
-     <!-- 11 -->
-     <four-square id="c2">
-       <chess-pawn></chess-pawn>
-     </four-square>
-
-     <!-- 12 -->
-     <four-square id="d2">
-       <chess-pawn></chess-pawn>
-     </four-square>
-
-     <!-- 13 -->
-     <four-square id="e2">
-       <chess-pawn></chess-pawn>
-     </four-square>
-
-     <!-- 14 -->
-     <four-square id="f2">
-       <chess-pawn></chess-pawn>
-     </four-square>
-
-     <!-- 15 -->
-     <four-square id="g2">
-       <chess-pawn></chess-pawn>
-     </four-square>
-
-     <!-- 16 -->
-     <four-square id="h2">
-       <chess-pawn></chess-pawn>
-     </four-square>
-     
-
-     
-     <!-- 17 -->
-     <four-square>
-     </four-square>
-     <!-- 18 -->
-     <four-square>
-     </four-square>
-     <!-- 19 -->
-     <four-square>
-     </four-square>
-     <!-- 20 -->
-     <four-square>
-     </four-square>
-     <!-- 21 -->
-     <four-square>
-     </four-square>
-     <!-- 22 -->
-     <four-square>
-     </four-square>
-     <!-- 23 -->
-     <four-square>
-     </four-square>
-     <!-- 24 -->
-     <four-square>
-     </four-square>
-     
-     
-
-     <!-- 25 -->
-     <four-square>
-     </four-square>
-     <!-- 26 -->
-     <four-square>
-     </four-square>
-     <!-- 27 -->
-     <four-square>
-     </four-square>
-     <!-- 28 -->
-     <four-square>
-     </four-square>
-     <!-- 29 -->
-     <four-square>
-     </four-square>
-     <!-- 30 -->
-     <four-square>
-     </four-square>
-     <!-- 31 -->
-     <four-square>
-     </four-square>
-     <!-- 32 -->
-     <four-square>
-     </four-square>
-     
-
-     
-     <!-- 33 -->
-     <four-square>
-     </four-square>
-     <!-- 34 -->
-     <four-square>
-     </four-square>
-     <!-- 35 -->
-     <four-square>
-     </four-square>
-     <!-- 36 -->
-     <four-square>
-     </four-square>
-     <!-- 37 -->
-     <four-square>
-     </four-square>
-     <!-- 38 -->
-     <four-square>
-     </four-square>
-     <!-- 39 -->
-     <four-square>
-     </four-square>
-     <!-- 40 -->
-     <four-square>
-     </four-square>
-     
-
-     
-     <!-- 41 -->
-     <four-square>
-     </four-square>
-     <!-- 42 -->
-     <four-square>
-     </four-square>
-     <!-- 43 -->
-     <four-square>
-     </four-square>
-     <!-- 44 -->
-     <four-square>
-     </four-square>
-     <!-- 45 -->
-     <four-square>
-     </four-square>
-     <!-- 47 -->
-     <four-square>
-     </four-square>
-     <!-- 48 -->
-     <four-square>
-     </four-square>
-     <!-- 49 -->
-     <four-square>
-     </four-square>
-     
-
-     
-     <!-- 50 -->
-     <four-square id="a7">
-           <chess-pawn></chess-pawn>
-     </four-square>      
-     <!-- 51 -->
-     <four-square id="b7">
-           <chess-pawn></chess-pawn>
-     </four-square>
-     <!-- 52 -->
-     <four-square id="c7">
-           <chess-pawn></chess-pawn>
-     </four-square>
-     <!-- 53 -->
-     <four-square id="d7">
-           <chess-pawn></chess-pawn>
-     </four-square>
-     <!-- 54 -->
-     <four-square id="e7">
-           <chess-pawn></chess-pawn>
-     </four-square>
-     <!-- 55 -->
-     <four-square id="f7">
-           <chess-pawn></chess-pawn>
-     </four-square>
-     <!-- 56 -->
-     <four-square id="g7">
-           <chess-pawn></chess-pawn>
-     </four-square>
-     <!-- 57 -->
-     <four-square id="h7">
-           <chess-pawn></chess-pawn>
-     </four-square>
-     
-     
-
-     <!-- 58 -->
-     <four-square id="a8">
-           <chess-rook @click=${this._rook}></chess-rook>
-     </four-square>
-     <!-- 59 -->
-     <four-square id="b8">
-           <chess-knight></chess-knight>
-     </four-square>
-     <!-- 60 -->
-     <four-square id="c8">
-           <chess-bishop></chess-bishop>
-     </four-square>
-     <!-- 61 -->
-     <four-square id="d8">
-           <chess-king></chess-king>
-     </four-square>
-     <!-- 62 -->
-     <four-square id="e8">
-           <chess-queen></chess-queen>
-     </four-square>
-     <!-- 63 -->
-     <four-square id="f8">
-           <chess-bishop></chess-bishop>
-     </four-square>
-     <!-- 64 -->
-     <four-square id="g8">
-           <chess-knight></chess-knight>
-     </four-square>
-     <!-- 64 -->
-     <four-square id="h8">
-           <chess-rook @click=${this._rook}></chess-rook>
-     </four-square>
-
-     </div>
-
-	`
+      :host { display: block; width: min(100%, 720px); margin: 0 auto; }
+      .frame {
+        position: relative;
+        display: grid;
+        grid-template-columns: repeat(8, 1fr);
+        width: 100%;
+        border: 3px solid #3a2a1c;
+        border-radius: 6px;
+        overflow: hidden;
+        box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35);
+      }
+      .actors {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        z-index: 3;
+      }
+      .token, .shot, .pulse {
+        position: absolute;
+        transform: translate(-50%, -50%);
+      }
+      .token {
+        width: 4.2%;
+        height: 4.2%;
+        border-radius: 50%;
+        display: grid;
+        place-items: end center;
+      }
+      .token.white { background: #d7ecff; box-shadow: 0 0 0 1px #16324a; }
+      .token.black { background: #ffb4b4; box-shadow: 0 0 0 1px #4a1616; }
+      .token.knight { border-radius: 2px; transform: translate(-50%, -50%) rotate(45deg); }
+      .token.archer { clip-path: polygon(50% 0, 100% 100%, 0 100%); border-radius: 0; }
+      .token.cannon { border-radius: 2px; }
+      .token.mage { clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%); }
+      .token.buff { outline: 2px solid #f6d56a; }
+      .bar { width: 140%; height: 2px; background: rgba(0,0,0,.4); }
+      .bar span { display: block; height: 100%; background: #3dba5c; }
+      .shot { width: 1.6%; height: 1.6%; border-radius: 50%; background: #f4e27a; }
+      .shot.shell { width: 2.2%; height: 2.2%; background: #e7e2d6; }
+      .shot.arrow { background: #d7ecff; }
+      .pulse {
+        border-radius: 50%;
+        border: 3px solid transparent;
+        opacity: 0.85;
+      }
+      .pulse.blessing { border-color: #f6d56a; background: rgba(246, 213, 106, 0.18); }
+      .pulse.heal { border-color: #7ddea0; background: rgba(80, 180, 110, 0.16); }
+      .pulse.blast { border-color: #ff8a4a; background: rgba(255, 90, 40, 0.22); }
+    `;
   }
 
-}
-
-/**
-
-    	<div style="height:100%; width:100%;">
-        <slot></slot>
-        <div style="height:100%; width:100%; display: grid; grid-template-columns: 50% 50%; grid-template-rows: 50% 50%;">
-          <four-square></four-square>
-          <four-square></four-square>
-          <four-square></four-square>
-          <four-square></four-square>
+  protected override render(): TemplateResult {
+    const game = this.game;
+    if (!game || game.status === 'menu') return html``;
+    const selectedTower = this.selected ? towerAt(game, this.selected.file, this.selected.rank) : undefined;
+    const moves = selectedTower ? legalMoves(game, selectedTower) : [];
+    const blocks = new Set(game.blocks.map((block) => block.y * 16 + block.x));
+    const squares = [];
+    for (let rank = 7; rank >= 0; rank -= 1) {
+      for (let file = 0; file < 8; file += 1) {
+        const tower = towerAt(game, file, rank);
+        const move = moves.find((square) => square.file === file && square.rank === rank);
+        const hint = this.selected && this.selected.file === file && this.selected.rank === rank
+          ? 'selected'
+          : move
+            ? (tower ? 'capture' : 'move')
+            : '';
+        const blocked = [
+          blocks.has((rank * 2 + 1) * 16 + file * 2),
+          blocks.has((rank * 2 + 1) * 16 + file * 2 + 1),
+          blocks.has((rank * 2) * 16 + file * 2),
+          blocks.has((rank * 2) * 16 + file * 2 + 1),
+        ];
+        squares.push(html`
+          <one-square
+            .file=${file}
+            .rank=${rank}
+            .dark=${(file + rank) % 2 === 0}
+            .hint=${hint}
+            .kind=${tower?.kind ?? ''}
+            .side=${tower?.side ?? ''}
+            .hp=${tower?.hp ?? 0}
+            .maxHp=${tower?.maxHp ?? 1}
+            .blocked=${blocked}
+            .label=${tower ? `${tower.side} ${tower.kind}` : 'empty square'}
+            @square-click=${(event: CustomEvent<{ file: number; rank: number }>) => handleSquare(event.detail.file, event.detail.rank)}
+          ></one-square>
+        `);
+      }
+    }
+    return html`
+      <div class="frame">
+        ${squares}
+        <div class="actors">
+          ${game.effects.map((effect) => {
+            const size = effect.spell === 'heal' ? effect.radius * 2 / 8 * 100 : effect.radius * 2 / 16 * 100;
+            const left = (effect.file + 0.5) / 8 * 100;
+            const top = (7 - effect.rank + 0.5) / 8 * 100;
+            return html`<div class="pulse ${effect.spell}" style="left:${left}%; top:${top}%; width:${size}%; height:${size}%"></div>`;
+          })}
+          ${game.soldiers.map((soldier) => html`
+            <div
+              class="token ${soldier.side} ${soldier.kind} ${soldier.buffUntil >= game.tick ? 'buff' : ''}"
+              style="left:${(soldier.x + 0.5) / 16 * 100}%; top:${(15 - soldier.y + 0.5) / 16 * 100}%">
+              <div class="bar"><span style="width:${Math.max(0, soldier.hp / soldier.maxHp) * 100}%"></span></div>
+            </div>
+          `)}
+          ${game.projectiles.map((shot) => {
+            const t = Math.min(1, (game.tick - shot.born) / Math.max(1, shot.life));
+            const x = shot.x + (shot.tx - shot.x) * t;
+            const y = shot.y + (shot.ty - shot.y) * t;
+            return html`<div class="shot ${shot.kind}" style="left:${(x + 0.5) / 16 * 100}%; top:${(15 - y + 0.5) / 16 * 100}%"></div>`;
+          })}
         </div>
       </div>
-
-      [a1,b1,c1,d1,e1,f1,g1,h1,a2,b2,c2,d2,e2,f2,g2,h2,a3,b3,c3,d3,e3,f3,g3,h3,a4,b4,c4,d4,e4,f4,g4,h4,a5,b5,c5,d5,e5,f5,g5,h5,a6,b6,c6,d6,e6,f6,g6,h6,a7,b7,c7,d7,e7,f7,g7,h7,a8,b8,c8,d8,e8,f8,g8,h8]
-
-
-      a1, b1, c1, d1, e1, f1, g1, h1,
-      a2, b2, c2, d2, e2, f2, g2, h2,
-      a3, b3, c3, d3, e3, f3, g3, h3,
-      a4, b4, c4, d4, e4, f4, g4, h4,
-      a5, b5, c5, d5, e5, f5, g5, h5,
-      a6, b6, c6, d6, e6, f6, g6, h6,
-      a7, b7, c7, d7, e7, f7, g7, h7,
-      a8, b8, c8, d8, e8, f8, g8, h8
-
-var arena, grid, i;
-    arena = [
-      "a1", "b1", "c1", "d1", "e1", "f1", "g1", "h1",
-      "a2", "b2", "c2", "d2", "e2", "f2", "g2", "h2",
-      "a3", "b3", "c3", "d3", "e3", "f3", "g3", "h3",
-      "a4", "b4", "c4", "d4", "e4", "f4", "g4", "h4",
-      "a5", "b5", "c5", "d5", "e5", "f5", "g5", "h5",
-      "a6", "b6", "c6", "d6", "e6", "f6", "g6", "h6",
-      "a7", "b7", "c7", "d7", "e7", "f7", "g7", "h7",
-      "a8", "b8", "c8", "d8", "e8", "f8", "g8", "h8"
-    ];
-
-
-**/
+    `;
+  }
+}

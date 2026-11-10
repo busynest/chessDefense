@@ -2,12 +2,14 @@ import { configureStore, type ThunkAction, type UnknownAction } from '@reduxjs/t
 import type { AnyAction, Store } from 'redux';
 
 import { appReducer } from './application/application_state.js';
+import { gameReducer } from './game/game_state.js';
 import { userReducer } from './user/user_state.js';
 
 export const store = configureStore({
   reducer: {
     app: appReducer,
     user: userReducer,
+    game: gameReducer,
   },
 });
 

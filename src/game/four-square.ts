@@ -1,56 +1,37 @@
 import { LitElement, css, html, type CSSResultGroup, type TemplateResult } from 'lit';
-import { customElement } from 'lit/decorators.js';
+import { customElement, property } from 'lit/decorators.js';
 
-import './one-square.js';
+import './square-space.js';
 
+/**
+ * The 2×2 army grid inside one chess square.
+ * `blocked` is top-left, top-right, bottom-left, bottom-right.
+ */
 @customElement('four-square')
 export class FourSquare extends LitElement {
+  @property({ type: Array }) blocked: boolean[] = [false, false, false, false];
+
   static override get styles(): CSSResultGroup {
     return css`
-      .green {
-        background-color: rgb(118, 150, 86);
-      }
-
-      .white {
-        background-color: rgb(238, 238, 210);
-      }
-
-      .orange {
-        background-color: rgb(238, 238, 210);
-      }
-
-      .pink {
-        background-color: rgb(118, 150, 86);
+      :host { display: block; width: 100%; height: 100%; pointer-events: none; }
+      .grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        grid-template-rows: 1fr 1fr;
+        width: 100%;
+        height: 100%;
       }
     `;
   }
 
   protected override render(): TemplateResult {
+    const flags = this.blocked;
     return html`
-      <div
-        style="
-          height: 100%;
-          width: 100%;
-          position: relative;
-          z-index: 1;
-          display: grid;
-          grid-template-columns: 1fr;">
-        <slot></slot>
-        <div
-          style="
-            height: 100%;
-            width: 100%;
-            position: absolute;
-            z-index: -1;
-            display: grid;
-            grid-gap: 2px;
-            grid-template-columns: 1fr 1fr;
-            grid-template-rows: 1fr 1fr;">
-          <one-square id="aa" class="green"></one-square>
-          <one-square class="white"></one-square>
-          <one-square class="orange"></one-square>
-          <one-square class="pink"></one-square>
-        </div>
+      <div class="grid">
+        <square-space .blocked=${flags[0] === true}></square-space>
+        <square-space .blocked=${flags[1] === true}></square-space>
+        <square-space .blocked=${flags[2] === true}></square-space>
+        <square-space .blocked=${flags[3] === true}></square-space>
       </div>
     `;
   }

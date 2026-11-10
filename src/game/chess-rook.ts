@@ -1,40 +1,21 @@
-import { LitElement, css, html, type CSSResultGroup, type TemplateResult } from 'lit';
-import { customElement } from 'lit/decorators.js';
+import { LitElement, css, type CSSResultGroup } from 'lit';
+import { customElement, property } from 'lit/decorators.js';
+
+import { pieceSvg } from './glyphs.js';
+import type { Side } from './types.js';
 
 @customElement('chess-rook')
 export class ChessRook extends LitElement {
-  rook(): void {
-    this.setAttribute('style', 'display: none;');
-  }
+  @property({ type: String }) side: Side = 'white';
 
   static override get styles(): CSSResultGroup {
     return css`
-      .rook {
-        background-color: green;
-        display: grid;
-        grid-template-columns: 1fr;
-        height: 100%;
-        width: 100%;
-      }
-
-      .myPath {
-        background-color: black;
-        clip-path: polygon(30% 0%, 70% 0%, 100% 30%, 100% 70%, 70% 100%, 30% 100%, 0% 70%, 0% 30%);
-      }
+      :host { display: grid; place-items: center; width: 100%; height: 100%; pointer-events: none; }
+      svg { width: 74%; height: 74%; }
     `;
   }
 
-  protected override render(): TemplateResult {
-    return html`
-      <div id="LT">
-        <svg
-          viewBox="0 0 100 100"
-          preserveAspectRatio="none"
-          xmlns="http://www.w3.org/2000/svg"
-          @click=${this.rook}>
-          <circle cx="50" cy="50" r="15" stroke="green" stroke-width="4" fill="yellow" />
-        </svg>
-      </div>
-    `;
+  protected override render() {
+    return pieceSvg('rook', this.side);
   }
 }
