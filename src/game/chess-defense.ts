@@ -36,7 +36,7 @@ import { rememberPose } from './film.js';
 import { createMatch } from './setup.js';
 import { shouldPublish } from './publish.js';
 import { loadCareer, recordResult } from './record.js';
-import { playTap, playVictory, playWave } from './sound.js';
+import { armAudio, playTap, playVictory, playWave } from './sound.js';
 import './board-square.js';
 import { markTutorial, setDifficulty, setMuted } from '../prefs/prefs_state.js';
 import { connectStore, store, type RootState } from '../store.js';
@@ -106,17 +106,27 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
 
   protected override firstUpdated(): void {
     window.addEventListener('keydown', this.onKey);
+    window.addEventListener('pointerdown', this.armOnce);
+    window.addEventListener('keydown', this.armOnce);
     window.addEventListener('chessdefense-tour', this.onTour);
   }
 
   override disconnectedCallback(): void {
     window.removeEventListener('keydown', this.onKey);
+    window.removeEventListener('pointerdown', this.armOnce);
+    window.removeEventListener('keydown', this.armOnce);
     window.removeEventListener('chessdefense-tour', this.onTour);
     super.disconnectedCallback();
     this.stopLoop();
     this.teardown();
     this.stopReplay();
   }
+
+  private armOnce = (): void => {
+    armAudio();
+    window.removeEventListener('pointerdown', this.armOnce);
+    window.removeEventListener('keydown', this.armOnce);
+  };
 
   private onTour = (): void => {
     this.tutorial = 0;
@@ -800,7 +810,7 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
             ${game.status === 'paused' ? 'Resume' : 'Pause'}
           </button>
           <button type="button" class="quiet" @click=${() => this.leave()}>Menu</button>
-          <button type="button" class="quiet" @click=${() => store.dispatch(setMuted(!this.muted))}>${this.muted ? 'Unmute' : 'Mute'}</button>
+          <button type="button" class="quiet" @click=${() => { this.armOnce(); store.dispatch(setMuted(!this.muted)); }}>${this.muted ? 'Unmute' : 'Mute'}</button>
         </div>
         <div class="wave" data-coach="wave" aria-live="polite">${waveLabel}</div>
         <div class="exposed">${game.tick >= SUDDEN.tick ? 'Kings exposed — hits land harder' : `Kings exposed in ${this.exposedClock(game.tick)}`}</div>

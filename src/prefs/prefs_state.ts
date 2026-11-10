@@ -12,6 +12,8 @@ export interface PrefsState {
   seenTutorial: boolean;
   /** High-contrast team colors plus the circle and diamond marks. */
   palette: TeamPalette;
+  /** Optional drone. Off until the player turns it on. */
+  music: boolean;
 }
 
 const KEY = 'chessdefense-prefs';
@@ -22,6 +24,7 @@ const defaults: PrefsState = {
   volume: 0.5,
   seenTutorial: false,
   palette: 'classic',
+  music: false,
 };
 
 function load(): PrefsState {
@@ -39,6 +42,7 @@ function load(): PrefsState {
       volume,
       seenTutorial: parsed.seenTutorial === true,
       palette: parsed.palette === 'bright' ? 'bright' : 'classic',
+      music: parsed.music === true,
     };
   } catch {
     return defaults;
@@ -72,8 +76,11 @@ const prefsSlice = createSlice({
     setPalette(state, action: PayloadAction<TeamPalette>) {
       state.palette = action.payload;
     },
+    setMusic(state, action: PayloadAction<boolean>) {
+      state.music = action.payload;
+    },
   },
 });
 
-export const { setDifficulty, setMuted, setVolume, markTutorial, setPalette } = prefsSlice.actions;
+export const { setDifficulty, setMuted, setVolume, markTutorial, setPalette, setMusic } = prefsSlice.actions;
 export const prefsReducer = prefsSlice.reducer;

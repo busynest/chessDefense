@@ -8,7 +8,7 @@ import { pieceSvg } from './glyphs.js';
 import { handleCell, handleSquare } from './input.js';
 import './one-square.js';
 import type { SoldierKind } from './types.js';
-import { playCollapse, playHit, playStrike } from './sound.js';
+import { playCollapse, playHit, playKing, playSoldier, playSpell, playStrike, playWall } from './sound.js';
 import { blitSprite, spriteAtlas, type Pose } from './sprites.js';
 import { connectStore, type RootState } from '../store.js';
 import type { GameState, PieceKind, Side, Square } from './types.js';
@@ -55,7 +55,8 @@ export class BoardSquare extends connect(connectStore)(LitElement) {
         if (!ids.has(tower.id)) {
           this.ruins.push({ file: tower.file, rank: tower.rank, side: tower.side, kind: tower.kind, born: now });
           this.shake = !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-          playCollapse();
+          if (tower.kind === 'king') playKing();
+          else playCollapse();
           window.setTimeout(() => { this.shake = false; this.requestUpdate(); }, 420);
         }
       }
@@ -77,6 +78,7 @@ export class BoardSquare extends connect(connectStore)(LitElement) {
       for (const soldier of next.soldiers) {
         const prev = this.game.soldiers.find((item) => item.id === soldier.id);
         if (prev && soldier.hp < prev.hp - 0.4) this.hurt.set(soldier.id, now + 160);
+        if (prev && soldier.attackReadyTick > prev.attackReadyTick) playSoldier(soldier.kind);
       }
       for (const soldier of this.game.soldiers) {
         if (!soldiers.has(soldier.id)) {
@@ -89,6 +91,14 @@ export class BoardSquare extends connect(connectStore)(LitElement) {
             linked: soldier.originId !== '' && !ids.has(soldier.originId),
           });
         }
+      }
+      const previousBlocks = new Set(this.game.blocks.map((block) => `${block.x},${block.y}`));
+      if (next.blocks.some((block) => !previousBlocks.has(`${block.x},${block.y}`))) playWall();
+      const previousEffects = new Set(this.game.effects.map((effect) => effect.id));
+      for (const effect of next.effects) {
+        if (previousEffects.has(effect.id)) continue;
+        playSpell(effect.spell);
+        break;
       }
       this.ruins = this.ruins.filter((ruin) => now - ruin.born < 1500);
       this.ashes = this.ashes.filter((ash) => now - ash.born < 700);
