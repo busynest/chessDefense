@@ -8,6 +8,7 @@ import { fallbackAim, longestRoute, pathToTower, pathToward } from './pathing.js
 import { createMatch } from './setup.js';
 import { step } from './simulate.js';
 import type { GameState, Soldier, Tower } from './types.js';
+import { forfeitState, linkPhase, RECONNECT_MS, STALE_MS, transit, unseenIds } from './link.js';
 import { shouldPublish } from './publish.js';
 import { BLOCKS, ECONOMY, KING_LEAK, OVERCHARGE, PIECES, SOLDIERS, SUDDEN, WAVES, buildableRows, overchargeCost, repairCost, upgradeCost } from './units.js';
 
@@ -166,6 +167,48 @@ test('after five minutes a soldier hurts the King harder', () => {
   const early = wound(20);
   const late = wound(SUDDEN.tick);
   assert.ok(late > early, `early ${early} late ${late}`);
+});
+
+test('the wire delays inside 150ms plus or minus 50ms and drops 2 percent', () => {
+  let drops = 0;
+  for (let i = 0; i < 1000; i += 1) {
+    const hop = transit(i / 1000, ((i * 17) % 1000) / 1000);
+    assert.ok(hop.delayMs >= 100 && hop.delayMs <= 200, String(hop.delayMs));
+    if (hop.drop) drops += 1;
+  }
+  assert.equal(drops, 20);
+  assert.equal(transit(0, 0.5).drop, true);
+  assert.equal(transit(0.5, 0.5).drop, false);
+});
+
+test('a dropped peer can return for 30 seconds and then forfeits', () => {
+  const seen = 1_000_000;
+  assert.equal(linkPhase(seen + 1000, seen, null).phase, 'live');
+  assert.equal(linkPhase(seen, 0, null).phase, 'live');
+  const down = linkPhase(seen + STALE_MS + 10, seen, null);
+  assert.equal(down.phase, 'reconnecting');
+  const back = linkPhase(seen + STALE_MS + 10, seen + STALE_MS + 10, down.noticedAt);
+  assert.equal(back.phase, 'live');
+  assert.equal(back.noticedAt, null);
+  const gone = linkPhase(down.noticedAt! + RECONNECT_MS, seen, down.noticedAt);
+  assert.equal(gone.phase, 'forfeit');
+});
+
+test('a command id is replayed once', () => {
+  const known = new Set(['a']);
+  assert.deepEqual(unseenIds(known, ['a', 'b', 'b', 'c']), ['b', 'c']);
+  assert.deepEqual(unseenIds(new Set(['a', 'b', 'c']), ['a', 'b']), []);
+});
+
+test('a forfeit names who left and does not damage towers', () => {
+  const state = playing();
+  const hp = state.towers.map((tower) => tower.hp);
+  const next = forfeitState(state, 'white', 'black');
+  assert.equal(next.status, 'victory');
+  assert.equal(next.winner, 'white');
+  assert.equal(next.banner?.text, 'Black left the match.');
+  assert.deepEqual(next.towers.map((tower) => tower.hp), hp);
+  assert.equal(state.status, 'playing');
 });
 
 test('the host publishes the tick the King falls', () => {

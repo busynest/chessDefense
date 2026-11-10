@@ -1,6 +1,6 @@
 import { towerAt } from './chess.js';
 import { chebyshev, mazeVerdict, placementSeals, towerCells } from './pathing.js';
-import type { GameState, Side, SpellId } from './types.js';
+import type { GameState, PlayerCommand, Side, SpellId } from './types.js';
 import { reportHarm } from './telemetry.js';
 import { BLOCKS, ECONOMY, OVERCHARGE, PIECES, REPAIR, SOLDIERS, SPELLS, combatOf, inBuildZone, isCenterRow, overchargeCost, repairCost, squareName, upgradeCost } from './units.js';
 import { reportOvercharge, reportRepair } from './telemetry.js';
@@ -292,4 +292,26 @@ export function tryRemoveBlock(input: GameState, side: Side, x: number, y: numbe
 
 export function label(side: Side): string {
   return side === 'white' ? 'White' : 'Black';
+}
+
+/** Apply one networked command. The caller rejects a command from the wrong seat first. */
+export function applyCommand(input: GameState, command: PlayerCommand): MoveResult {
+  switch (command.type) {
+    case 'upgrade':
+      return tryUpgrade(input, command.side, command.file, command.rank);
+    case 'repair':
+      return tryRepair(input, command.side, command.file, command.rank);
+    case 'overcharge':
+      return tryOvercharge(input, command.side, command.file, command.rank);
+    case 'spell':
+      return trySpell(input, command.side, command.spell);
+    case 'block':
+      return tryPlaceBlock(input, command.side, command.x, command.y);
+    case 'unblock':
+      return tryRemoveBlock(input, command.side, command.x, command.y);
+    case 'target':
+      return tryAim(input, command.side, command.file, command.rank);
+    default:
+      return { state: input, ok: false, reason: 'Unknown command.' };
+  }
 }

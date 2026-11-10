@@ -4,6 +4,7 @@ import { tryAim, tryOvercharge, tryPlaceBlock, tryRemoveBlock, tryRepair, trySpe
 import { createMatch, createMenu } from './setup.js';
 import { step } from './simulate.js';
 import type { Difficulty, GameState, Side, SpellId, Square } from './types.js';
+import type { LinkPhase } from './link.js';
 
 export interface GameSliceState {
   game: GameState;
@@ -13,6 +14,8 @@ export interface GameSliceState {
   onlineCode: string;
   onlineNote: string;
   record: 'idle' | 'saved' | 'error' | 'skipped';
+  /** Live, waiting on a dropped peer, or that peer's time ran out. */
+  link: LinkPhase;
 }
 
 const initialState: GameSliceState = {
@@ -23,6 +26,7 @@ const initialState: GameSliceState = {
   onlineCode: '',
   onlineNote: '',
   record: 'idle',
+  link: 'live',
 };
 
 const gameSlice = createSlice({
@@ -37,6 +41,7 @@ const gameSlice = createSlice({
       state.onlineCode = '';
       state.onlineNote = '';
       state.record = 'idle';
+      state.link = 'live';
     },
     startLocal(state, action: PayloadAction<{ mode: 'ai' | 'local'; difficulty: Difficulty; seed: number }>) {
       state.game = createMatch({
@@ -51,6 +56,7 @@ const gameSlice = createSlice({
       state.onlineCode = '';
       state.onlineNote = '';
       state.record = 'idle';
+      state.link = 'live';
     },
     beginOnline(state, action: PayloadAction<{ seed: number; role: 'host' | 'guest'; code: string }>) {
       const match = createMatch({
@@ -67,6 +73,19 @@ const gameSlice = createSlice({
       state.selected = null;
       state.placing = null;
       state.record = 'idle';
+      state.link = 'live';
+    },
+    resumeOnline(state, action: PayloadAction<{ role: 'host' | 'guest'; code: string; snapshot: GameState }>) {
+      state.game = action.payload.snapshot;
+      state.role = action.payload.role;
+      state.onlineCode = action.payload.code;
+      state.onlineNote = 'Match live.';
+      state.selected = null;
+      state.placing = null;
+      state.link = 'live';
+    },
+    setLink(state, action: PayloadAction<LinkPhase>) {
+      state.link = action.payload;
     },
     setPlacing(state, action: PayloadAction<Side | null>) {
       state.placing = action.payload;
@@ -147,6 +166,7 @@ const gameSlice = createSlice({
     },
     tick(state) {
       if (state.role === 'guest') return;
+      if (state.link === 'reconnecting') return;
       if (state.game.status !== 'playing') return;
       state.game = step(current(state.game));
     },
@@ -162,6 +182,8 @@ export const {
   beginOnline,
   setOnlineNote,
   openOnline,
+  resumeOnline,
+  setLink,
   applySnapshot,
   togglePause,
   selectSquare,

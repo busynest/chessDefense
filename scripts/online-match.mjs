@@ -15,6 +15,7 @@ import {
   connectFirestoreEmulator,
   doc,
   getDoc,
+  getDocs,
   getFirestore,
   onSnapshot,
   serverTimestamp,
@@ -22,7 +23,8 @@ import {
   updateDoc,
 } from 'firebase/firestore';
 
-import { tryOvercharge, tryPlaceBlock, tryRepair, trySpell, tryUpgrade } from '../out/game/commands.js';
+import { applyCommand, tryPlaceBlock } from '../out/game/commands.js';
+import { forfeitState, linkPhase, RECONNECT_MS, STALE_MS, transit, unseenIds } from '../out/game/link.js';
 import { rematchAgreed } from '../out/game/online.js';
 import { createMatch } from '../out/game/setup.js';
 import { step } from '../out/game/simulate.js';
@@ -58,27 +60,17 @@ function tower(state, side, kind) {
 
 function applyGuest(state, command) {
   if (command.side !== 'black') return { state, ok: false };
-  const result = command.type === 'upgrade'
-    ? tryUpgrade(state, 'black', command.file, command.rank)
-    : command.type === 'repair'
-      ? tryRepair(state, 'black', command.file, command.rank)
-      : command.type === 'overcharge'
-        ? tryOvercharge(state, 'black', command.file, command.rank)
-        : command.type === 'spell'
-          ? trySpell(state, 'black', command.spell)
-          : command.type === 'block'
-            ? tryPlaceBlock(state, 'black', command.x, command.y)
-            : null;
-  if (!result?.ok) return { state, ok: false };
+  const result = applyCommand(state, command);
+  if (!result.ok) return { state, ok: false };
   return { state: result.state, ok: true };
 }
 
-function listen(db) {
+function listen(db, match = code) {
   const queue = [];
   let live = false;
   let opened;
   const ready = new Promise((resolve) => { opened = resolve; });
-  const stop = onSnapshot(collection(db, 'matches', code, 'inputs'), (snap) => {
+  const stop = onSnapshot(collection(db, 'matches', match, 'inputs'), (snap) => {
     if (!live) {
       live = true;
       opened();
@@ -104,25 +96,25 @@ function listen(db) {
   };
 }
 
-async function send(db, uid, command) {
-  await addDoc(collection(db, 'matches', code, 'inputs'), {
+async function send(db, uid, command, match = code) {
+  await addDoc(collection(db, 'matches', match, 'inputs'), {
     uid,
     command,
     at: serverTimestamp(),
   });
 }
 
-async function publish(db, state) {
-  await updateDoc(doc(db, 'matches', code), {
+async function publish(db, state, match = code) {
+  await updateDoc(doc(db, 'matches', match), {
     snapshot: state,
     status: state.status,
     winner: state.winner,
   });
 }
 
-function watch(db) {
+function watch(db, match = code) {
   let data = null;
-  const stop = onSnapshot(doc(db, 'matches', code), (snap) => {
+  const stop = onSnapshot(doc(db, 'matches', match), (snap) => {
     data = snap.data();
   });
   return {
@@ -297,6 +289,131 @@ const agreed = await returned.until((data) => rematchAgreed(data));
 assert.equal(rematchAgreed(agreed), true);
 inputs.stop();
 returned.stop();
+
+const wire = 'EML2';
+await setDoc(doc(host.db, 'matches', wire), {
+  hostId: hostUser.uid,
+  guestId: null,
+  seed: 11,
+  status: 'playing',
+  pulse: { host: Date.now(), guest: 0 },
+  appliedIds: [],
+  createdAt: serverTimestamp(),
+});
+await updateDoc(doc(guest.db, 'matches', wire), { guestId: guestUser.uid });
+await updateDoc(doc(guest.db, 'matches', wire), { 'pulse.guest': Date.now() });
+let live = createMatch({ mode: 'online', difficulty: 'normal', seed: 11, humanSide: 'white' });
+live.gold.black = 500;
+live.mana.black = 100;
+await publish(host.db, live, wire);
+const wireView = watch(guest.db, wire);
+await wireView.until((data) => data.snapshot && data.snapshot.seed === 11);
+const wireInputs = listen(host.db, wire);
+await wireInputs.ready;
+
+const delays = [];
+let drops = 0;
+async function deliver(command) {
+  let hop = transit(drops === 0 ? 0 : 0.9, 0.4);
+  delays.push(hop.delayMs);
+  await new Promise((resolve) => setTimeout(resolve, hop.delayMs));
+  if (hop.drop) {
+    drops += 1;
+    hop = transit(0.9, 0.7);
+    delays.push(hop.delayMs);
+    await new Promise((resolve) => setTimeout(resolve, hop.delayMs));
+    assert.equal(hop.drop, false);
+  }
+  await send(guest.db, guestUser.uid, command, wire);
+}
+
+const wirePawn = tower(live, 'black', 'pawn');
+await deliver({ type: 'upgrade', side: 'black', file: wirePawn.file, rank: wirePawn.rank });
+live = applyGuest(live, await wireInputs.next()).state;
+assert.equal(tower(live, 'black', 'pawn').level, 2);
+
+const wireKnight = tower(live, 'black', 'knight');
+wireKnight.hp = Math.max(1, wireKnight.hp - 30);
+const wireHurt = wireKnight.hp;
+await deliver({ type: 'repair', side: 'black', file: wireKnight.file, rank: wireKnight.rank });
+live = applyGuest(live, await wireInputs.next()).state;
+assert.ok(tower(live, 'black', 'knight').hp > wireHurt);
+
+const wireRook = tower(live, 'black', 'rook');
+wireRook.level = 3;
+await deliver({ type: 'overcharge', side: 'black', file: wireRook.file, rank: wireRook.rank });
+live = applyGuest(live, await wireInputs.next()).state;
+assert.equal(tower(live, 'black', 'rook').overchargeUses, 1);
+
+await deliver({ type: 'spell', side: 'black', spell: 'heal' });
+live = applyGuest(live, await wireInputs.next()).state;
+assert.ok(live.mana.black < 100);
+
+await deliver({ type: 'block', side: 'black', x: 4, y: 9 });
+live = applyGuest(live, await wireInputs.next()).state;
+assert.equal(live.blocks.filter((block) => block.side === 'black' && block.hp > 0).length, 1);
+
+const wireQueen = tower(live, 'white', 'queen');
+await deliver({ type: 'target', side: 'black', file: wireQueen.file, rank: wireQueen.rank });
+live = applyGuest(live, await wireInputs.next()).state;
+assert.equal(live.waveTarget.black.file, wireQueen.file);
+assert.equal(live.waveTarget.black.rank, wireQueen.rank);
+
+assert.equal(drops, 1);
+assert.ok(delays.every((delay) => delay >= 100 && delay <= 200));
+
+const listed = await getDocs(collection(host.db, 'matches', wire, 'inputs'));
+const known = new Set(listed.docs.map((item) => item.id));
+await deliver({ type: 'target', side: 'black', file: -1, rank: -1 });
+const after = await getDocs(collection(host.db, 'matches', wire, 'inputs'));
+const fresh = unseenIds(known, after.docs.map((item) => item.id));
+assert.equal(fresh.length, 1);
+const replayed = after.docs.find((item) => item.id === fresh[0]).data().command;
+live = applyGuest(live, replayed).state;
+assert.equal(live.waveTarget.black, null);
+assert.deepEqual(unseenIds(new Set([...known, fresh[0]]), after.docs.map((item) => item.id)), []);
+
+const now = Date.now();
+const dropped = linkPhase(now, now - STALE_MS - 50, null);
+assert.equal(dropped.phase, 'reconnecting');
+const returnedLink = linkPhase(now, now, dropped.noticedAt);
+assert.equal(returnedLink.phase, 'live');
+const expired = linkPhase(dropped.noticedAt + RECONNECT_MS, now - STALE_MS - 50, dropped.noticedAt);
+assert.equal(expired.phase, 'forfeit');
+
+await publish(host.db, live, wire);
+await wireView.until((data) => data.snapshot && data.snapshot.waveTarget.black === null && data.snapshot.blocks.some((block) => block.y === 9));
+
+const wireKing = tower(live, 'black', 'king');
+wireKing.hp = 0;
+live = step(live);
+assert.equal(live.status, 'victory');
+assert.equal(live.winner, 'white');
+const wireHop = transit(0.8, 0.3);
+await new Promise((resolve) => setTimeout(resolve, wireHop.delayMs));
+await publish(host.db, live, wire);
+const wireEnding = await wireView.until((data) => data.status === 'victory' && data.snapshot && data.snapshot.winner === 'white');
+assert.equal(wireEnding.snapshot.status, 'victory');
+
+await updateDoc(doc(host.db, 'matches', wire), { rematch: { host: false, guest: false }, status: 'victory' });
+const guestHop = transit(0.6, 0.2);
+await new Promise((resolve) => setTimeout(resolve, guestHop.delayMs));
+await updateDoc(doc(guest.db, 'matches', wire), { 'rematch.guest': true });
+const hostHop = transit(0.7, 0.8);
+await new Promise((resolve) => setTimeout(resolve, hostHop.delayMs));
+await updateDoc(doc(host.db, 'matches', wire), { 'rematch.host': true });
+const agreedWire = await wireView.until((data) => rematchAgreed(data));
+assert.equal(rematchAgreed(agreedWire), true);
+
+const forfeited = forfeitState(live, 'black', 'white');
+assert.equal(forfeited.winner, 'black');
+assert.equal(forfeited.banner.text, 'White left the match.');
+await publish(host.db, forfeited, wire);
+const wireLeft = await wireView.until((data) => data.snapshot && data.snapshot.banner && data.snapshot.banner.text === 'White left the match.');
+assert.equal(wireLeft.winner, 'black');
+
+wireInputs.stop();
+wireView.stop();
 await signOut(host.auth);
 await signOut(guest.auth);
 console.log('online emulator match passed');

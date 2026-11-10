@@ -6,6 +6,8 @@ import { towerAt } from './chess.js';
 import {
   applySnapshot,
   beginOnline,
+  resumeOnline,
+  setLink,
   controlsSide,
   markRecord,
   openOnline,
@@ -28,7 +30,8 @@ import {
 } from './game_state.js';
 import { handleAim, handleOvercharge, handleRepair, handleSpell, handleUpgrade } from './input.js';
 import { rememberMatch, recentMatches } from './history.js';
-import { clearRematch, closeMatch, createMatchDoc, joinMatchDoc, matchCode, offerRematch, publishSnapshot, readMatch, rematchAgreed, signedInUid, watchInputs, watchMatch } from './online.js';
+import { clearRematch, closeMatch, claimForfeit, createMatchDoc, joinMatchDoc, matchCode, noteApplied, offerRematch, publishSnapshot, pulseMatch, readMatch, rematchAgreed, signedInUid, watchInputs, watchMatch, type MatchDoc } from './online.js';
+import { forfeitState, Presence, RECONNECT_MS, secondsLeft } from './link.js';
 import { createMatch } from './setup.js';
 import { shouldPublish } from './publish.js';
 import { loadCareer, recordResult } from './record.js';
@@ -74,6 +77,12 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
     { text: 'Blessing, Heal, and Blast belong to the Queen. At five minutes the kings are exposed and hits land harder.', coach: 'blessing' },
   ];
   private rematchBusy = false;
+  private presence = new Presence();
+  private pulseTimer = 0;
+  private matchPulse: { host?: number; guest?: number } = {};
+  private sawPeer = false;
+  private relisten = 0;
+  private forfeited = false;
 
   override stateChanged(state: RootState): void {
     this.slice = state.game;
@@ -90,13 +99,11 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
 
   protected override firstUpdated(): void {
     window.addEventListener('keydown', this.onKey);
-    window.addEventListener('pagehide', this.abandonIfHost);
     window.addEventListener('chessdefense-tour', this.onTour);
   }
 
   override disconnectedCallback(): void {
     window.removeEventListener('keydown', this.onKey);
-    window.removeEventListener('pagehide', this.abandonIfHost);
     window.removeEventListener('chessdefense-tour', this.onTour);
     super.disconnectedCallback();
     this.stopLoop();
@@ -215,7 +222,7 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
     this.raf = requestAnimationFrame(this.frame);
     if (!this.active || document.hidden) return;
     const slice = store.getState().game;
-    if (slice.role === 'guest' || slice.game.status !== 'playing') return;
+    if (slice.role === 'guest' || slice.link === 'reconnecting' || slice.game.status !== 'playing') return;
     if (this.last === 0) this.last = now;
     let delta = now - this.last;
     this.last = now;
@@ -234,19 +241,96 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
       this.code = slice.onlineCode;
       this.seen.clear();
       this.lastPublish = -1;
-      if (this.code) {
-        this.stopMatch = watchMatch(this.code, (data) => this.onMatch(data), (message) => store.dispatch(setOnlineNote(message)));
-        if (slice.role === 'host') {
-          this.stopInputs = watchInputs(this.code, (id, command) => this.onInput(id, command), (message) => store.dispatch(setOnlineNote(message)));
-        }
-      }
+      this.sawPeer = false;
+      this.forfeited = false;
+      this.presence = new Presence();
+      this.matchPulse = {};
+      if (this.code) void this.openSession(this.code, slice.role);
     }
-    if (slice.role === 'host' && shouldPublish(slice.game.status, slice.game.tick, this.lastPublish)) {
+    if (slice.role === 'host' && slice.link !== 'reconnecting' && shouldPublish(slice.game.status, slice.game.tick, this.lastPublish)) {
       this.lastPublish = slice.game.tick;
-      void publishSnapshot(slice.onlineCode, slice.game).catch((error: unknown) => {
+      void publishSnapshot(slice.onlineCode, slice.game, [...this.seen]).catch((error: unknown) => {
         store.dispatch(setOnlineNote(error instanceof Error ? error.message : 'Could not sync the match.'));
       });
     }
+  }
+
+  private async openSession(code: string, role: GameSliceState['role']): Promise<void> {
+    try {
+      const data = await readMatch(code);
+      if (this.code !== code) return;
+      for (const id of data.appliedIds ?? []) this.seen.add(id);
+      this.matchPulse = data.pulse ?? {};
+    } catch {
+      /* The live listener reports a missing match. */
+    }
+    if (this.code !== code) return;
+    this.stopMatch?.();
+    this.stopInputs?.();
+    this.stopMatch = watchMatch(code, (data) => this.onMatch(data), (message) => this.onLinkError(message));
+    if (role === 'host') {
+      this.stopInputs = watchInputs(code, (id, command) => this.onInput(id, command), (message) => this.onLinkError(message), this.seen);
+    }
+    this.startPulse();
+  }
+
+  private onLinkError(message: string): void {
+    store.dispatch(setOnlineNote(message || 'Reconnecting…'));
+    store.dispatch(setLink('reconnecting'));
+    if (this.relisten) return;
+    this.relisten = window.setTimeout(() => {
+      this.relisten = 0;
+      const slice = store.getState().game;
+      if (!this.code || slice.onlineCode !== this.code) return;
+      void this.openSession(this.code, slice.role);
+    }, 1000);
+  }
+
+  private startPulse(): void {
+    this.stopPulse();
+    const beat = (): void => {
+      const slice = store.getState().game;
+      if (!slice.onlineCode || (slice.role !== 'host' && slice.role !== 'guest')) return;
+      void pulseMatch(slice.onlineCode, slice.role).catch(() => undefined);
+      this.reviewLink();
+    };
+    beat();
+    this.pulseTimer = window.setInterval(beat, 2000);
+  }
+
+  private stopPulse(): void {
+    if (this.pulseTimer) window.clearInterval(this.pulseTimer);
+    this.pulseTimer = 0;
+  }
+
+  private reviewLink(): void {
+    const slice = store.getState().game;
+    if (slice.game.mode !== 'online' || slice.role === 'none') return;
+    if (slice.game.status === 'victory' || slice.game.status === 'menu' || slice.game.status === 'lobby') return;
+    const peer = slice.role === 'host' ? (this.matchPulse.guest ?? 0) : (this.matchPulse.host ?? 0);
+    if (!this.sawPeer) {
+      if (peer > 0) this.sawPeer = true;
+      return;
+    }
+    const phase = this.presence.see(Date.now(), peer);
+    if (phase !== slice.link) store.dispatch(setLink(phase));
+    if (phase === 'reconnecting') {
+      const left = secondsLeft(Date.now(), this.presence.noticedAt);
+      store.dispatch(setOnlineNote(`Reconnecting… ${left}s`));
+    } else if (phase === 'live' && slice.onlineNote.startsWith('Reconnecting')) {
+      store.dispatch(setOnlineNote('Match live.'));
+    }
+    if (phase !== 'forfeit' || this.forfeited) return;
+    this.forfeited = true;
+    if (slice.role === 'host') {
+      const next = forfeitState(slice.game, 'white', 'black');
+      store.dispatch(applySnapshot(next));
+      void publishSnapshot(slice.onlineCode, next, [...this.seen]).catch(() => undefined);
+      return;
+    }
+    const next = forfeitState(slice.game, 'black', 'white');
+    store.dispatch(applySnapshot(next));
+    void claimForfeit(slice.onlineCode, 'black', 'white').catch(() => undefined);
   }
 
   private teardown(): void {
@@ -254,10 +338,21 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
     this.stopInputs?.();
     this.stopMatch = null;
     this.stopInputs = null;
+    this.stopPulse();
+    if (this.relisten) window.clearTimeout(this.relisten);
+    this.relisten = 0;
   }
 
-  private onMatch(data: { guestId: string | null; status?: string; snapshot?: GameState; rematch?: { host?: boolean; guest?: boolean } }): void {
+  private onMatch(data: MatchDoc): void {
     const slice = store.getState().game;
+    this.matchPulse = data.pulse ?? this.matchPulse;
+    if ((data.pulse?.host ?? 0) > 0 && (data.pulse?.guest ?? 0) > 0) this.sawPeer = true;
+    if (data.forfeit && slice.role === 'host' && data.forfeit.by === 'white' && slice.game.status !== 'victory') {
+      const next = forfeitState(store.getState().game.game, data.forfeit.winner, 'white');
+      store.dispatch(applySnapshot(next));
+      void publishSnapshot(slice.onlineCode, next, [...this.seen]).catch(() => undefined);
+      return;
+    }
     if (slice.role === 'host' && data.guestId && slice.game.status === 'lobby') {
       store.dispatch(openOnline());
       const live = store.getState().game.game;
@@ -277,6 +372,10 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
         seed: (slice.game.seed + 1) >>> 0 || 1,
         humanSide: 'white',
       });
+      this.sawPeer = false;
+      this.presence = new Presence();
+      this.forfeited = false;
+      store.dispatch(setLink('live'));
       store.dispatch(applySnapshot(fresh));
       store.dispatch(setOnlineNote('Rematch live.'));
       void publishSnapshot(slice.onlineCode, fresh)
@@ -291,6 +390,10 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
     }
     if (slice.role === 'guest' && data.snapshot) {
       store.dispatch(applySnapshot(data.snapshot));
+      if (store.getState().game.link === 'reconnecting') {
+        this.reviewLink();
+        return;
+      }
       const status = data.status === 'abandoned' ? 'abandoned' : data.snapshot.status;
       const note = status === 'abandoned'
         ? 'The host left the match.'
@@ -299,11 +402,13 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
           : status === 'playing' ? 'Match live.' : '';
       if (note) store.dispatch(setOnlineNote(note));
     }
+    this.reviewLink();
   }
 
   private onInput(id: string, command: PlayerCommand): void {
     if (this.seen.has(id)) return;
     this.seen.add(id);
+    if (this.code) void noteApplied(this.code, id).catch(() => undefined);
     if (store.getState().game.role !== 'host' || command.side !== 'black') return;
     if (command.type === 'upgrade') {
       store.dispatch(playUpgrade({ file: command.file, rank: command.rank, side: 'black' }));
@@ -458,9 +563,22 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
     try {
       const data = await readMatch(code);
       if (data.status === 'abandoned' || data.status === 'victory') throw new Error('That match is already over.');
-      if (data.hostId === uid) throw new Error('Open your own match from this browser, or share the code.');
+      if (data.forfeit) throw new Error('That match is already over.');
+      if (data.hostId === uid) {
+        if (!data.snapshot) throw new Error('Open your own match from this browser, or share the code.');
+        const seen = data.pulse?.host ?? 0;
+        if (seen > 0 && Date.now() - seen > RECONNECT_MS) throw new Error('That match is already over.');
+        store.dispatch(resumeOnline({ role: 'host', code, snapshot: data.snapshot }));
+        return;
+      }
       if (data.guestId && data.guestId !== uid) throw new Error('That match already has two players.');
       if (!data.guestId) await joinMatchDoc(code, uid);
+      if (data.snapshot && data.snapshot.status !== 'lobby') {
+        const seen = data.pulse?.guest ?? 0;
+        if (seen > 0 && Date.now() - seen > RECONNECT_MS) throw new Error('That match is already over.');
+        store.dispatch(resumeOnline({ role: 'guest', code, snapshot: data.snapshot }));
+        return;
+      }
       store.dispatch(beginOnline({ seed: data.seed, role: 'guest', code }));
     } catch (error) {
       store.dispatch(setOnlineNote(error instanceof Error ? error.message : 'Could not join the match.'));
@@ -474,6 +592,16 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
       h1 { margin: 0; text-align: center; font-size: 2.4rem; color: #f6e7a8; text-shadow: 0 2px 0 #2a160c; }
       .lede { text-align: center; margin: 6px 0 0; color: #e6d3b4; }
       .menu, .play { display: grid; gap: 14px; }
+      .reconnect {
+        margin: 0;
+        padding: 10px 12px;
+        border-radius: 10px;
+        background: #8c3a2a;
+        color: #fff6e8;
+        text-align: center;
+        font-family: Cinzel, Palatino, serif;
+        letter-spacing: 0.04em;
+      }
       .card, .hud, .end {
         background:
           linear-gradient(180deg, rgba(62, 42, 28, 0.92), rgba(22, 14, 10, 0.92));
@@ -583,6 +711,7 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
         <div id="coach-arrow" class="pointer" hidden></div>
         ${this.hud(slice)}
         <div class="table">
+          ${slice.link === 'reconnecting' ? html`<p class="reconnect" role="status">Reconnecting…</p>` : ''}
           <p class="banner">${slice.game.banner?.text ?? ''}</p>
           <board-square
             .coachFile=${this.coachCell().file}
@@ -615,7 +744,7 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
         </div>
         <div class="card">
           <strong>Online 1v1</strong>
-          <p>Sign in, then host a code or join one. The host runs the match. You play White when you host, Black when you join.</p>
+          <p>Sign in, then host a code or join one. The host runs the match. You play White when you host, Black when you join. Enter the same code within 30 seconds to resume a dropped match.</p>
           <div class="row">
             <button type="button" @click=${() => this.host()}>Host match</button>
             <input .value=${this.joinValue} @input=${(event: Event) => { this.joinValue = (event.target as HTMLInputElement).value; }} placeholder="Code" maxlength="4" aria-label="Match code" />
