@@ -9,10 +9,13 @@ import {
   controlsSide,
   markRecord,
   openOnline,
+  playBlock,
   playMove,
   playSpell,
+  playUnblock,
   playerSide,
   setOnlineNote,
+  setPlacing,
   showMenu,
   startLocal,
   tick,
@@ -150,8 +153,12 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
         to: { file: command.toFile, rank: command.toRank },
         side: 'black',
       }));
-    } else {
+    } else if (command.type === 'spell') {
       store.dispatch(playSpell({ side: 'black', spell: command.spell }));
+    } else if (command.type === 'block') {
+      store.dispatch(playBlock({ side: 'black', x: command.x, y: command.y }));
+    } else {
+      store.dispatch(playUnblock({ side: 'black', x: command.x, y: command.y }));
     }
   }
 
@@ -324,6 +331,9 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
     const game = slice.game;
     const selected = slice.selected ? towerAt(game, slice.selected.file, slice.selected.rank) : undefined;
     const remain = Math.max(0, (game.nextWaveTick - game.tick) * 0.1);
+    const waveLabel = game.wave === 0
+      ? `Build · wave 1 in ${remain.toFixed(0)}s`
+      : `Wave ${game.wave} · next ${remain.toFixed(0)}s`;
     const sides: Side[] = game.mode === 'local' ? ['white', 'black'] : [playerSide(slice) ?? 'white'];
     return html`
       <aside class="hud">
@@ -333,7 +343,17 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
           </button>
           <button type="button" class="quiet" @click=${() => store.dispatch(showMenu())}>Menu</button>
         </div>
-        <div class="gold">Wave ${game.wave} · next ${remain.toFixed(0)}s</div>
+        <div class="gold">${waveLabel}</div>
+        <div class="row">
+          ${sides.map((side) => html`
+            <button
+              type="button"
+              class=${slice.placing === side ? '' : 'quiet'}
+              @click=${() => store.dispatch(setPlacing(slice.placing === side ? null : side))}>
+              ${side === 'white' ? 'White walls' : 'Black walls'}
+            </button>
+          `)}
+        </div>
         ${game.mode === 'online' ? html`<div>Code <strong>${slice.onlineCode}</strong> · ${slice.role === 'host' ? 'White' : 'Black'}</div>` : ''}
         <p class="note">${slice.onlineNote}</p>
         ${(['white', 'black'] as const).map((side) => html`
@@ -378,7 +398,7 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
     return html`
       <div class="end">
         <h2>${text}</h2>
-        <p>Wave ${slice.game.wave}. ${saved}</p>
+        <p>${winner === 'draw' ? 'Both King towers fell together.' : 'The enemy King tower has fallen.'} Wave ${slice.game.wave}. ${saved}</p>
         <div class="row" style="justify-content:center;">
           ${slice.game.mode === 'online'
             ? html`<button type="button" @click=${() => store.dispatch(showMenu())}>Back to menu</button>`

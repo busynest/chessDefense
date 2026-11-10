@@ -10,13 +10,10 @@ export const TICK_SECONDS = 0.1;
 export const ECONOMY = {
   goldPerTick: 1,
   manaPerTick: 0.5,
-  startingGold: 36,
+  startingGold: 48,
   startingMana: 18,
   goldCap: 400,
   manaCap: 160,
-  waveEveryTicks: 200,
-  waveCooldownFactor: 0.88,
-  minCooldownFactor: 0.4,
 };
 
 export interface PieceDef {
@@ -25,7 +22,6 @@ export interface PieceDef {
   hp: number;
   moveCost: number;
   moveTicks: number;
-  spawnTicks: number;
   auraRange: number;
   auraDamage: number;
   auraTicks: number;
@@ -70,7 +66,6 @@ export const PIECES: Record<PieceKind, PieceDef> = {
     hp: 48,
     moveCost: 8,
     moveTicks: 40,
-    spawnTicks: 36,
     auraRange: 2,
     auraDamage: 3,
     auraTicks: 12,
@@ -82,7 +77,6 @@ export const PIECES: Record<PieceKind, PieceDef> = {
     hp: 80,
     moveCost: 18,
     moveTicks: 50,
-    spawnTicks: 70,
     auraRange: 1,
     auraDamage: 8,
     auraTicks: 14,
@@ -94,7 +88,6 @@ export const PIECES: Record<PieceKind, PieceDef> = {
     hp: 55,
     moveCost: 16,
     moveTicks: 50,
-    spawnTicks: 48,
     auraRange: 4,
     auraDamage: 5,
     auraTicks: 12,
@@ -106,7 +99,6 @@ export const PIECES: Record<PieceKind, PieceDef> = {
     hp: 100,
     moveCost: 24,
     moveTicks: 70,
-    spawnTicks: 90,
     auraRange: 5,
     auraDamage: 12,
     auraTicks: 16,
@@ -118,7 +110,6 @@ export const PIECES: Record<PieceKind, PieceDef> = {
     hp: 90,
     moveCost: 30,
     moveTicks: 80,
-    spawnTicks: 110,
     auraRange: 4,
     auraDamage: 8,
     auraTicks: 14,
@@ -130,7 +121,6 @@ export const PIECES: Record<PieceKind, PieceDef> = {
     hp: 140,
     moveCost: 20,
     moveTicks: 60,
-    spawnTicks: 130,
     auraRange: 2,
     auraDamage: 9,
     auraTicks: 12,
@@ -201,9 +191,43 @@ export function otherSide(side: Side): Side {
   return side === 'white' ? 'black' : 'white';
 }
 
-export function waveScale(wave: number): number {
-  const factor = Math.pow(ECONOMY.waveCooldownFactor, Math.max(0, wave - 1));
-  return Math.max(ECONOMY.minCooldownFactor, factor);
+/**
+ * Discrete waves. The match opens with a build phase, then every living tower
+ * releases its soldiers at once. Later waves send more of them, with more life
+ * and strength. Nothing spawns between launches.
+ */
+export const WAVES = {
+  /** Ticks of building before wave 1. 12 seconds. */
+  firstWaveTick: 120,
+  /** Ticks from one launch to the next. 15 seconds. */
+  gapTicks: 150,
+  /** Most soldiers one side may have on the board. */
+  soldierCap: 40,
+  unitsForWave(wave: number): number {
+    if (wave <= 2) return 1;
+    if (wave <= 4) return 2;
+    return 3;
+  },
+  /** Life and strength multiplier. Wave 1 is 1. Each later wave adds 15%. */
+  statScale(wave: number): number {
+    return 1 + Math.max(0, wave - 1) * 0.15;
+  },
+};
+
+/**
+ * Player walls. y 0 is White's back rank, drawn at the bottom.
+ * White may build on y 0–7 (screen rows 8–15). Black may build on y 8–15 (screen rows 0–7).
+ * Soldiers can break a wall, so a maze only stalls.
+ */
+export const BLOCKS = {
+  cost: 12,
+  hp: 28,
+  /** Gold returned when the owner picks the wall back up. */
+  refund: 6,
+};
+
+export function ownsHalf(side: Side, y: number): boolean {
+  return side === 'white' ? y >= 0 && y <= 7 : y >= 8 && y <= 15;
 }
 
 /** How often the AI considers a move or a spell, in ticks. */

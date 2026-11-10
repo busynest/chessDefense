@@ -2,12 +2,12 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import { legalMoves, towerAt } from './chess.js';
-import { tryMove, trySpell } from './commands.js';
+import { tryMove, tryPlaceBlock, tryRemoveBlock, trySpell } from './commands.js';
 import { pathToward } from './pathing.js';
 import { createMatch } from './setup.js';
 import { step } from './simulate.js';
 import type { GameState, Soldier, Tower } from './types.js';
-import { PIECES } from './units.js';
+import { BLOCKS, PIECES, WAVES } from './units.js';
 
 function playing(): GameState {
   return createMatch({ mode: 'local', difficulty: 'normal', seed: 7 });
@@ -34,7 +34,6 @@ function place(state: GameState, partial: Pick<Tower, 'side' | 'kind' | 'file' |
     hp: partial.hp ?? def.hp,
     maxHp: def.hp,
     moveReadyTick: 0,
-    spawnReadyTick: 9999,
     auraReadyTick: 9999,
     hurtBy: null,
   };
@@ -92,13 +91,18 @@ test('friendly towers cannot stack', () => {
   assert.equal(moved.ok, false);
 });
 
-test('pawns spawn peasants on the open cell in front of them', () => {
-  const state = playing();
-  for (const tower of state.towers) tower.spawnReadyTick = 0;
-  const next = step(state);
-  const peasants = next.soldiers.filter((soldier) => soldier.kind === 'peasant' && soldier.side === 'white');
-  assert.ok(peasants.length >= 8);
+test('the first wave is one launch after the build, and the next wave waits', () => {
+  let state = playing();
+  assert.equal(state.wave, 0);
+  assert.equal(state.soldiers.length, 0);
+  while (state.wave === 0) state = step(state);
+  assert.equal(state.tick, WAVES.firstWaveTick);
+  const peasants = state.soldiers.filter((soldier) => soldier.kind === 'peasant' && soldier.side === 'white');
+  assert.equal(peasants.length, 8);
   assert.ok(peasants.every((soldier) => soldier.y >= 4));
+  const quiet = step(state);
+  assert.equal(quiet.wave, 1);
+  assert.equal(quiet.soldiers.filter((soldier) => soldier.side === 'white' && soldier.kind === 'peasant').length, 8);
 });
 
 test('pathing walks around a wall and toward the enemy king', () => {
@@ -106,7 +110,7 @@ test('pathing walks around a wall and toward the enemy king', () => {
   place(state, { side: 'black', kind: 'king', file: 4, rank: 7 });
   state.blocks = [];
   for (let x = 0; x < 16; x += 1) {
-    if (x !== 15) state.blocks.push({ x, y: 8 });
+    if (x !== 15) state.blocks.push({ x, y: 8, side: 'black', hp: 28, maxHp: 28, hurtBy: null });
   }
   const path = pathToward(state, 0, 4, 'white');
   assert.ok(path.length > 0);
@@ -132,6 +136,7 @@ test('melee combat damages a soldier and removes it at zero life', () => {
     buffUntil: 0,
     buffStr: 0,
     buffSpeed: 1,
+    power: 1,
     hurtBy: null,
   };
   const defender: Soldier = { ...attacker, id: 'b', side: 'black', kind: 'peasant', x: 1, y: 2, hp: 5, maxHp: 16 };
@@ -159,6 +164,7 @@ test('destroying the enemy king ends the match', () => {
     buffUntil: 0,
     buffStr: 0,
     buffSpeed: 1,
+    power: 1,
     hurtBy: null,
   }];
   const next = step(state);
@@ -186,6 +192,7 @@ test('a queen blessing buffs a nearby friendly soldier and spends mana', () => {
     buffUntil: 0,
     buffStr: 0,
     buffSpeed: 1,
+    power: 1,
     hurtBy: null,
   }];
   const cast = trySpell(state, 'white', 'blessing');
@@ -223,4 +230,64 @@ test('a scripted attack can defeat the easy AI king', () => {
   }
   assert.equal(state.status, 'victory');
   assert.ok(state.winner === 'white' || state.winner === 'black');
+});
+
+test('white cannot wall the top half, and a sealed rank is rejected', () => {
+  const state = bare();
+  state.gold.white = 500;
+  state.gold.black = 500;
+  const wrongHalf = tryPlaceBlock(state, 'white', 3, 8);
+  assert.equal(wrongHalf.ok, false);
+  const topHalf = tryPlaceBlock(state, 'black', 3, 8);
+  assert.equal(topHalf.ok, true);
+  const bottom = tryPlaceBlock(state, 'white', 3, 7);
+  assert.equal(bottom.ok, true);
+
+  let walled = bare();
+  walled.gold.white = 500;
+  for (let x = 0; x < 15; x += 1) {
+    const placed = tryPlaceBlock(walled, 'white', x, 7);
+    assert.equal(placed.ok, true, `gap remains at ${x}`);
+    walled = placed.state;
+  }
+  const sealed = tryPlaceBlock(walled, 'white', 15, 7);
+  assert.equal(sealed.ok, false);
+  assert.match(sealed.reason, /seal/);
+});
+
+test('a tower at zero life is removed and no longer blocks its cells', () => {
+  const state = bare();
+  const pawn = place(state, { side: 'black', kind: 'pawn', file: 0, rank: 6, hp: 4 });
+  place(state, { side: 'white', kind: 'king', file: 4, rank: 0 });
+  place(state, { side: 'black', kind: 'king', file: 4, rank: 7 });
+  state.soldiers = [{
+    id: 'axe',
+    side: 'white',
+    kind: 'peasant',
+    x: 0,
+    y: 11,
+    hp: 40,
+    maxHp: 40,
+    attackReadyTick: 0,
+    repathTick: 9999,
+    path: [],
+    buffUntil: 0,
+    buffStr: 0,
+    buffSpeed: 1,
+    power: 1,
+    hurtBy: null,
+  }];
+  const next = step(state);
+  assert.equal(next.towers.some((tower) => tower.id === pawn.id), false);
+  assert.equal(next.status, 'playing');
+});
+
+test('selling a block returns part of its cost', () => {
+  const state = bare();
+  const placed = tryPlaceBlock(state, 'white', 2, 5);
+  assert.equal(placed.ok, true);
+  const removed = tryRemoveBlock(placed.state, 'white', 2, 5);
+  assert.equal(removed.ok, true);
+  assert.equal(removed.state.blocks.length, 0);
+  assert.equal(removed.state.gold.white, 200 - BLOCKS.cost + BLOCKS.refund);
 });

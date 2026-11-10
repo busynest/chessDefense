@@ -10,13 +10,13 @@ There are two layers.
 
 There is no castling, no en passant, and pawns do not promote. A pawn moves one square toward the enemy, or two from its starting square when the path is clear, and captures one square diagonally forward.
 
-**Armies, the 16×16.** Every chess square is split into four cells. Towers build soldiers onto the cell in front of them. Soldiers march toward the enemy King, route around towers and stone blocks, fight enemy soldiers in range, and damage towers. Soldiers do not block each other. Towers and blocks do.
+**Armies, the 16×16.** Every chess square is split into four cells. Soldiers do not spawn in a trickle. After a 12 second build, every living tower releases its soldier at once: pawns send peasants, knights send cavalry, bishops send archers, rooks send iron cannons, the Queen sends a mage, and the King sends a royal guard. The next wave is 15 seconds later. Wave 1 and 2 send one soldier per tower. Waves 3 and 4 send two. Wave 5 and after send three, and each wave adds 15% life and strength. A side can have 40 soldiers on the board. Anyone past that cap waits for the next launch.
 
-A side may have at most 16 soldiers at once. Further spawns wait until there is room.
+Soldiers march toward the enemy King, route around towers and blocks, fight enemy soldiers in range, and attack towers. A tower at zero life is destroyed and leaves the 8×8. Its four cells open up, and it stops sending waves. Towers also shoot soldiers that walk into their range.
 
-**Economy.** Both towns earn 10 gold and 5 mana each second, starting from 36 gold and 18 mana. Gold pays for tower moves. Mana pays for Queen spells. Gold caps at 400 and mana at 160.
+**Blocks.** Each player spends 12 gold to place a wall on the 16×16 grid, only on their own half. White's half is the bottom eight rows (screen rows 8–15). Black's half is the top eight (screen rows 0–7). A wall has 28 life. Soldiers that stand next to one will break it, so a maze only stalls. Picking up your own wall refunds 6 gold. A placement that would wall off every route between the two home ranks is rejected. Walls cannot sit on a tower cell or on another wall.
 
-**Waves.** Every 20 seconds the wave number rises and spawn cooldowns shorten, down to 40% of the opening pace.
+**Economy.** Both towns earn 10 gold and 5 mana each second, starting from 48 gold and 18 mana. Gold pays for tower moves and blocks. Mana pays for Queen spells. Gold caps at 400 and mana at 160.
 
 **Queen magic.** Only a living Queen can cast, and every spell is centered on her.
 
@@ -26,18 +26,18 @@ A side may have at most 16 soldiers at once. Further spawns wait until there is 
 
 **Blocks.** Eight stone blocks sit in the center in two clusters, with a lane between them and open wings on both sides.
 
-**Win.** Destroy the enemy King. If both Kings fall on the same step, the match is a draw.
+**Win.** Destroy the enemy King tower, with soldiers or with a chess capture. If both King towers fall on the same step, the match is a draw.
 
 ### Units
 
-| Tower | Builds | Life | Move | Spawn | Aura |
+| Tower | Builds each wave | Life | Move | Aura |
 | --- | --- | --- | --- | --- | --- |
-| Pawn | Peasant | 48 | 8 gold, 4.0s | 3.6s | 3 damage, range 2 |
-| Knight | Knight | 80 | 18 gold, 5.0s | 7.0s | 8 damage, range 1 |
-| Bishop | Archer | 55 | 16 gold, 5.0s | 4.8s | 5 damage, range 4 |
-| Rook | Iron Cannon | 100 | 24 gold, 7.0s | 9.0s | 12 damage, range 5 |
-| Queen | Mage | 90 | 30 gold, 8.0s | 11.0s | 8 damage, range 4 |
-| King | Royal Guard | 140 | 20 gold, 6.0s | 13.0s | 9 damage, range 2 |
+| Pawn | Peasant | 48 | 8 gold, 4.0s | 3 damage, range 2 |
+| Knight | Knight | 80 | 18 gold, 5.0s | 8 damage, range 1 |
+| Bishop | Archer | 55 | 16 gold, 5.0s | 5 damage, range 4 |
+| Rook | Iron Cannon | 100 | 24 gold, 7.0s | 12 damage, range 5 |
+| Queen | Mage | 90 | 30 gold, 8.0s | 8 damage, range 4 |
+| King | Royal Guard | 140 | 20 gold, 6.0s | 9 damage, range 2 |
 
 Auras fire on their own cooldown. They are the tower shooting while its soldiers are away.
 
@@ -62,7 +62,7 @@ Open the site and choose a mode.
 - **Local 2 player.** Both colors are live at once on one screen. White and Black can each select their own towers while the armies keep moving. This is split control, not a turn-based hot-seat, because the match is real time.
 - **Online 1v1.** Sign in, host a four-letter code, and send it to the other player. The host is White and runs the simulation. The guest is Black and sends moves and spells to the host. The host publishes the position about twice a second. The guest is looking at that snapshot, so orders arrive a short moment later. If the host closes the tab, the match stops.
 
-Click one of your towers, then a highlighted square. Green is a move. Red is a capture. Spell buttons sit in the side panel, or above the board on a phone. Pause freezes the armies. The page also pauses while the tab is hidden. Menu leaves the match. Rematch starts the same mode with a new layout seed.
+Click one of your towers, then a highlighted square. Green is a move. Red is a capture. The wall button opens block placement: your half of the board is shaded, a green cell is legal, and a red cell is not. Tap a cell to build. Tap your own wall to sell it. Spell buttons sit in the side panel, or above the board on a phone. Pause freezes the armies. The page also pauses while the tab is hidden. Menu leaves the match. Rematch starts the same mode with a new layout seed.
 
 Sign in to save a win, loss, or draw from versus-AI and online matches. Local games are not recorded, because two players share one account. The record is `wins–losses–draws`.
 
@@ -73,9 +73,11 @@ These are the calls the brief left open.
 - White sits on rank 1. The human is White against the AI.
 - Towers capture each other by chess moves. Soldiers also damage towers, including the King.
 - No castling, en passant, or promotion. Those rules fight the real-time layer more than they help it.
-- Soldiers do not occupy cells. A lane can stack. Towers occupy their four cells, and blocks occupy one.
-- Pathing is breadth-first search to the closest reachable cell to the enemy King. The King starts sealed in by its own back rank, so armies attack the pawn wall until a hole opens.
-- Each side is capped at 16 soldiers so a stalled match cannot flood the board.
+- Soldiers attack in waves, not a stream. Twelve seconds of building, then a launch, then fifteen seconds until the next one.
+- Soldiers do not occupy cells. A lane can stack. Towers occupy their four cells, and player blocks occupy one.
+- Pathing is breadth-first search to the closest reachable cell to the enemy King. A block that cuts every route from one home rank to the other is rejected. Soldiers can also break a block they are standing against, so a maze is not permanent.
+- Each side is capped at 40 soldiers so a late wave cannot flood the board.
+- The opening has no neutral stones. The maze is whatever the players, or the AI, pay for.
 - The clock is a fixed 100ms step, drawn from `requestAnimationFrame`. The simulation never reads the frame delta except to decide how many steps are due. A long hitch applies at most 200ms.
 - Gold and mana are separate. Moves spend gold. Spells spend mana.
 - Queen spells are self-centered so a phone can cast without a second targeting gesture.

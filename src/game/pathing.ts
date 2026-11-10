@@ -24,7 +24,48 @@ export function distToTower(x: number, y: number, tower: Tower): number {
   return best;
 }
 
-/** Towers and neutral blocks occupy army cells. Soldiers do not, so lanes can stack. */
+/**
+ * True when this one extra wall would cut every route between the two home ranks.
+ * Tower cells are not walls: the pawn rank is meant to be fought through.
+ * A maze with a single gap still connects y 0 to y 15.
+ */
+export function placementSeals(blocks: { x: number; y: number }[], x: number, y: number): boolean {
+  const blocked = new Set(blocks.map((block) => block.y * 16 + block.x));
+  blocked.add(y * 16 + x);
+  return !rankReaches(blocked, 15, 0) || !rankReaches(blocked, 0, 15);
+}
+
+function rankReaches(blocked: Set<number>, fromY: number, toY: number): boolean {
+  const queue: number[] = [];
+  const seen = new Set<number>();
+  for (let x = 0; x < 16; x += 1) {
+    if (blocked.has(fromY * 16 + x)) continue;
+    const key = fromY * 16 + x;
+    queue.push(key);
+    seen.add(key);
+  }
+  while (queue.length > 0) {
+    const current = queue.shift()!;
+    const cy = (current / 16) | 0;
+    if (cy === toY) return true;
+    const cx = current % 16;
+    for (let dy = -1; dy <= 1; dy += 1) {
+      for (let dx = -1; dx <= 1; dx += 1) {
+        if (dx === 0 && dy === 0) continue;
+        const nx = cx + dx;
+        const ny = cy + dy;
+        if (nx < 0 || ny < 0 || nx > 15 || ny > 15) continue;
+        const key = ny * 16 + nx;
+        if (blocked.has(key) || seen.has(key)) continue;
+        seen.add(key);
+        queue.push(key);
+      }
+    }
+  }
+  return false;
+}
+
+/** Towers and blocks occupy army cells. Soldiers do not, so lanes can stack. */
 export function blockedSet(state: GameState): Set<number> {
   const blocked = new Set<number>();
   for (const block of state.blocks) blocked.add(block.y * 16 + block.x);

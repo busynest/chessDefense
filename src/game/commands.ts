@@ -1,7 +1,7 @@
 import { legalMoves, towerAt } from './chess.js';
-import { chebyshev } from './pathing.js';
+import { chebyshev, placementSeals, towerCells } from './pathing.js';
 import type { GameState, Side, SpellId, Square } from './types.js';
-import { ECONOMY, PIECES, SOLDIERS, SPELLS, squareName } from './units.js';
+import { BLOCKS, ECONOMY, PIECES, SOLDIERS, SPELLS, ownsHalf, squareName } from './units.js';
 
 export interface MoveResult {
   state: GameState;
@@ -138,6 +138,7 @@ export function sweepDead(state: GameState): void {
     state.gold[tower.hurtBy] = Math.min(ECONOMY.goldCap, state.gold[tower.hurtBy] + PIECES[tower.kind].bounty);
   }
   state.towers = state.towers.filter((tower) => tower.hp > 0);
+  state.blocks = state.blocks.filter((block) => block.hp > 0);
 }
 
 export function resolveKings(state: GameState): void {
@@ -152,9 +153,45 @@ export function finish(state: GameState, winner: Side | 'draw'): void {
   state.status = 'victory';
   state.winner = winner;
   state.banner = {
-    text: winner === 'draw' ? 'Both kings have fallen. Draw.' : `${label(winner)} wins.`,
+    text: winner === 'draw'
+      ? 'Both King towers fell together. Draw.'
+      : `${label(winner)} destroyed the enemy King tower.`,
     until: state.tick + 99999,
   };
+}
+
+export function blockProblem(input: GameState, side: Side, x: number, y: number): string {
+  if (input.status !== 'playing') return 'The match is not running.';
+  if (x < 0 || y < 0 || x > 15 || y > 15) return 'That cell is off the board.';
+  if (!ownsHalf(side, y)) return 'Blocks stay on your half of the board.';
+  if (input.gold[side] < BLOCKS.cost) return 'Not enough gold for a block.';
+  if (input.blocks.some((block) => block.x === x && block.y === y && block.hp > 0)) return 'A block is already there.';
+  const occupied = input.towers.some((tower) => tower.hp > 0 && towerCells(tower).some((cell) => cell.x === x && cell.y === y));
+  if (occupied) return 'A tower stands on that cell.';
+  if (placementSeals(input.blocks, x, y)) return 'That would seal every path to a King.';
+  return '';
+}
+
+export function tryPlaceBlock(input: GameState, side: Side, x: number, y: number): MoveResult {
+  const problem = blockProblem(input, side, x, y);
+  if (problem) return { state: input, ok: false, reason: problem };
+
+  const state = fresh(input);
+  state.gold[side] -= BLOCKS.cost;
+  state.blocks.push({ x, y, side, hp: BLOCKS.hp, maxHp: BLOCKS.hp, hurtBy: null });
+  banner(state, `${label(side)} places a block.`);
+  return { state, ok: true, reason: '' };
+}
+
+export function tryRemoveBlock(input: GameState, side: Side, x: number, y: number): MoveResult {
+  if (input.status !== 'playing') return { state: input, ok: false, reason: 'The match is not running.' };
+  const found = input.blocks.find((block) => block.x === x && block.y === y && block.hp > 0);
+  if (!found || found.side !== side) return { state: input, ok: false, reason: 'That is not your block.' };
+  const state = fresh(input);
+  state.blocks = state.blocks.filter((block) => !(block.x === x && block.y === y));
+  state.gold[side] = Math.min(ECONOMY.goldCap, state.gold[side] + BLOCKS.refund);
+  banner(state, `${label(side)} sells a block for ${BLOCKS.refund} gold.`);
+  return { state, ok: true, reason: '' };
 }
 
 export function label(side: Side): string {

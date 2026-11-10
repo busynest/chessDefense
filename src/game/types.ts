@@ -25,7 +25,6 @@ export interface Tower {
   hp: number;
   maxHp: number;
   moveReadyTick: number;
-  spawnReadyTick: number;
   auraReadyTick: number;
   hurtBy: Side | null;
 }
@@ -44,6 +43,8 @@ export interface Soldier {
   buffUntil: number;
   buffStr: number;
   buffSpeed: number;
+  /** Wave scaling. 1 is a wave-1 soldier. */
+  power: number;
   hurtBy: Side | null;
 }
 
@@ -62,6 +63,10 @@ export interface Projectile {
 export interface Block {
   x: number;
   y: number;
+  side: Side;
+  hp: number;
+  maxHp: number;
+  hurtBy: Side | null;
 }
 
 export interface Pulse {
@@ -117,4 +122,18 @@ export interface SpellCommand {
   spell: SpellId;
 }
 
-export type PlayerCommand = MoveCommand | SpellCommand;
+export interface BlockCommand {
+  type: 'block';
+  side: Side;
+  x: number;
+  y: number;
+}
+
+export interface UnblockCommand {
+  type: 'unblock';
+  side: Side;
+  x: number;
+  y: number;
+}
+
+export type PlayerCommand = MoveCommand | SpellCommand | BlockCommand | UnblockCommand;

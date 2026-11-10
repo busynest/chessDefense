@@ -2,8 +2,9 @@ import { LitElement, css, html, type CSSResultGroup, type TemplateResult } from 
 import { customElement, state } from 'lit/decorators.js';
 import { connect } from 'pwa-helpers/connect-mixin.js';
 
+import { blockProblem } from './commands.js';
 import { legalMoves, towerAt } from './chess.js';
-import { handleSquare } from './input.js';
+import { handleCell, handleSquare } from './input.js';
 import './one-square.js';
 import { connectStore, type RootState } from '../store.js';
 import type { GameState, Square } from './types.js';
@@ -12,10 +13,13 @@ import type { GameState, Square } from './types.js';
 export class BoardSquare extends connect(connectStore)(LitElement) {
   @state() private game: GameState | null = null;
   @state() private selected: Square | null = null;
+  @state() private placing: 'white' | 'black' | null = null;
+  @state() private ghost: SquareCell | null = null;
 
   override stateChanged(state: RootState): void {
     this.game = state.game.game;
     this.selected = state.game.selected;
+    this.placing = state.game.placing;
   }
 
   static override get styles(): CSSResultGroup {
@@ -31,12 +35,20 @@ export class BoardSquare extends connect(connectStore)(LitElement) {
         overflow: hidden;
         box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35);
       }
-      .actors {
+      .actors, .maze {
         position: absolute;
         inset: 0;
-        pointer-events: none;
-        z-index: 3;
+        z-index: 5;
       }
+      .actors { pointer-events: none; }
+      .maze { touch-action: none; }
+      .half { position: absolute; left: 0; right: 0; height: 50%; pointer-events: none; }
+      .half.top { top: 0; background: rgba(180, 60, 60, 0.18); }
+      .half.bottom { bottom: 0; background: rgba(40, 90, 180, 0.18); }
+      .half.own { background: rgba(70, 170, 90, 0.38); }
+      .ghost { position: absolute; box-sizing: border-box; }
+      .ghost.ok { background: rgba(40, 160, 70, 0.55); }
+      .ghost.bad { background: rgba(200, 40, 40, 0.5); }
       .token, .shot, .pulse {
         position: absolute;
         transform: translate(-50%, -50%);
@@ -127,6 +139,11 @@ export class BoardSquare extends connect(connectStore)(LitElement) {
               <div class="bar"><span style="width:${Math.max(0, soldier.hp / soldier.maxHp) * 100}%"></span></div>
             </div>
           `)}
+          ${game.blocks.filter((block) => block.hp > 0).map((block) => html`
+            <div class="token" style="left:${(block.x + 0.5) / 16 * 100}%; top:${(15 - block.y + 0.5) / 16 * 100}%; width:5%; height:5%; background:transparent; box-shadow:none;">
+              <div class="bar"><span style="width:${Math.max(0, block.hp / block.maxHp) * 100}%"></span></div>
+            </div>
+          `)}
           ${game.projectiles.map((shot) => {
             const t = Math.min(1, (game.tick - shot.born) / Math.max(1, shot.life));
             const x = shot.x + (shot.tx - shot.x) * t;
@@ -134,7 +151,50 @@ export class BoardSquare extends connect(connectStore)(LitElement) {
             return html`<div class="shot ${shot.kind}" style="left:${(x + 0.5) / 16 * 100}%; top:${(15 - y + 0.5) / 16 * 100}%"></div>`;
           })}
         </div>
+        ${this.placing ? this.maze(game) : ''}
       </div>
     `;
   }
+
+  private maze(game: GameState): TemplateResult {
+    const side = this.placing;
+    const ghost = this.ghost;
+    const own = ghost ? game.blocks.some((block) => block.x === ghost.x && block.y === ghost.y && block.hp > 0 && block.side === side) : false;
+    const problem = ghost && side && !own ? blockProblem(game, side, ghost.x, ghost.y) : '';
+    return html`
+      <div
+        class="maze"
+        @pointermove=${(event: PointerEvent) => this.track(event)}
+        @pointerdown=${(event: PointerEvent) => this.track(event)}
+        @pointerup=${(event: PointerEvent) => this.drop(event)}>
+        <div class="half top ${side === 'black' ? 'own' : ''}"></div>
+        <div class="half bottom ${side === 'white' ? 'own' : ''}"></div>
+        ${ghost ? html`<div class="ghost ${own || problem === '' ? 'ok' : 'bad'}" style="left:${ghost.x / 16 * 100}%; top:${(15 - ghost.y) / 16 * 100}%; width:${100 / 16}%; height:${100 / 16}%"></div>` : ''}
+      </div>
+    `;
+  }
+
+  private cellAt(event: PointerEvent): SquareCell | null {
+    const frame = event.currentTarget as HTMLElement;
+    const rect = frame.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return null;
+    const x = Math.min(15, Math.max(0, Math.floor(((event.clientX - rect.left) / rect.width) * 16)));
+    const y = 15 - Math.min(15, Math.max(0, Math.floor(((event.clientY - rect.top) / rect.height) * 16)));
+    return { x, y };
+  }
+
+  private track(event: PointerEvent): void {
+    this.ghost = this.cellAt(event);
+  }
+
+  private drop(event: PointerEvent): void {
+    const cell = this.cellAt(event);
+    this.ghost = cell;
+    if (cell) handleCell(cell.x, cell.y);
+  }
+}
+
+interface SquareCell {
+  x: number;
+  y: number;
 }

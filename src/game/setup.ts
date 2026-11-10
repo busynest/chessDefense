@@ -1,16 +1,7 @@
 import type { Difficulty, GameState, Mode, PieceKind, Side, Tower } from './types.js';
-import { ECONOMY, PIECES } from './units.js';
+import { PIECES, WAVES } from './units.js';
 
 const BACK: PieceKind[] = ['rook', 'knight', 'bishop', 'queen', 'king', 'bishop', 'knight', 'rook'];
-
-/**
- * Neutral obstacles on the 256-grid. They sit in the center with a two-cell
- * gap, plus open files on both wings, so armies can route around them.
- */
-export const START_BLOCKS = [
-  { x: 5, y: 7 }, { x: 6, y: 7 }, { x: 9, y: 7 }, { x: 10, y: 7 },
-  { x: 5, y: 8 }, { x: 6, y: 8 }, { x: 9, y: 8 }, { x: 10, y: 8 },
-];
 
 export function createMatch(options: { mode: Mode; difficulty: Difficulty; seed: number; humanSide?: Side }): GameState {
   const seed = options.seed >>> 0 || 1;
@@ -27,7 +18,6 @@ export function createMatch(options: { mode: Mode; difficulty: Difficulty; seed:
       hp: def.hp,
       maxHp: def.hp,
       moveReadyTick: 0,
-      spawnReadyTick: 8 + stagger,
       auraReadyTick: 6 + (stagger % 5),
       hurtBy: null,
     });
@@ -49,16 +39,16 @@ export function createMatch(options: { mode: Mode; difficulty: Difficulty; seed:
     seed,
     rng: seed,
     nextId,
-    wave: 1,
-    nextWaveTick: ECONOMY.waveEveryTicks,
-    gold: { white: 36, black: 36 },
+    wave: 0,
+    nextWaveTick: WAVES.firstWaveTick,
+    gold: { white: 48, black: 48 },
     mana: { white: 18, black: 18 },
     towers,
     soldiers: [],
     projectiles: [],
-    blocks: START_BLOCKS.map((block) => ({ ...block })),
+    blocks: [],
     effects: [],
-    banner: { text: 'The towns are mustering.', until: 30 },
+    banner: { text: 'Build. The first wave has not marched.', until: WAVES.firstWaveTick },
   };
 }
 

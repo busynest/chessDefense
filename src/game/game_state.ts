@@ -1,6 +1,6 @@
 import { createSlice, current, type PayloadAction } from '@reduxjs/toolkit';
 
-import { tryMove, trySpell } from './commands.js';
+import { tryMove, tryPlaceBlock, tryRemoveBlock, trySpell } from './commands.js';
 import { createMatch, createMenu } from './setup.js';
 import { step } from './simulate.js';
 import type { Difficulty, GameState, Side, SpellId, Square } from './types.js';
@@ -8,6 +8,7 @@ import type { Difficulty, GameState, Side, SpellId, Square } from './types.js';
 export interface GameSliceState {
   game: GameState;
   selected: Square | null;
+  placing: Side | null;
   role: 'none' | 'host' | 'guest';
   onlineCode: string;
   onlineNote: string;
@@ -17,6 +18,7 @@ export interface GameSliceState {
 const initialState: GameSliceState = {
   game: createMenu(),
   selected: null,
+  placing: null,
   role: 'none',
   onlineCode: '',
   onlineNote: '',
@@ -30,6 +32,7 @@ const gameSlice = createSlice({
     showMenu(state) {
       state.game = createMenu();
       state.selected = null;
+      state.placing = null;
       state.role = 'none';
       state.onlineCode = '';
       state.onlineNote = '';
@@ -43,6 +46,7 @@ const gameSlice = createSlice({
         humanSide: 'white',
       });
       state.selected = null;
+      state.placing = null;
       state.role = 'none';
       state.onlineCode = '';
       state.onlineNote = '';
@@ -61,7 +65,12 @@ const gameSlice = createSlice({
       state.onlineCode = action.payload.code;
       state.onlineNote = action.payload.role === 'host' ? 'Waiting for an opponent.' : 'Waiting for the host.';
       state.selected = null;
+      state.placing = null;
       state.record = 'idle';
+    },
+    setPlacing(state, action: PayloadAction<Side | null>) {
+      state.placing = action.payload;
+      state.selected = null;
     },
     setOnlineNote(state, action: PayloadAction<string>) {
       state.onlineNote = action.payload;
@@ -92,7 +101,23 @@ const gameSlice = createSlice({
     playSpell(state, action: PayloadAction<{ side: Side; spell: SpellId }>) {
       const result = trySpell(current(state.game), action.payload.side, action.payload.spell);
       if (!result.ok) {
-        state.onlineNote = result.reason;
+        state.game.banner = { text: result.reason, until: state.game.tick + 30 };
+        return;
+      }
+      state.game = result.state;
+    },
+    playBlock(state, action: PayloadAction<{ side: Side; x: number; y: number }>) {
+      const result = tryPlaceBlock(current(state.game), action.payload.side, action.payload.x, action.payload.y);
+      if (!result.ok) {
+        state.game.banner = { text: result.reason, until: state.game.tick + 35 };
+        return;
+      }
+      state.game = result.state;
+    },
+    playUnblock(state, action: PayloadAction<{ side: Side; x: number; y: number }>) {
+      const result = tryRemoveBlock(current(state.game), action.payload.side, action.payload.x, action.payload.y);
+      if (!result.ok) {
+        state.game.banner = { text: result.reason, until: state.game.tick + 35 };
         return;
       }
       state.game = result.state;
@@ -119,6 +144,9 @@ export const {
   selectSquare,
   playMove,
   playSpell,
+  playBlock,
+  playUnblock,
+  setPlacing,
   tick,
   markRecord,
 } = gameSlice.actions;

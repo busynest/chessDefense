@@ -30,9 +30,9 @@ export class HowToPage extends PageViewElement {
       </section>
       <section>
         <h2>Towers</h2>
-        <p>Towers start in the chess starting position and move by the real chess rules, slowly. A move spends gold and then the tower has to wait. Pieces cannot stack. Moving onto an enemy tower captures it. There is no castling, no en passant, and pawns do not promote. Lose your King and you lose the match.</p>
+        <p>Towers start in the chess starting position and move by the real chess rules, slowly. A move spends gold and then the tower has to wait. Pieces cannot stack. Moving onto an enemy tower captures it. There is no castling, no en passant, and pawns do not promote. Every tower can be destroyed. Destroy the enemy King tower and you win.</p>
         <table>
-          <tr><th>Tower</th><th>Army</th><th>Life</th><th>Move</th><th>Spawn</th></tr>
+          <tr><th>Tower</th><th>Each wave</th><th>Life</th><th>Move</th></tr>
           ${pieces.map((kind) => {
             const piece = PIECES[kind];
             return html`<tr>
@@ -40,14 +40,13 @@ export class HowToPage extends PageViewElement {
               <td>${SOLDIERS[piece.soldier].label}</td>
               <td>${piece.hp}</td>
               <td>${piece.moveCost} gold, ${piece.moveTicks / 10}s</td>
-              <td>${piece.spawnTicks / 10}s</td>
             </tr>`;
           })}
         </table>
       </section>
       <section>
         <h2>Soldiers</h2>
-        <p>Towers build soldiers on their own. Soldiers walk the 16×16 grid toward the enemy King, fight whoever they meet, and damage towers. Strength is the damage of one hit. Speed is cells per second.</p>
+        <p>Waves leave every living tower at once. The first march is 12 seconds in, then every 15 seconds. Later waves send more soldiers, with more life and strength. They walk the 16×16 grid toward the enemy King tower. Strength is the damage of one hit. Speed is cells per second. Walls cost 12 gold, have 28 life, and refund 6. White builds on the bottom half. Black builds on the top half.</p>
         <table>
           <tr><th>Soldier</th><th>Strength</th><th>Life</th><th>Speed</th><th>Range</th></tr>
           ${soldiers.map((kind) => {

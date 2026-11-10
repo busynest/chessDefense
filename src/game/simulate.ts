@@ -1,7 +1,7 @@
 import { resolveKings, sweepDead } from './commands.js';
 import { distToTower, isBlockedCell, pathToward, towerCells, blockedSet } from './pathing.js';
 import type { GameState, Projectile, Side, Soldier, Tower } from './types.js';
-import { ECONOMY, PIECES, SOLDIERS, TICK_SECONDS, waveScale } from './units.js';
+import { ECONOMY, PIECES, SOLDIERS, TICK_SECONDS, WAVES } from './units.js';
 import { aiAct } from './ai.js';
 
 interface Strike {
@@ -19,13 +19,8 @@ export function step(input: GameState): GameState {
   const state = structuredClone(input);
   state.tick += 1;
   gain(state);
-  if (state.tick >= state.nextWaveTick) {
-    state.wave += 1;
-    state.nextWaveTick = state.tick + ECONOMY.waveEveryTicks;
-    state.banner = { text: `Wave ${state.wave}. The towns call more villagers.`, until: state.tick + 25 };
-  }
+  if (state.tick >= state.nextWaveTick) launchWave(state);
   const shots: Strike[] = [];
-  spawn(state);
   towersShoot(state, shots);
   soldiersAct(state, shots);
   for (const shot of shots) {
@@ -62,48 +57,54 @@ function gain(state: GameState): void {
   }
 }
 
-function spawn(state: GameState): void {
-  const scale = waveScale(state.wave);
+function launchWave(state: GameState): void {
+  state.wave += 1;
+  state.nextWaveTick = state.tick + WAVES.gapTicks;
+  const count = WAVES.unitsForWave(state.wave);
+  const scale = WAVES.statScale(state.wave);
+  state.banner = { text: `Wave ${state.wave} marches.`, until: state.tick + 30 };
   for (const tower of state.towers) {
-    if (tower.hp <= 0 || tower.spawnReadyTick > state.tick) continue;
-    const alive = state.soldiers.filter((soldier) => soldier.side === tower.side && soldier.hp > 0).length;
-    if (alive >= 16) {
-      tower.spawnReadyTick = state.tick + 10;
-      continue;
-    }
+    if (tower.hp <= 0) continue;
     const kind = PIECES[tower.kind].soldier;
-    const cell = spawnCell(state, tower);
-    if (!cell) continue;
     const def = SOLDIERS[kind];
-    state.soldiers.push({
-      id: nid(state),
-      side: tower.side,
-      kind,
-      x: cell.x,
-      y: cell.y,
-      hp: def.hp,
-      maxHp: def.hp,
-      attackReadyTick: state.tick + 2,
-      repathTick: state.tick,
-      path: [],
-      buffUntil: 0,
-      buffStr: 0,
-      buffSpeed: 1,
-      hurtBy: null,
-    });
-    tower.spawnReadyTick = state.tick + Math.max(8, Math.round(PIECES[tower.kind].spawnTicks * scale));
+    for (let n = 0; n < count; n += 1) {
+      if (sideCount(state, tower.side) >= WAVES.soldierCap) break;
+      const cell = spawnCell(state, tower, n);
+      if (!cell) break;
+      const hp = Math.max(1, Math.round(def.hp * scale));
+      state.soldiers.push({
+        id: nid(state),
+        side: tower.side,
+        kind,
+        x: cell.x,
+        y: cell.y,
+        hp,
+        maxHp: hp,
+        attackReadyTick: state.tick + 2,
+        repathTick: state.tick,
+        path: [],
+        buffUntil: 0,
+        buffStr: 0,
+        buffSpeed: 1,
+        power: scale,
+        hurtBy: null,
+      });
+    }
   }
 }
 
-function spawnCell(state: GameState, tower: Tower): { x: number; y: number } | null {
+function sideCount(state: GameState, side: Side): number {
+  return state.soldiers.filter((soldier) => soldier.side === side && soldier.hp > 0).length;
+}
+
+function spawnCell(state: GameState, tower: Tower, n: number): { x: number; y: number } | null {
   const dir = tower.side === 'white' ? 1 : -1;
   const forwardY = tower.side === 'white' ? tower.rank * 2 + 2 : tower.rank * 2 - 1;
-  const candidates = [
-    { x: tower.file * 2, y: forwardY },
-    { x: tower.file * 2 + 1, y: forwardY },
-    { x: tower.file * 2, y: forwardY + dir },
-    { x: tower.file * 2 + 1, y: forwardY + dir },
-  ];
+  const candidates = [];
+  for (let step = 0; step < 4; step += 1) {
+    const y = forwardY + dir * (n + step);
+    candidates.push({ x: tower.file * 2, y }, { x: tower.file * 2 + 1, y });
+  }
   const blocked = new Set(state.blocks.map((block) => block.y * 16 + block.x));
   for (const other of state.towers) {
     if (other.hp <= 0) continue;
@@ -162,6 +163,15 @@ function soldiersAct(state: GameState, shots: Strike[]): void {
       continue;
     }
     if (foe) continue;
+    const wall = nearestBlock(state, soldier);
+    if (wall && soldier.attackReadyTick <= state.tick) {
+      wall.hp -= stats.strength;
+      wall.hurtBy = soldier.side;
+      soldier.attackReadyTick = state.tick + stats.attackTicks;
+      shots.push({ x: soldier.x, y: soldier.y, tx: wall.x, ty: wall.y, side: soldier.side, kind: 'shot' });
+      continue;
+    }
+    if (wall) continue;
     if (soldier.repathTick <= state.tick || soldier.path.length === 0) {
       soldier.path = pathToward(state, soldier.x, soldier.y, soldier.side);
       soldier.repathTick = state.tick + 10;
@@ -196,7 +206,7 @@ function statsOf(soldier: Soldier, tick: number): { strength: number; speed: num
   const base = SOLDIERS[soldier.kind];
   const buffed = soldier.buffUntil >= tick;
   return {
-    strength: base.strength + (buffed ? soldier.buffStr : 0),
+    strength: Math.max(1, Math.round(base.strength * soldier.power) + (buffed ? soldier.buffStr : 0)),
     speed: base.speed * (buffed ? soldier.buffSpeed : 1),
     range: base.range,
     attackTicks: base.attackTicks,
@@ -215,6 +225,20 @@ function nearestSoldier(state: GameState, origin: { x: number; y: number }, side
     const dist = Math.max(Math.abs(soldier.x - origin.x), Math.abs(soldier.y - origin.y));
     if (dist < bestDist) {
       best = soldier;
+      bestDist = dist;
+    }
+  }
+  return best;
+}
+
+function nearestBlock(state: GameState, soldier: Soldier): GameState['blocks'][number] | null {
+  let best: GameState['blocks'][number] | null = null;
+  let bestDist = 1.001;
+  for (const block of state.blocks) {
+    if (block.hp <= 0) continue;
+    const dist = Math.max(Math.abs(block.x - soldier.x), Math.abs(block.y - soldier.y));
+    if (dist < bestDist) {
+      best = block;
       bestDist = dist;
     }
   }

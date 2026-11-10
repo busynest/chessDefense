@@ -1,8 +1,8 @@
 import { legalMoves } from './chess.js';
-import { tryMove, trySpell } from './commands.js';
+import { tryMove, tryPlaceBlock, trySpell } from './commands.js';
 import { chebyshev } from './pathing.js';
 import type { GameState, Side, Square, Tower } from './types.js';
-import { AI_PERIOD, PIECES, SPELLS } from './units.js';
+import { AI_PERIOD, BLOCKS, PIECES, SPELLS } from './units.js';
 
 /**
  * One decision for the computer side. Easy hesitates and mostly heals.
@@ -14,8 +14,29 @@ export function aiAct(state: GameState): void {
   if (state.tick % period !== 0) return;
   const side: Side = state.humanSide === 'white' ? 'black' : 'white';
   if (state.difficulty === 'easy' && roll(state) < 0.45) return;
+  const building = state.nextWaveTick - state.tick > 30;
+  if (building && layBlock(state, side)) return;
   if (cast(state, side)) return;
   reposition(state, side);
+}
+
+function layBlock(state: GameState, side: Side): boolean {
+  const budget = state.difficulty === 'easy' ? 2 : state.difficulty === 'normal' ? 4 : 6;
+  const owned = state.blocks.filter((block) => block.side === side && block.hp > 0).length;
+  if (owned >= budget || state.gold[side] < BLOCKS.cost) return false;
+  const gap = 3 + Math.floor(roll(state) * 10);
+  const rows = side === 'white' ? [6, 7, 5, 4] : [9, 8, 10, 11];
+  for (const y of rows) {
+    for (let x = 0; x < 16; x += 1) {
+      if (Math.abs(x - gap) <= (state.difficulty === 'hard' ? 0 : 1)) continue;
+      if (state.blocks.some((block) => block.x === x && block.y === y && block.hp > 0)) continue;
+      const placed = tryPlaceBlock(state, side, x, y);
+      if (!placed.ok) continue;
+      apply(state, placed.state);
+      return true;
+    }
+  }
+  return false;
 }
 
 function cast(state: GameState, side: Side): boolean {
@@ -116,6 +137,7 @@ function apply(state: GameState, next: GameState): boolean {
   state.mana = next.mana;
   state.towers = next.towers;
   state.soldiers = next.soldiers;
+  state.blocks = next.blocks;
   state.effects = next.effects;
   state.banner = next.banner;
   state.status = next.status;

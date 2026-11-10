@@ -1,5 +1,5 @@
 import { legalMoves, towerAt } from './chess.js';
-import { controlsSide, playMove, playSpell, selectSquare } from './game_state.js';
+import { controlsSide, playBlock, playMove, playSpell, playUnblock, selectSquare } from './game_state.js';
 import { sendCommand, signedInUid } from './online.js';
 import { store } from '../store.js';
 import type { PlayerCommand, Side, SpellId } from './types.js';
@@ -46,4 +46,19 @@ export function handleSpell(side: Side, spell: SpellId): void {
     return;
   }
   store.dispatch(playSpell({ side, spell }));
+}
+
+export function handleCell(x: number, y: number): void {
+  const slice = store.getState().game;
+  const side = slice.placing;
+  if (!side || slice.game.status !== 'playing' || !controlsSide(slice, side)) return;
+  const own = slice.game.blocks.some((block) => block.x === x && block.y === y && block.hp > 0 && block.side === side);
+  const command: PlayerCommand = own ? { type: 'unblock', side, x, y } : { type: 'block', side, x, y };
+  if (slice.role === 'guest') {
+    const uid = signedInUid();
+    if (uid) void sendCommand(slice.onlineCode, uid, command);
+    return;
+  }
+  if (own) store.dispatch(playUnblock({ side, x, y }));
+  else store.dispatch(playBlock({ side, x, y }));
 }
