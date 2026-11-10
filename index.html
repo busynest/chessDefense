@@ -18,9 +18,9 @@
     gtag('js', new Date());
     gtag('config', 'UA-73943527-8');
   </script>
-  <script>
-    window.process = window.process || { env: { NODE_ENV: 'development' } };
-  </script>
+  <script src="./config/development.js"></script>
+  <script src="./config/production.js"></script>
+  <script src="./boot.js"></script>
   <style>
     body {
       margin: 0;

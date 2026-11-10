@@ -35,7 +35,7 @@ Soldiers march toward the enemy King, route around towers and blocks, fight enem
 
 **Repair.** Tap a wounded tower and spend gold for the life it is missing, about one gold per eight life, at least 4. The tower cannot be repaired again for 8 seconds. Soldiers that reach the King deal 15% of a normal hit, so one leaker wounds the keep.
 
-**Overcharge.** A level 3 tower can spend 16 gold to hit 50% harder and faster for 10 seconds. Soldiers it launches in that window are stronger. It cannot be bought again for 12 seconds. The tower glows gold while the boost lasts.
+**Overcharge.** A level 3 tower can spend gold to hit 50% harder and faster for 8 seconds. Soldiers it launches in that window are stronger. The first charge on a tower costs 36. The next one on that same tower costs 28 more, then 28 more again. It cannot be bought again for 30 seconds. The button shows the price for that tower. The tower glows gold while the boost lasts.
 
 **Win.** Destroy the enemy King tower, with soldiers or with a chess capture. If both King towers fall on the same step, the match is a draw.
 
@@ -94,7 +94,7 @@ These are the calls the brief left open.
 - Queen spells are self-centered so a phone can cast without a second targeting gesture.
 - The King builds a royal guard instead of a second spell, and still moves one square.
 - Local play is simultaneous. A hot-seat turn would freeze one town while its armies were still the thing that loses.
-- Online play is host-authoritative rather than lockstep. Firestore latency is a poor shared clock, and one simulator cannot drift from itself. Guest commands are checked against that side's pieces, so a guest cannot move White.
+- Online play is host-authoritative rather than lockstep. Firestore latency is a poor shared clock, and one simulator cannot drift from itself. Guest commands are checked against that side's pieces, so a guest cannot move White. The host publishes the position every half second, and once more when the match ends, so the guest sees the same King fall. A listener that starts again does not replay commands it already had, so a reconnect does not spend the gold twice.
 - Match history is per signed-in user. Versus AI and online write `users/{uid}` and `users/{uid}/history`. Local matches do not.
 - The same seed and the same commands replay the same match. The AI reads a stored random state, not `Math.random`.
 
@@ -111,9 +111,23 @@ npm start
 npm run build
 ```
 
-`npm test` compiles and runs the rule tests with Node's test runner. They cover chess moves, captures, spawning, pathing around a wall, melee, the King falling, Blessing, deterministic replays, and a scripted win against the easy AI.
+`npm test` compiles and runs the rule tests with Node's test runner. They cover chess moves, captures, spawning, pathing around a wall, melee, the King falling, Blessing, Overcharge pricing, deterministic replays, and a scripted win against the easy AI.
 
 `npm start` serves http://localhost:8080 and keeps `tsc --watch` running. The page loads `out/application-shell.js`.
+
+### Local online matches
+
+`config/development.js` and `config/production.js` hold the contractors-centre web config. `boot.js` runs before the app module. On `localhost` or `127.0.0.1` it selects the development config, whose Realtime Database URL is `http://localhost:9000?ns=emulationui`. Any other host selects production, `https://contractors-centre.firebaseio.com`. Both keys land on `window.process.env` together: `NODE_ENV` and `FIREBASE_CONFIG`. pwa-auth reads that config when it loads.
+
+On localhost the page also talks to the Auth emulator on port 9099 and the Firestore emulator on port 8088. A production host does not. Sign-in and online matches on this machine need those emulators running.
+
+```bash
+npm run dev:emulators
+```
+
+Then open http://127.0.0.1:8080 . Sign in from the Login button with any email and password. The emulator keeps those accounts on this machine only.
+
+`npm run test:online` boots the same emulators, plays a host and a guest through create, join, build, a wall, upgrade, repair, Overcharge, a spell, a wave, a dropped guest listener, and the King falling, then exits.
 
 `npm run build` writes the hosting bundle to `dist/`. `dist/` is not committed. Firebase Hosting is pointed at it.
 
@@ -129,10 +143,12 @@ Deploy the rules with the site. Until those rules are published, online matches 
 
 ### Firebase
 
-`src/firebase-config.ts` is the existing Chess Defense web config. Nothing new was invented. pwa-auth still provides `<user-icon>`, `<user-drawer>`, `<user-login>`, `<user-settings>`, and `<email-reset>`.
+`src/firebase-config.ts` reads the config `boot.js` already chose, and passes that same JSON to the pwa-auth elements. pwa-auth still provides `<user-icon>`, `<user-drawer>`, `<user-login>`, `<user-settings>`, and `<email-reset>`. The Firebase project is contractors-centre.
 
 `firestore.rules` lets a signed-in player read and write only `users/{their uid}`, create a match they host, join a match that has an empty guest seat, and append inputs stamped with their own uid. The host may update the match document. Guests may not overwrite the snapshot after they have joined. Feedback can be created by a signed-in user.
 
 `storage.rules` allows an image under 5 MB at `pwa-auth/{uid}/…`, which is where profile photos go. `database.rules.json` limits the Realtime Database to `users/{uid}` for that same user.
 
-Online play and Analytics both call Google with that web API key. From this environment the key returned HTTP 400 for Analytics. The key was left as it is. Online matches also need the rules deployed before two browsers can meet.
+Online play on a deployed host uses the contractors-centre project. Localhost uses the emulators instead, so a match can be played before those rules are published. The Realtime Database emulator is port 9000, namespace `emulationui`, matching the development database URL.
+
+The contractors-centre web key is a real Identity Toolkit key. A request from `https://contractors-centre.firebaseapp.com` is accepted. A request from `http://localhost:8080` or `http://127.0.0.1:8080` is rejected with `API_KEY_HTTP_REFERRER_BLOCKED`. That is why local sign-in goes through the Auth emulator.

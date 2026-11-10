@@ -35,6 +35,8 @@ export interface Tower {
   overchargeUntil: number;
   /** Next tick this level-3 tower may be overcharged again. */
   overchargeReadyTick: number;
+  /** How many times this tower has been overcharged. The price climbs. */
+  overchargeUses: number;
   hurtBy: Side | null;
 }
 

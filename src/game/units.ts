@@ -233,16 +233,24 @@ export function repairCost(missing: number): number {
  * Damage and fire rate rise, and soldiers spawned during the boost are stronger.
  */
 export const OVERCHARGE = {
-  cost: 16,
-  /** 10 seconds of boosted fire. */
-  duration: 100,
-  /** 12 seconds from the purchase before it can be bought again. */
-  cooldown: 120,
+  /** First purchase on a tower. Each later purchase on that same tower costs more. */
+  baseCost: 36,
+  stepCost: 28,
+  /** 8 seconds of boosted fire. */
+  duration: 80,
+  /** 30 seconds from the purchase before it can be bought again. */
+  cooldown: 300,
   damage: 1.5,
   /** Attack cooldown multiplier. Lower is faster. */
   haste: 0.7,
   soldier: 1.35,
 };
+
+/** 36, then 64, then 92, and so on. A missing count is a first purchase. */
+export function overchargeCost(uses: number | undefined): number {
+  const paid = Number.isFinite(uses) ? Math.max(0, Math.floor(uses ?? 0)) : 0;
+  return OVERCHARGE.baseCost + paid * OVERCHARGE.stepCost;
+}
 
 export function overcharged(until: number, tick: number): boolean {
   return until > tick;

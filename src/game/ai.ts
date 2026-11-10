@@ -1,7 +1,7 @@
 import { tryOvercharge, tryPlaceBlock, tryRepair, trySpell, tryUpgrade } from './commands.js';
 import { chebyshev } from './pathing.js';
 import type { GameState, PieceKind, Side, Tower } from './types.js';
-import { AI_PERIOD, BLOCKS, OVERCHARGE, SPELLS, repairCost, upgradeCost } from './units.js';
+import { AI_PERIOD, BLOCKS, SPELLS, combatOf, overchargeCost, repairCost, upgradeCost } from './units.js';
 
 /**
  * One decision for the computer side. Towers do not move.
@@ -84,35 +84,43 @@ function woundScore(tower: Tower): number {
   return tower.kind === 'king' ? ratio - 1 : ratio;
 }
 
+function enemyNear(state: GameState, tower: Tower): boolean {
+  const range = combatOf(tower.kind, tower.level).range;
+  const x = tower.file * 2 + 0.5;
+  const y = tower.rank * 2 + 0.5;
+  return state.soldiers.some((soldier) => (
+    soldier.side !== tower.side
+    && soldier.hp > 0
+    && chebyshev(soldier.x, soldier.y, x, y) <= range
+  ));
+}
+
 function surge(state: GameState, side: Side): boolean {
-  if (state.gold[side] < OVERCHARGE.cost) return false;
-  const waveSoon = state.nextWaveTick - state.tick < 50;
-  const enemies = state.soldiers.some((soldier) => soldier.side !== side && soldier.hp > 0);
-  if (state.difficulty === 'easy' && state.gold[side] < 64 && roll(state, side) > 0.35) return false;
-  if (state.difficulty === 'normal' && !waveSoon && !enemies && state.gold[side] < 48) return false;
-  const limit = state.difficulty === 'hard' ? 4 : state.difficulty === 'normal' ? 2 : 1;
-  let bought = false;
-  for (let n = 0; n < limit; n += 1) {
-    if (state.gold[side] < OVERCHARGE.cost) break;
-    const ready = state.towers.filter((tower) => (
-      tower.side === side
-      && tower.hp > 0
-      && tower.level >= 3
-      && tower.overchargeUntil <= state.tick
-      && tower.overchargeReadyTick <= state.tick
-    ));
-    if (ready.length === 0) break;
-    const ranked = [...ready].sort((a, b) => VALUE[b.kind] - VALUE[a.kind]);
-    const pick = state.difficulty === 'easy'
-      ? ranked.find((tower) => tower.kind === 'pawn' || tower.kind === 'knight') ?? ranked[ranked.length - 1]
-      : ranked[0];
-    if (!pick) break;
-    const charged = tryOvercharge(state, side, pick.file, pick.rank);
-    if (!charged.ok) break;
-    apply(state, charged.state);
-    bought = true;
-  }
-  return bought;
+  const waveSoon = state.nextWaveTick - state.tick >= 0 && state.nextWaveTick - state.tick < 25;
+  const pressed = state.towers.some((tower) => tower.side === side && tower.hp > 0 && tower.hp <= tower.maxHp * 0.5);
+  if (state.difficulty === 'easy' && (!pressed || roll(state, side) > 0.2)) return false;
+  const reserve = state.difficulty === 'hard' ? 18 : 48;
+  const gold = state.gold[side];
+  const ready = state.towers.filter((tower) => {
+    if (tower.side !== side || tower.hp <= 0 || tower.level < 3) return false;
+    if (tower.overchargeUntil > state.tick || tower.overchargeReadyTick > state.tick) return false;
+    const uses = tower.overchargeUses ?? 0;
+    if (gold < overchargeCost(uses)) return false;
+    const launch = waveSoon && uses === 0 && (tower.kind === 'rook' || tower.kind === 'bishop' || tower.kind === 'queen');
+    const fighting = uses < 2 && (pressed || enemyNear(state, tower) || launch);
+    const dump = uses === 2 && gold >= 100;
+    return fighting || dump;
+  });
+  if (ready.length === 0) return false;
+  const ranked = [...ready].sort((a, b) => VALUE[b.kind] - VALUE[a.kind] || (a.overchargeUses ?? 0) - (b.overchargeUses ?? 0));
+  const pick = state.difficulty === 'easy'
+    ? ranked.find((tower) => tower.kind === 'pawn' || tower.kind === 'knight') ?? ranked[ranked.length - 1]
+    : ranked.find((tower) => (tower.overchargeUses ?? 0) === 2 || pressed || state.gold[side] - overchargeCost(tower.overchargeUses) >= reserve);
+  if (!pick) return false;
+  const charged = tryOvercharge(state, side, pick.file, pick.rank);
+  if (!charged.ok) return false;
+  apply(state, charged.state);
+  return true;
 }
 
 function layBlock(state: GameState, side: Side): boolean {

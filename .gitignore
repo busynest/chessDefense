@@ -4,3 +4,5 @@
 /dist/
 /out/
 /depreciated/
+*-debug.log
+firestore-debug.log

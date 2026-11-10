@@ -23,6 +23,7 @@ export function createMatch(options: { mode: Mode; difficulty: Difficulty; seed:
       mendedTick: 0,
       overchargeUntil: 0,
       overchargeReadyTick: 0,
+      overchargeUses: 0,
       hurtBy: null,
     });
     nextId += 1;

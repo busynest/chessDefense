@@ -1,14 +1,20 @@
 import type { FirebaseOptions } from 'firebase/app';
 
-/** Existing Chess Defense web app config. Client keys only; nothing new is invented. */
-export const firebaseConfig: FirebaseOptions = {
-  apiKey: 'AIzaSyAWXOpxGc_GbTYckgNPpRhEWzOpeRxMAOg',
-  authDomain: 'chess-defense.firebaseapp.com',
-  databaseURL: 'https://chess-defense.firebaseio.com',
-  projectId: 'chess-defense',
-  storageBucket: 'chess-defense.appspot.com',
-  messagingSenderId: '1056334501744',
-  appId: '1:1056334501744:web:7d256ce8e20946d4e1a1b5',
-};
+declare global {
+  interface Window {
+    process?: { env?: { NODE_ENV?: string; FIREBASE_CONFIG?: string } };
+  }
+}
 
+/**
+ * The config boot.js chose. Localhost gets the development file, which points
+ * the Realtime Database at the emulator. Every other host gets production.
+ */
+function bootedConfig(): FirebaseOptions {
+  const raw = window.process?.env?.FIREBASE_CONFIG;
+  if (!raw) throw new Error('boot.js must set FIREBASE_CONFIG before the app module.');
+  return JSON.parse(raw) as FirebaseOptions;
+}
+
+export const firebaseConfig: FirebaseOptions = bootedConfig();
 export const firebaseConfigAttribute = JSON.stringify(firebaseConfig);

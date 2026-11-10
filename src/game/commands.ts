@@ -2,7 +2,7 @@ import { towerAt } from './chess.js';
 import { chebyshev, placementSeals, towerCells } from './pathing.js';
 import type { GameState, Side, SpellId } from './types.js';
 import { reportHarm } from './telemetry.js';
-import { BLOCKS, ECONOMY, OVERCHARGE, PIECES, REPAIR, SOLDIERS, SPELLS, combatOf, ownsHalf, repairCost, squareName, upgradeCost } from './units.js';
+import { BLOCKS, ECONOMY, OVERCHARGE, PIECES, REPAIR, SOLDIERS, SPELLS, combatOf, overchargeCost, ownsHalf, repairCost, squareName, upgradeCost } from './units.js';
 import { reportOvercharge, reportRepair } from './telemetry.js';
 
 export interface MoveResult {
@@ -75,11 +75,13 @@ export function tryOvercharge(input: GameState, side: Side, file: number, rank: 
   if (tower.level < 3) return { state: input, ok: false, reason: 'Overcharge needs a level 3 tower.' };
   if (input.tick < tower.overchargeUntil) return { state: input, ok: false, reason: 'That tower is already overcharged.' };
   if (input.tick < tower.overchargeReadyTick) return { state: input, ok: false, reason: 'Overcharge is still cooling down.' };
-  if (input.gold[side] < OVERCHARGE.cost) return { state: input, ok: false, reason: 'Not enough gold to overcharge.' };
+  const price = overchargeCost(tower.overchargeUses);
+  if (input.gold[side] < price) return { state: input, ok: false, reason: 'Not enough gold to overcharge.' };
 
   const state = fresh(input);
   const piece = towerAt(state, file, rank)!;
-  state.gold[side] -= OVERCHARGE.cost;
+  state.gold[side] -= price;
+  piece.overchargeUses = (piece.overchargeUses ?? 0) + 1;
   piece.overchargeUntil = state.tick + OVERCHARGE.duration;
   piece.overchargeReadyTick = state.tick + OVERCHARGE.cooldown;
   reportOvercharge({ side, kind: piece.kind });

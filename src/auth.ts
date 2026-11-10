@@ -1,3 +1,5 @@
+import { connectAuthEmulator, getAuth } from 'firebase/auth';
+import { connectFirestoreEmulator, getFirestore } from 'firebase/firestore';
 import {
   getCurrentUser,
   initialize,
@@ -7,12 +9,16 @@ import {
   type PwaUser,
 } from 'pwa-auth';
 
-import { firebaseConfig } from './firebase-config.js';
 import { store } from './store.js';
 import { setUser } from './user/user_state.js';
 
+const localHost = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+if (localHost) {
+  connectAuthEmulator(getAuth(), 'http://127.0.0.1:9099', { disableWarnings: true });
+  connectFirestoreEmulator(getFirestore(), '127.0.0.1', 8088);
+}
+
 initialize({
-  config: firebaseConfig,
   actionCodeSettings: {
     url: 'https://www.chessdefense.com',
     handleCodeInApp: false,

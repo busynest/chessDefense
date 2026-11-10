@@ -13,6 +13,8 @@ function copySite() {
         html.replace('./out/application-shell.js', './application-shell.js'),
       );
       await copyFile('manifest.json', 'dist/manifest.json');
+      await copyFile('boot.js', 'dist/boot.js');
+      await cp('config', 'dist/config', { recursive: true });
       await copyFile('robots.txt', 'dist/robots.txt');
       await copyFile('sitemap.xml', 'dist/sitemap.xml');
       await cp('images', 'dist/images', { recursive: true });

@@ -7,7 +7,8 @@ import { pathToward } from './pathing.js';
 import { createMatch } from './setup.js';
 import { step } from './simulate.js';
 import type { GameState, Soldier, Tower } from './types.js';
-import { BLOCKS, KING_LEAK, OVERCHARGE, PIECES, SOLDIERS, WAVES, repairCost, upgradeCost } from './units.js';
+import { shouldPublish } from './publish.js';
+import { BLOCKS, KING_LEAK, OVERCHARGE, PIECES, SOLDIERS, WAVES, overchargeCost, repairCost, upgradeCost } from './units.js';
 
 function playing(): GameState {
   return createMatch({ mode: 'local', difficulty: 'normal', seed: 7 });
@@ -39,6 +40,7 @@ function place(state: GameState, partial: Pick<Tower, 'side' | 'kind' | 'file' |
     mendedTick: 0,
     overchargeUntil: 0,
     overchargeReadyTick: 0,
+    overchargeUses: 0,
     hurtBy: null,
   };
   state.towers.push(tower);
@@ -112,8 +114,9 @@ test('overcharge spends gold on a level 3 tower and then waits', () => {
   pawn.level = 3;
   const charged = tryOvercharge(state, 'white', 0, 1);
   assert.equal(charged.ok, true);
-  assert.equal(charged.state.gold.white, 80 - OVERCHARGE.cost);
+  assert.equal(charged.state.gold.white, 80 - overchargeCost(0));
   const piece = towerAt(charged.state, 0, 1)!;
+  assert.equal(piece.overchargeUses, 1);
   assert.equal(piece.overchargeUntil, charged.state.tick + OVERCHARGE.duration);
   assert.equal(tryOvercharge(charged.state, 'white', 0, 1).ok, false);
   const foe = fighter({ id: 'target', side: 'black', kind: 'peasant', x: 1, y: 4, hp: 40, maxHp: 40 });
@@ -127,6 +130,31 @@ test('overcharge spends gold on a level 3 tower and then waits', () => {
   const normalHit = step(quiet).soldiers.find((soldier) => soldier.id === 'target')!.hp;
   const boostedHit = step(boosted).soldiers.find((soldier) => soldier.id === 'boosted')!.hp;
   assert.ok(boostedHit < normalHit);
+});
+
+test('the host publishes the tick the King falls', () => {
+  assert.equal(shouldPublish('playing', 5, -1), true);
+  assert.equal(shouldPublish('playing', 6, -1), false);
+  assert.equal(shouldPublish('playing', 5, 5), false);
+  assert.equal(shouldPublish('victory', 7, 5), true);
+  assert.equal(shouldPublish('victory', 7, 7), false);
+  assert.equal(shouldPublish('lobby', 0, -1), false);
+});
+
+test('overcharge costs more the next time that tower buys it', () => {
+  const state = bare();
+  const pawn = place(state, { side: 'white', kind: 'pawn', file: 0, rank: 1 });
+  pawn.level = 3;
+  state.gold.white = 400;
+  const first = tryOvercharge(state, 'white', 0, 1);
+  assert.equal(first.ok, true);
+  const cooled = first.state;
+  cooled.tick = towerAt(cooled, 0, 1)!.overchargeReadyTick;
+  const second = tryOvercharge(cooled, 'white', 0, 1);
+  assert.equal(second.ok, true);
+  assert.ok(overchargeCost(1) > overchargeCost(0));
+  assert.equal(second.state.gold.white, 400 - overchargeCost(0) - overchargeCost(1));
+  assert.equal(towerAt(second.state, 0, 1)?.overchargeUses, 2);
 });
 
 test('an upgrade spends gold, raises the level, and stops at level 3', () => {

@@ -51,10 +51,11 @@ export function watchMatch(
 }
 
 export async function publishSnapshot(code: string, game: GameState): Promise<void> {
+  const snapshot = JSON.parse(JSON.stringify(game)) as GameState;
   await updateDoc(doc(db, 'matches', code), {
-    snapshot: game,
-    status: game.status,
-    winner: game.winner,
+    snapshot,
+    status: snapshot.status,
+    winner: snapshot.winner,
   });
 }
 
@@ -71,7 +72,14 @@ export function watchInputs(
   onCommand: (id: string, command: PlayerCommand) => void,
   onError: (message: string) => void,
 ): Unsubscribe {
+  let live = false;
   return onSnapshot(collection(db, 'matches', code, 'inputs'), (snap) => {
+    // The first snapshot is the backlog. Replaying it after a listener
+    // restart would spend the same guest order a second time.
+    if (!live) {
+      live = true;
+      return;
+    }
     for (const change of snap.docChanges()) {
       if (change.type !== 'added') continue;
       const data = change.doc.data() as { command?: PlayerCommand };

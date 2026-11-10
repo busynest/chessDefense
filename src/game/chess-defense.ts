@@ -26,11 +26,12 @@ import {
 } from './game_state.js';
 import { handleOvercharge, handleRepair, handleSpell, handleUpgrade } from './input.js';
 import { createMatchDoc, joinMatchDoc, matchCode, publishSnapshot, readMatch, signedInUid, watchInputs, watchMatch } from './online.js';
+import { shouldPublish } from './publish.js';
 import { loadCareer, recordResult } from './record.js';
 import './board-square.js';
 import { connectStore, store, type RootState } from '../store.js';
 import type { Difficulty, GameState, PlayerCommand, Side, SpellId } from './types.js';
-import { OVERCHARGE, PIECES, SPELLS, combatOf, overcharged, repairCost, squareName, upgradeCost } from './units.js';
+import { PIECES, SPELLS, combatOf, overchargeCost, overcharged, repairCost, squareName, upgradeCost } from './units.js';
 import type { Unsubscribe } from 'firebase/firestore';
 
 @customElement('chess-defense')
@@ -121,7 +122,7 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
         }
       }
     }
-    if (slice.role === 'host' && slice.game.status === 'playing' && slice.game.tick !== this.lastPublish && slice.game.tick % 5 === 0) {
+    if (slice.role === 'host' && shouldPublish(slice.game.status, slice.game.tick, this.lastPublish)) {
       this.lastPublish = slice.game.tick;
       void publishSnapshot(slice.onlineCode, slice.game).catch((error: unknown) => {
         store.dispatch(setOnlineNote(error instanceof Error ? error.message : 'Could not sync the match.'));
@@ -140,9 +141,19 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
     const slice = store.getState().game;
     if (slice.role === 'host' && data.guestId && slice.game.status === 'lobby') {
       store.dispatch(openOnline());
-      void publishSnapshot(slice.onlineCode, store.getState().game.game);
+      const live = store.getState().game.game;
+      void publishSnapshot(slice.onlineCode, live).catch((error: unknown) => {
+        store.dispatch(setOnlineNote(error instanceof Error ? error.message : 'Could not open the match.'));
+      });
     }
-    if (slice.role === 'guest' && data.snapshot) store.dispatch(applySnapshot(data.snapshot));
+    if (slice.role === 'guest' && data.snapshot) {
+      store.dispatch(applySnapshot(data.snapshot));
+      const status = data.snapshot.status;
+      const note = status === 'victory'
+        ? (data.snapshot.winner === 'black' ? 'Black won.' : data.snapshot.winner === 'white' ? 'White won.' : 'Draw.')
+        : status === 'playing' ? 'Match live.' : '';
+      if (note) store.dispatch(setOnlineNote(note));
+    }
   }
 
   private onInput(id: string, command: PlayerCommand): void {
@@ -445,7 +456,7 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
       ? `Charged ${Math.ceil((tower.overchargeUntil - tick) / 10)}s`
       : wait > 0
         ? `Charge ${Math.ceil(wait / 10)}s`
-        : `Overcharge ${OVERCHARGE.cost}`;
+        : `Overcharge ${overchargeCost(tower.overchargeUses)}`;
     return html`
       <button
         type="button"
