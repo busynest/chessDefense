@@ -7,8 +7,9 @@ import { towerAt } from './chess.js';
 import { pieceSvg } from './glyphs.js';
 import { handleCell, handleSquare } from './input.js';
 import './one-square.js';
-import type { Soldier } from './types.js';
+import type { SoldierKind } from './types.js';
 import { playCollapse, playHit, playStrike } from './sound.js';
+import { blitSprite, spriteAtlas, type Pose } from './sprites.js';
 import { connectStore, type RootState } from '../store.js';
 import type { GameState, PieceKind, Side, Square } from './types.js';
 import { previewRoute } from './pathing.js';
@@ -32,6 +33,8 @@ export class BoardSquare extends connect(connectStore)(LitElement) {
   private ruinTimer = 0;
   private seenShots = new Set<string>();
   private paintWait = 0;
+  private lastX = new Map<string, number>();
+  private hurt = new Map<string, number>();
 
   override stateChanged(state: RootState): void {
     this.bright = state.prefs.palette === 'bright';
@@ -63,12 +66,17 @@ export class BoardSquare extends connect(connectStore)(LitElement) {
         this.flashes.add(key);
         window.setTimeout(() => { this.flashes.delete(key); this.requestUpdate(); }, 280);
       }
+      for (const soldier of next.soldiers) {
+        const prev = this.game.soldiers.find((item) => item.id === soldier.id);
+        if (prev && soldier.hp < prev.hp - 0.4) this.hurt.set(soldier.id, now + 160);
+      }
       for (const soldier of this.game.soldiers) {
         if (!soldiers.has(soldier.id)) {
           this.ashes.push({
             x: soldier.x,
             y: soldier.y,
             side: soldier.side,
+            kind: soldier.kind,
             born: now,
             linked: soldier.originId !== '' && !ids.has(soldier.originId),
           });
@@ -122,10 +130,63 @@ export class BoardSquare extends connect(connectStore)(LitElement) {
     if (!ctx) return;
     ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
     ctx.clearRect(0, 0, width, height);
-    const cell = width / 16;
+    const atlas = spriteAtlas(ratio, this.bright);
+    const cellW = width / 16;
+    const cellH = height / 16;
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const crowd = game.soldiers.length > 48;
+    const now = performance.now();
     for (const soldier of game.soldiers) {
       const spot = exitSpot(game, soldier);
-      drawSoldier(ctx, soldier, (spot.x + 0.5) * cell, (15 - spot.y + 0.5) * cell, cell * 0.42, this.bright);
+      let py = (15 - spot.y + 0.5) * cellH;
+      const px = (spot.x + 0.5) * cellW;
+      if (!reduced && !crowd) py -= Math.sin(game.tick * 0.8 + spot.x) * cellH * 0.05;
+      const prev = this.lastX.get(soldier.id);
+      const flip = prev !== undefined && spot.x < prev - 0.04;
+      this.lastX.set(soldier.id, spot.x);
+      const cooling = soldier.attackReadyTick - game.tick;
+      const attacking = !reduced && cooling >= 5 && cooling <= 12;
+      const pose: Pose = attacking ? 'attack' : 'walk';
+      const frame = reduced ? 1 : attacking ? Math.min(2, 12 - cooling) : (Math.floor(game.tick / 2) + spot.x) % 4;
+      if (soldier.buffUntil >= game.tick) {
+        ctx.fillStyle = 'rgba(246, 226, 122, 0.35)';
+        ctx.beginPath();
+        ctx.arc(px, py, cellW * 0.42, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      blitSprite(ctx, atlas, soldier.kind, soldier.side, pose, frame, px, py, cellW * 0.95, cellH * 1.25, flip);
+      if (soldier.power >= 1.3) {
+        ctx.fillStyle = 'rgba(240, 215, 138, 0.9)';
+        ctx.fillRect(px - 2, py - cellH * 0.7, 4, 2);
+      }
+      if ((this.hurt.get(soldier.id) ?? 0) > now) {
+        ctx.save();
+        ctx.globalAlpha = 0.55;
+        ctx.fillStyle = '#fff';
+        ctx.beginPath();
+        ctx.ellipse(px, py - cellH * 0.15, cellW * 0.28, cellH * 0.4, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+    for (const ash of this.ashes) {
+      const age = Math.min(1, (now - ash.born) / 700);
+      ctx.save();
+      ctx.globalAlpha = 1 - age;
+      blitSprite(
+        ctx,
+        atlas,
+        ash.kind,
+        ash.side,
+        'death',
+        age > 0.45 ? 1 : 0,
+        (ash.x + 0.5) * cellW,
+        (15 - ash.y + 0.5) * cellH + age * cellH * 0.3,
+        cellW * 0.95,
+        cellH * 1.25,
+        false,
+      );
+      ctx.restore();
     }
   }
 
@@ -495,60 +556,10 @@ interface Ash {
   x: number;
   y: number;
   side: Side;
+  kind: SoldierKind;
   born: number;
   /** The parent tower fell, so this soldier faded with it. */
   linked: boolean;
-}
-
-function drawSoldier(ctx: CanvasRenderingContext2D, soldier: Soldier, x: number, y: number, size: number, bright: boolean): void {
-  const cloth = bright
-    ? (soldier.side === 'white' ? '#7ec8ff' : '#ff9a3c')
-    : (soldier.side === 'white' ? '#d5e4f2' : '#c46a55');
-  const dark = soldier.side === 'white' ? '#1d3348' : '#2a120e';
-  ctx.save();
-  ctx.translate(x, y);
-  ctx.fillStyle = cloth;
-  ctx.strokeStyle = dark;
-  ctx.lineWidth = 1;
-  if (soldier.kind === 'knight' || soldier.kind === 'guard') {
-    ctx.beginPath();
-    ctx.moveTo(0, -size);
-    ctx.lineTo(size * 0.8, size * 0.7);
-    ctx.lineTo(-size * 0.8, size * 0.7);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-  } else if (soldier.kind === 'cannon') {
-    ctx.fillRect(-size, -size * 0.35, size * 2, size * 0.7);
-    ctx.strokeRect(-size, -size * 0.35, size * 2, size * 0.7);
-  } else if (soldier.kind === 'mage') {
-    ctx.beginPath();
-    ctx.moveTo(0, -size);
-    ctx.lineTo(size * 0.7, 0);
-    ctx.lineTo(0, size);
-    ctx.lineTo(-size * 0.7, 0);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-  } else {
-    ctx.beginPath();
-    ctx.arc(0, 0, size * 0.72, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-  }
-  ctx.fillStyle = soldier.side === 'white' ? '#7ec8ff' : '#ff9a3c';
-  if (soldier.side === 'white') {
-    ctx.beginPath();
-    ctx.arc(0, size * 0.85, size * 0.22, 0, Math.PI * 2);
-    ctx.fill();
-  } else {
-    ctx.save();
-    ctx.translate(0, size * 0.85);
-    ctx.rotate(Math.PI / 4);
-    ctx.fillRect(-size * 0.18, -size * 0.18, size * 0.36, size * 0.36);
-    ctx.restore();
-  }
-  ctx.restore();
 }
 
 function exitSpot(game: GameState, soldier: GameState['soldiers'][number]): { x: number; y: number } {

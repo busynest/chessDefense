@@ -93,9 +93,18 @@ Easy's gold-cap time fell from 74% to 52%. The longest game is 385s, down from 4
 
 108 games after the hunt and the full King hit. Nothing unfinished, no draws. Easy vs Easy 6–6, mean 233s, wave 14.7. Normal vs Normal 6–6, 275s. Hard vs Hard 5–7, 291s. Normal and Hard both beat Easy 24–0. Hard beats Normal 15–9, means 270–293s. Longest game 371s. Twenty-six games pass five minutes and end in the exposed minute. Easy gold-cap time 52%. All-sides gold cap 42%. Overcharge 15.4 per game.
 
+## Sprite pass
+
+| Category | Was | Now | What changed |
+| --- | --- | --- | --- |
+| Visual polish | 7 | 8 | The six soldiers are original drawings on the same canvas: peasant, mounted knight, archer, iron cannon, mage, and royal guard. White is pale steel with blue trim. Black is obsidian with amber trim. Bright colors swaps the inks to blue and orange. A circle or a diamond stays under the feet. |
+| Performance | 7 | 7 | The atlas is built once per device pixel ratio and palette. Classic took 8.8ms, bright 6.4ms, and the sheet is 432×576. At 4× CPU, wave 12, 64 soldiers: token idle 16.7ms, sprite idle 17.6ms, token stress 19.3ms, sprite stress 20.6ms. Reduced motion holds a static frame. Past 48 soldiers the idle bob still stops. |
+
+The simulation did not change, so the 108-game batch matches the hunt numbers above. Overall stays 7. The atlas reads at board size, and it is still flatter than the tower illustrations.
+
 ## Still left for a 10
 
-- Soldier tokens are clear and cheap, and they are not the old illustrated sprites.
+- The soldier atlas is original and readable, and it is still flatter than the tower illustrations.
 - The desktop panel is shorter and still lists every system once a tower is selected.
 - Online rematch has no ready check and has not been sat through in two browsers under latency.
 - Focus order on the board squares is the browser default.

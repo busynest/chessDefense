@@ -5,6 +5,7 @@ import { PageViewElement } from '../lazy-loader.js';
 import { BLOCKS, PIECES, SOLDIERS, SPELLS, SUDDEN, WAVES } from '../game/units.js';
 import { navigate } from './application_state.js';
 import { store } from '../store.js';
+import '../game/sprites.js';
 import type { PieceKind, SoldierKind, SpellId } from '../game/types.js';
 
 @customElement('how-to-page')
@@ -66,7 +67,7 @@ export class HowToPage extends PageViewElement {
           ${soldiers.map((kind) => {
             const soldier = SOLDIERS[kind];
             return html`<tr>
-              <td>${soldier.label}</td>
+              <td><soldier-icon kind=${kind} side="white"></soldier-icon><soldier-icon kind=${kind} side="black"></soldier-icon> ${soldier.label}</td>
               <td>${soldier.strength}</td>
               <td>${soldier.hp}</td>
               <td>${soldier.speed}</td>
