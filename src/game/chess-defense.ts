@@ -285,6 +285,13 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
         text-align: center;
       }
       .banner { text-align: center; min-height: 1.2em; color: #f6e7a8; font-family: Cinzel, Palatino, serif; }
+      .coach { margin: 0; color: #f3e6cf; font-size: 0.92rem; }
+      @media (max-width: 720px) {
+        .play { display: flex; flex-direction: column; }
+        .table { order: -1; }
+        .hud { padding: 10px; }
+        h1 { font-size: 1.7rem; }
+      }
     `;
   }
 
@@ -295,7 +302,7 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
     return html`
       <div class="play">
         ${this.hud(slice)}
-        <div>
+        <div class="table">
           <p class="banner">${slice.game.banner?.text ?? ''}</p>
           <board-square></board-square>
           ${slice.game.status === 'victory' ? this.victory(slice) : ''}
@@ -370,6 +377,7 @@ export class ChessDefense extends connect(connectStore)(LitElement) {
         ${(['white', 'black'] as const).map((side) => html`
           <div class="gold">${side === 'white' ? 'White' : 'Black'} ${Math.floor(game.gold[side])} gold · ${Math.floor(game.mana[side])} mana</div>
         `)}
+        ${game.wave === 0 ? html`<p class="coach">Destroy the enemy King tower. Click one of your towers, then a glowing square. The wall button shades your half: green can be built, red cannot.</p>` : ''}
         ${selected ? html`
           <div>
             <strong>${selected.side} ${PIECES[selected.kind].label}</strong>

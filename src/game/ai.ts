@@ -6,7 +6,8 @@ import { AI_PERIOD, BLOCKS, PIECES, SPELLS } from './units.js';
 
 /**
  * One decision for the computer side. Easy hesitates and mostly heals.
- * Normal uses every spell and takes captures. Hard acts often and walks pieces forward.
+ * Normal uses every spell and takes captures. Hard acts often, walls a lane,
+ * and develops pieces without stepping into the enemy army.
  * The rng state on the match advances so the same seed replays the same game.
  */
 export function aiAct(state: GameState): void {
@@ -28,7 +29,7 @@ function layBlock(state: GameState, side: Side): boolean {
   const rows = side === 'white' ? [6, 7, 5, 4] : [9, 8, 10, 11];
   for (const y of rows) {
     for (let x = 0; x < 16; x += 1) {
-      if (Math.abs(x - gap) <= (state.difficulty === 'hard' ? 0 : 1)) continue;
+      if (Math.abs(x - gap) <= 1) continue;
       if (state.blocks.some((block) => block.x === x && block.y === y && block.hp > 0)) continue;
       const placed = tryPlaceBlock(state, side, x, y);
       if (!placed.ok) continue;
@@ -43,17 +44,17 @@ function cast(state: GameState, side: Side): boolean {
   const queen = state.towers.find((tower) => tower.side === side && tower.kind === 'queen' && tower.hp > 0);
   if (!queen) return false;
   const mana = state.mana[side];
-  const hurtFriend = state.towers.some((tower) => tower.side === side && tower.hp > 0 && tower.hp / tower.maxHp < (state.difficulty === 'easy' ? 0.3 : 0.5));
-  if (hurtFriend && mana >= SPELLS.heal.mana) {
-    return apply(state, trySpell(state, side, 'heal').state);
-  }
   const nearEnemies = state.soldiers.filter((soldier) => {
     if (soldier.side === side || soldier.hp <= 0) return false;
     return chebyshev(soldier.x, soldier.y, queen.file * 2 + 0.5, queen.rank * 2 + 0.5) <= 5;
   }).length;
-  const blastAt = state.difficulty === 'hard' ? 2 : state.difficulty === 'normal' ? 3 : 5;
+  const blastAt = state.difficulty === 'easy' ? 4 : 2;
   if (nearEnemies >= blastAt && mana >= SPELLS.blast.mana) {
     return apply(state, trySpell(state, side, 'blast').state);
+  }
+  const hurtFriend = state.towers.some((tower) => tower.side === side && tower.hp > 0 && tower.hp / tower.maxHp < 0.4);
+  if (hurtFriend && mana >= SPELLS.heal.mana) {
+    return apply(state, trySpell(state, side, 'heal').state);
   }
   const friends = state.soldiers.filter((soldier) => soldier.side === side && soldier.hp > 0).length;
   if (state.difficulty !== 'easy' && friends >= 2 && mana >= SPELLS.blessing.mana && roll(state) < 0.65) {
@@ -87,11 +88,12 @@ function reposition(state: GameState, side: Side): void {
       return;
     }
     if (tower.kind === 'king') continue;
-    const advanceBias = state.difficulty === 'hard' ? 0.85 : state.difficulty === 'normal' ? 0.45 : 0.18;
+    const advanceBias = state.difficulty === 'hard' ? 0.5 : state.difficulty === 'normal' ? 0.4 : 0.15;
     if (roll(state) > advanceBias) continue;
     const forward = [...moves].sort((a, b) => forwardness(side, b) - forwardness(side, a))[0];
     if (!forward) continue;
     if (forwardness(side, forward) <= forwardness(side, tower)) continue;
+    if (walksIntoArmy(state, side, forward)) continue;
     commit(state, tower, forward);
     return;
   }
@@ -121,6 +123,13 @@ function nearestThreat(x: number, y: number, threats: GameState['soldiers']): nu
     if (dist < best) best = dist;
   }
   return best;
+}
+
+function walksIntoArmy(state: GameState, side: Side, square: Square): boolean {
+  return state.soldiers.some((soldier) => {
+    if (soldier.side === side || soldier.hp <= 0) return false;
+    return chebyshev(soldier.x, soldier.y, square.file * 2 + 0.5, square.rank * 2 + 0.5) <= 3;
+  });
 }
 
 function forwardness(side: Side, square: { rank: number }): number {

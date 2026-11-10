@@ -1,6 +1,7 @@
 import { legalMoves, towerAt } from './chess.js';
 import { chebyshev, placementSeals, towerCells } from './pathing.js';
 import type { GameState, Side, SpellId, Square } from './types.js';
+import { reportHarm } from './telemetry.js';
 import { BLOCKS, ECONOMY, PIECES, SOLDIERS, SPELLS, ownsHalf, squareName } from './units.js';
 
 export interface MoveResult {
@@ -102,6 +103,15 @@ export function trySpell(input: GameState, side: Side, spell: SpellId): MoveResu
       if (chebyshev(soldier.x, soldier.y, cx, cy) > def.radius) continue;
       soldier.hp -= def.damage;
       soldier.hurtBy = side;
+      reportHarm({
+        source: 'blast',
+        kind: 'blast',
+        side,
+        target: 'soldier',
+        targetKind: soldier.kind,
+        amount: def.damage,
+        lethal: soldier.hp <= 0,
+      });
     }
     for (const tower of state.towers) {
       if (tower.side === side || tower.hp <= 0) continue;
@@ -109,6 +119,15 @@ export function trySpell(input: GameState, side: Side, spell: SpellId): MoveResu
       if (distance > 2) continue;
       tower.hp -= def.towerDamage;
       tower.hurtBy = side;
+      reportHarm({
+        source: 'blast',
+        kind: 'blast',
+        side,
+        target: 'tower',
+        targetKind: tower.kind,
+        amount: def.towerDamage,
+        lethal: tower.hp <= 0,
+      });
     }
   }
   state.effects.push({

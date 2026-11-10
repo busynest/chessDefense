@@ -8,8 +8,8 @@ export const TICK_SECONDS = 0.1;
  * Both sides receive the same income. Caps keep a stalled match readable.
  */
 export const ECONOMY = {
-  goldPerTick: 1,
-  manaPerTick: 0.5,
+  goldPerTick: 0.8,
+  manaPerTick: 0.4,
   startingGold: 48,
   startingMana: 18,
   goldCap: 400,
@@ -77,8 +77,8 @@ export const PIECES: Record<PieceKind, PieceDef> = {
     hp: 80,
     moveCost: 18,
     moveTicks: 50,
-    auraRange: 1,
-    auraDamage: 8,
+    auraRange: 2,
+    auraDamage: 6,
     auraTicks: 14,
     bounty: 20,
   },
@@ -133,7 +133,7 @@ export const SOLDIERS: Record<SoldierKind, SoldierDef> = {
   peasant: { label: 'Peasant', strength: 5, hp: 16, speed: 2.2, range: 1, attackTicks: 8, bounty: 3 },
   knight: { label: 'Knight', strength: 12, hp: 34, speed: 3.4, range: 1, attackTicks: 9, bounty: 7 },
   archer: { label: 'Archer', strength: 8, hp: 16, speed: 2.0, range: 4, attackTicks: 10, bounty: 5 },
-  cannon: { label: 'Iron Cannon', strength: 18, hp: 26, speed: 1.0, range: 6, attackTicks: 16, bounty: 9 },
+  cannon: { label: 'Iron Cannon', strength: 14, hp: 26, speed: 1.0, range: 5, attackTicks: 16, bounty: 9 },
   mage: { label: 'Mage', strength: 9, hp: 20, speed: 1.8, range: 3, attackTicks: 11, bounty: 8 },
   guard: { label: 'Royal Guard', strength: 14, hp: 46, speed: 1.5, range: 1, attackTicks: 8, bounty: 10 },
 };
@@ -197,8 +197,8 @@ export function otherSide(side: Side): Side {
  * and strength. Nothing spawns between launches.
  */
 export const WAVES = {
-  /** Ticks of building before wave 1. 12 seconds. */
-  firstWaveTick: 120,
+  /** Ticks of building before wave 1. 18 seconds. */
+  firstWaveTick: 180,
   /** Ticks from one launch to the next. 15 seconds. */
   gapTicks: 150,
   /** Most soldiers one side may have on the board. */

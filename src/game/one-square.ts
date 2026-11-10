@@ -34,30 +34,43 @@ export class OneSquare extends LitElement {
         min-width: 0;
         aspect-ratio: 1;
         background:
-          linear-gradient(145deg, rgba(255,255,255,0.22), transparent 42%),
-          repeating-linear-gradient(90deg, rgba(90,60,30,0.05) 0 1px, transparent 1px 3px),
-          #e4d3b4;
-        box-shadow: inset 0 1px 0 rgba(255,255,255,0.35), inset 0 -2px 0 rgba(40,24,8,0.28);
+          linear-gradient(155deg, rgba(255, 228, 190, 0.28), transparent 36%),
+          repeating-linear-gradient(90deg, rgba(70, 40, 16, 0.07) 0 1px, transparent 1px 7px),
+          repeating-linear-gradient(0deg, rgba(50, 28, 12, 0.05) 0 1px, transparent 1px 9px),
+          radial-gradient(circle at 28% 18%, #c4a882, #7a5340 82%);
+        box-shadow:
+          inset 0 1px 0 rgba(255, 244, 220, 0.7),
+          inset 0 -3px 0 rgba(48, 26, 10, 0.48),
+          inset 3px 0 5px rgba(40, 20, 8, 0.16);
       }
       :host([dark]) {
         background:
-          linear-gradient(145deg, rgba(255,255,255,0.08), transparent 40%),
-          repeating-linear-gradient(90deg, rgba(0,0,0,0.08) 0 1px, transparent 1px 3px),
-          #8a6244;
+          linear-gradient(155deg, rgba(255, 200, 150, 0.12), transparent 40%),
+          repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.18) 0 1px, transparent 1px 7px),
+          repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.12) 0 1px, transparent 1px 9px),
+          radial-gradient(circle at 28% 18%, #6a4032, #241610 84%);
+        box-shadow:
+          inset 0 1px 0 rgba(255, 220, 180, 0.28),
+          inset 0 -3px 0 rgba(8, 4, 2, 0.62),
+          inset 3px 0 6px rgba(0, 0, 0, 0.22);
       }
       :host([hint='selected']) {
         box-shadow: inset 0 0 0 2px #f6e7a8, 0 0 14px rgba(246, 214, 120, 0.85);
         z-index: 2;
       }
-      :host([portal]) .piece { filter: drop-shadow(0 0 6px #f0c56a); }
+      :host([portal]) .piece { filter: drop-shadow(0 0 7px #f0c56a) drop-shadow(0 4px 2px rgba(0, 0, 0, 0.5)); }
       four-square { position: absolute; inset: 0; }
-      .piece { position: absolute; inset: 4% 4% 14%; }
+      .piece {
+        position: absolute;
+        inset: -10% -4% 5%;
+        filter: drop-shadow(0 4px 2px rgba(0, 0, 0, 0.5));
+      }
       .hp {
         position: absolute;
         left: 12%;
         right: 12%;
-        bottom: 5%;
-        height: 4px;
+        bottom: 3%;
+        height: 5px;
         border-radius: 4px;
         background: rgba(12, 8, 6, 0.72);
         box-shadow: 0 0 0 1px rgba(232, 206, 150, 0.45);

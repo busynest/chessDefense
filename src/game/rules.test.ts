@@ -282,6 +282,87 @@ test('a tower at zero life is removed and no longer blocks its cells', () => {
   assert.equal(next.status, 'playing');
 });
 
+test('a tower still deploys when a wall covers its own file', () => {
+  let state = bare();
+  state.gold.white = 500;
+  place(state, { side: 'white', kind: 'pawn', file: 0, rank: 1 });
+  place(state, { side: 'black', kind: 'king', file: 4, rank: 7 });
+  for (const y of [4, 5, 6]) {
+    for (const x of [0, 1]) {
+      const placed = tryPlaceBlock(state, 'white', x, y);
+      assert.equal(placed.ok, true, `${x},${y}`);
+      state = placed.state;
+    }
+  }
+  state.nextWaveTick = state.tick + 1;
+  state = step(state);
+  const spawned = state.soldiers.filter((soldier) => soldier.side === 'white');
+  assert.equal(spawned.length, 1);
+  assert.ok(spawned[0]!.x >= 2, `spawned on the walled file at x ${spawned[0]!.x}`);
+});
+
+test('a soldier walks a one-cell gap instead of chewing the wall beside it', () => {
+  const state = bare();
+  place(state, { side: 'white', kind: 'king', file: 0, rank: 0 });
+  place(state, { side: 'black', kind: 'king', file: 4, rank: 7 });
+  for (let x = 0; x < 16; x += 1) {
+    if (x === 8) continue;
+    state.blocks.push({ x, y: 8, side: 'black', hp: 28, maxHp: 28, hurtBy: null });
+  }
+  state.soldiers = [{
+    id: 'runner',
+    side: 'white',
+    kind: 'peasant',
+    x: 0,
+    y: 6,
+    hp: 40,
+    maxHp: 40,
+    attackReadyTick: 0,
+    repathTick: 0,
+    path: [],
+    buffUntil: 0,
+    buffStr: 0,
+    buffSpeed: 1,
+    power: 1,
+    hurtBy: null,
+  }];
+  let cursor = state;
+  for (let i = 0; i < 90; i += 1) cursor = step(cursor);
+  const soldier = cursor.soldiers.find((unit) => unit.id === 'runner');
+  assert.ok(soldier, 'the soldier should still be alive');
+  assert.ok(soldier.y > 8, `stuck at ${soldier.x},${soldier.y}`);
+  assert.ok(cursor.blocks.length > 12);
+});
+
+test('a soldier breaks a wall when every route is closed', () => {
+  const state = bare();
+  place(state, { side: 'white', kind: 'king', file: 0, rank: 0 });
+  place(state, { side: 'black', kind: 'king', file: 4, rank: 7 });
+  for (let x = 0; x < 16; x += 1) state.blocks.push({ x, y: 8, side: 'black', hp: 28, maxHp: 28, hurtBy: null });
+  state.soldiers = [{
+    id: 'axe',
+    side: 'white',
+    kind: 'peasant',
+    x: 8,
+    y: 7,
+    hp: 40,
+    maxHp: 40,
+    attackReadyTick: 0,
+    repathTick: 0,
+    path: [],
+    buffUntil: 0,
+    buffStr: 0,
+    buffSpeed: 1,
+    power: 1,
+    hurtBy: null,
+  }];
+  let cursor = state;
+  for (let i = 0; i < 20; i += 1) cursor = step(cursor);
+  const rank = cursor.blocks.filter((block) => block.y === 8);
+  const life = rank.reduce((sum, block) => sum + block.hp, 0);
+  assert.ok(life < 16 * 28, `wall rank still has ${life} life`);
+});
+
 test('selling a block returns part of its cost', () => {
   const state = bare();
   const placed = tryPlaceBlock(state, 'white', 2, 5);

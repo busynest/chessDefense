@@ -48,7 +48,7 @@ export function createMatch(options: { mode: Mode; difficulty: Difficulty; seed:
     projectiles: [],
     blocks: [],
     effects: [],
-    banner: { text: 'Build. The first wave has not marched.', until: WAVES.firstWaveTick },
+    banner: { text: 'Destroy the enemy King tower. Wave 1 has not marched.', until: WAVES.firstWaveTick },
   };
 }
 

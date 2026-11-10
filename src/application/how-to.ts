@@ -2,7 +2,7 @@ import { css, html, type CSSResultGroup, type TemplateResult } from 'lit';
 import { customElement } from 'lit/decorators.js';
 
 import { PageViewElement } from '../lazy-loader.js';
-import { PIECES, SOLDIERS, SPELLS } from '../game/units.js';
+import { BLOCKS, PIECES, SOLDIERS, SPELLS, WAVES } from '../game/units.js';
 import type { PieceKind, SoldierKind, SpellId } from '../game/types.js';
 
 @customElement('how-to-page')
@@ -46,7 +46,7 @@ export class HowToPage extends PageViewElement {
       </section>
       <section>
         <h2>Soldiers</h2>
-        <p>Waves leave every living tower at once. The first march is 12 seconds in, then every 15 seconds. Later waves send more soldiers, with more life and strength. They walk the 16×16 grid toward the enemy King tower. Strength is the damage of one hit. Speed is cells per second. Walls cost 12 gold, have 28 life, and refund 6. White builds on the bottom half. Black builds on the top half.</p>
+        <p>Waves leave every living tower at once. The first march is ${WAVES.firstWaveTick / 10} seconds in, then every ${WAVES.gapTicks / 10} seconds. Later waves send more soldiers, with more life and strength. They walk the 16×16 grid toward the enemy King tower. Strength is the damage of one hit. Speed is cells per second. Walls cost ${BLOCKS.cost} gold, have ${BLOCKS.hp} life, and refund ${BLOCKS.refund}. White builds on the bottom half. Black builds on the top half.</p>
         <table>
           <tr><th>Soldier</th><th>Strength</th><th>Life</th><th>Speed</th><th>Range</th></tr>
           ${soldiers.map((kind) => {
@@ -72,6 +72,7 @@ export class HowToPage extends PageViewElement {
         <h2>Controls</h2>
         <ul>
           <li>Click or tap your tower, then a highlighted square. Green is a move, red is a capture.</li>
+          <li>The wall button shades your half. Tap an empty cell to build. A green ghost is legal and a red ghost is not. Tap your own wall to sell it.</li>
           <li>Spell buttons sit in the panel. They stay quiet until you can afford them.</li>
           <li>Pause freezes the armies. Menu leaves the match.</li>
           <li>Versus AI, you are White. Local play is simultaneous: both colors can be moved on this screen while the clock runs. Online, the host is White and runs the match; the guest is Black and sends orders to the host.</li>

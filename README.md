@@ -10,21 +10,19 @@ There are two layers.
 
 There is no castling, no en passant, and pawns do not promote. A pawn moves one square toward the enemy, or two from its starting square when the path is clear, and captures one square diagonally forward.
 
-**Armies, the 16×16.** Every chess square is split into four cells. Soldiers do not spawn in a trickle. After a 12 second build, every living tower releases its soldier at once: pawns send peasants, knights send cavalry, bishops send archers, rooks send iron cannons, the Queen sends a mage, and the King sends a royal guard. The next wave is 15 seconds later. Wave 1 and 2 send one soldier per tower. Waves 3 and 4 send two. Wave 5 and after send three, and each wave adds 15% life and strength. A side can have 40 soldiers on the board. Anyone past that cap waits for the next launch.
+**Armies, the 16×16.** Every chess square is split into four cells. Soldiers do not spawn in a trickle. After an 18 second build, every living tower releases its soldier at once: pawns send peasants, knights send cavalry, bishops send archers, rooks send iron cannons, the Queen sends a mage, and the King sends a royal guard. The next wave is 15 seconds later. Wave 1 and 2 send one soldier per tower. Waves 3 and 4 send two. Wave 5 and after send three, and each wave adds 15% life and strength. A side can have 40 soldiers on the board. Anyone past that cap waits for the next launch.
 
 Soldiers march toward the enemy King, route around towers and blocks, fight enemy soldiers in range, and attack towers. A tower at zero life is destroyed and leaves the 8×8. Its four cells open up, and it stops sending waves. Towers also shoot soldiers that walk into their range.
 
-**Blocks.** Each player spends 12 gold to place a wall on the 16×16 grid, only on their own half. White's half is the bottom eight rows (screen rows 8–15). Black's half is the top eight (screen rows 0–7). A wall has 28 life. Soldiers that stand next to one will break it, so a maze only stalls. Picking up your own wall refunds 6 gold. A placement that would wall off every route between the two home ranks is rejected. Walls cannot sit on a tower cell or on another wall.
+**Blocks.** Each player spends 12 gold to place a wall on the 16×16 grid, only on their own half. White's half is the bottom eight rows (screen rows 8–15). Black's half is the top eight (screen rows 0–7). A wall has 28 life. Soldiers walk through a gap and only break a wall when it blocks every route, so a maze stalls and a sealed rank gets chewed open. Picking up your own wall refunds 6 gold. A placement that would wall off every route between the two home ranks is rejected. Walls cannot sit on a tower cell or on another wall. A wall in front of a tower does not silence that tower: the soldier deploys on the nearest open cell ahead.
 
-**Economy.** Both towns earn 10 gold and 5 mana each second, starting from 48 gold and 18 mana. Gold pays for tower moves and blocks. Mana pays for Queen spells. Gold caps at 400 and mana at 160.
+**Economy.** Both towns earn 8 gold and 4 mana each second, starting from 48 gold and 18 mana. Gold pays for tower moves and blocks. Mana pays for Queen spells. Gold caps at 400 and mana at 160.
 
 **Queen magic.** Only a living Queen can cast, and every spell is centered on her.
 
 - **Blessing** (24 mana). Friendly soldiers within 5 cells gain 4 strength and 35% speed, plus 6 life, for 6 seconds.
 - **Heal** (28 mana). Friendly towers within 2 chess squares regain 30 life.
 - **Blast** (36 mana). Enemy soldiers within 4 cells take 16 damage. Enemy towers within 2 squares take 10.
-
-**Blocks.** Eight stone blocks sit in the center in two clusters, with a lane between them and open wings on both sides.
 
 **Win.** Destroy the enemy King tower, with soldiers or with a chess capture. If both King towers fall on the same step, the match is a draw.
 
@@ -33,7 +31,7 @@ Soldiers march toward the enemy King, route around towers and blocks, fight enem
 | Tower | Builds each wave | Life | Move | Aura |
 | --- | --- | --- | --- | --- | --- |
 | Pawn | Peasant | 48 | 8 gold, 4.0s | 3 damage, range 2 |
-| Knight | Knight | 80 | 18 gold, 5.0s | 8 damage, range 1 |
+| Knight | Knight | 80 | 18 gold, 5.0s | 6 damage, range 2 |
 | Bishop | Archer | 55 | 16 gold, 5.0s | 5 damage, range 4 |
 | Rook | Iron Cannon | 100 | 24 gold, 7.0s | 12 damage, range 5 |
 | Queen | Mage | 90 | 30 gold, 8.0s | 8 damage, range 4 |
@@ -46,7 +44,7 @@ Auras fire on their own cooldown. They are the tower shooting while its soldiers
 | Peasant | 5 | 16 | 2.2 | 1 | 0.8s |
 | Knight | 12 | 34 | 3.4 | 1 | 0.9s |
 | Archer | 8 | 16 | 2.0 | 4 | 1.0s |
-| Iron Cannon | 18 | 26 | 1.0 | 6 | 1.6s |
+| Iron Cannon | 14 | 26 | 1.0 | 5 | 1.6s |
 | Mage | 9 | 20 | 1.8 | 3 | 1.1s |
 | Royal Guard | 14 | 46 | 1.5 | 1 | 0.8s |
 

@@ -1,6 +1,7 @@
 import { resolveKings, sweepDead } from './commands.js';
 import { distToTower, isBlockedCell, pathToward, towerCells, blockedSet } from './pathing.js';
 import type { GameState, Projectile, Side, Soldier, Tower } from './types.js';
+import { reportHarm } from './telemetry.js';
 import { ECONOMY, PIECES, SOLDIERS, TICK_SECONDS, WAVES } from './units.js';
 import { aiAct } from './ai.js';
 
@@ -100,21 +101,28 @@ function sideCount(state: GameState, side: Side): number {
 function spawnCell(state: GameState, tower: Tower, n: number): { x: number; y: number } | null {
   const dir = tower.side === 'white' ? 1 : -1;
   const forwardY = tower.side === 'white' ? tower.rank * 2 + 2 : tower.rank * 2 - 1;
-  const candidates = [];
-  for (let step = 0; step < 4; step += 1) {
-    const y = forwardY + dir * (n + step);
-    candidates.push({ x: tower.file * 2, y }, { x: tower.file * 2 + 1, y });
-  }
+  const homeX = tower.file * 2;
   const blocked = new Set(state.blocks.map((block) => block.y * 16 + block.x));
   for (const other of state.towers) {
     if (other.hp <= 0) continue;
     for (const cell of towerCells(other)) blocked.add(cell.y * 16 + cell.x);
   }
-  for (const cell of candidates) {
-    if (cell.x < 0 || cell.y < 0 || cell.x > 15 || cell.y > 15) continue;
-    if (!blocked.has(cell.y * 16 + cell.x)) return cell;
+  let best: { x: number; y: number } | null = null;
+  let bestScore = Infinity;
+  for (let y = 0; y < 16; y += 1) {
+    const forward = (y - forwardY) * dir;
+    if (forward < 0 || forward > 6) continue;
+    for (let x = 0; x < 16; x += 1) {
+      if (blocked.has(y * 16 + x)) continue;
+      const side = Math.min(Math.abs(x - homeX), Math.abs(x - (homeX + 1)));
+      const score = forward * 3 + side + (x + y + n) * 0.01;
+      if (score < bestScore) {
+        best = { x, y };
+        bestScore = score;
+      }
+    }
   }
-  return null;
+  return best;
 }
 
 function towersShoot(state: GameState, shots: Strike[]): void {
@@ -125,6 +133,15 @@ function towersShoot(state: GameState, shots: Strike[]): void {
     if (!foe) continue;
     foe.hp -= def.auraDamage;
     foe.hurtBy = tower.side;
+    reportHarm({
+      source: 'tower',
+      kind: tower.kind,
+      side: tower.side,
+      target: 'soldier',
+      targetKind: foe.kind,
+      amount: def.auraDamage,
+      lethal: foe.hp <= 0,
+    });
     tower.auraReadyTick = state.tick + def.auraTicks;
     shots.push({
       x: tower.file * 2 + 0.5,
@@ -147,9 +164,27 @@ function soldiersAct(state: GameState, shots: Strike[]): void {
       if (foe.soldier) {
         foe.soldier.hp -= stats.strength;
         foe.soldier.hurtBy = soldier.side;
+        reportHarm({
+          source: 'soldier',
+          kind: soldier.kind,
+          side: soldier.side,
+          target: 'soldier',
+          targetKind: foe.soldier.kind,
+          amount: stats.strength,
+          lethal: foe.soldier.hp <= 0,
+        });
       } else if (foe.tower) {
         foe.tower.hp -= stats.strength;
         foe.tower.hurtBy = soldier.side;
+        reportHarm({
+          source: 'soldier',
+          kind: soldier.kind,
+          side: soldier.side,
+          target: 'tower',
+          targetKind: foe.tower.kind,
+          amount: stats.strength,
+          lethal: foe.tower.hp <= 0,
+        });
       }
       soldier.attackReadyTick = state.tick + stats.attackTicks;
       shots.push({
@@ -163,22 +198,28 @@ function soldiersAct(state: GameState, shots: Strike[]): void {
       continue;
     }
     if (foe) continue;
-    const wall = nearestBlock(state, soldier);
-    if (wall && soldier.attackReadyTick <= state.tick) {
-      wall.hp -= stats.strength;
-      wall.hurtBy = soldier.side;
-      soldier.attackReadyTick = state.tick + stats.attackTicks;
-      shots.push({ x: soldier.x, y: soldier.y, tx: wall.x, ty: wall.y, side: soldier.side, kind: 'shot' });
-      continue;
-    }
-    if (wall) continue;
     if (soldier.repathTick <= state.tick || soldier.path.length === 0) {
       soldier.path = pathToward(state, soldier.x, soldier.y, soldier.side);
       soldier.repathTick = state.tick + 10;
     }
     const next = soldier.path[0];
-    if (!next) continue;
-    if (isBlockedCell(blocked, next.x, next.y)) {
+    if (!next || isBlockedCell(blocked, next.x, next.y)) {
+      const wall = nearestBlock(state, soldier);
+      if (wall && soldier.attackReadyTick <= state.tick) {
+        wall.hp -= stats.strength;
+        wall.hurtBy = soldier.side;
+        reportHarm({
+          source: 'soldier',
+          kind: soldier.kind,
+          side: soldier.side,
+          target: 'block',
+          targetKind: 'block',
+          amount: stats.strength,
+          lethal: wall.hp <= 0,
+        });
+        soldier.attackReadyTick = state.tick + stats.attackTicks;
+        shots.push({ x: soldier.x, y: soldier.y, tx: wall.x, ty: wall.y, side: soldier.side, kind: 'shot' });
+      }
       soldier.path = pathToward(state, soldier.x, soldier.y, soldier.side);
       soldier.repathTick = state.tick + 10;
       continue;
