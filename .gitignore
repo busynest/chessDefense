@@ -1,4 +1,10 @@
 /node_modules/
 /public/
 /build/
+/dist/
+/out/
 /depreciated/
+*-debug.log
+firestore-debug.log
+/test-results/
+/playwright-report/

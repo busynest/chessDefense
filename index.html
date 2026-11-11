@@ -2,148 +2,36 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <!-- TITLE -->
   <title>Chess Defense</title>
-  <!-- VIEWPORT -->
-  <meta name="viewport"                                   content="width=device-width, initial-scale=1.0">
-  <!-- MANIFEST -->
-  <link rel="manifest"                                    href="manifest.json">
-  <!-- DESCRIPTION -->
-  <meta name="description"                                content="ChessDefense is a New Type of Game, a cross between Chess + Tower Defense!">
-
-        <!-- Redux assumes `process.env.NODE_ENV` exists in the ES module build. https://github.com/reactjs/redux/issues/2907 -->
-        <script async>
-          window.process = { env: { NODE_ENV: 'production' }, nav: {} };
-          console.log('process ',window.process);
-        </script>
-
-        <!-- Force Polyfills -->
-        <script
-          async
-          Set-Cookie: polyr=poly; SameSite=Lax>
-          // Force Polyfills
-          if (window.customElements) window.customElements.forcePolyfill = true;
-          ShadyDOM = { force: true };
-          ShadyCSS = { shimcssproperties: true};
-        </script>
-
-        <!-- Web Components -->
-        <script
-          async
-          src="node_modules/@webcomponents/webcomponentsjs/webcomponents-bundle.js"
-          Set-Cookie: second="second" SameSite="Lax"></script>
-
-        <!-- Global site tag (gtag.js) - Google Analytics -->
-        <script async src="https://www.googletagmanager.com/gtag/js?id=UA-73943527-8"></script>
-        <script>
-          window.dataLayer = window.dataLayer || [];
-          function gtag(){dataLayer.push(arguments);}
-          gtag('js', new Date());
-          gtag('config', 'UA-73943527-8');
-        </script>
-
-        <!-- Service Worker -->
-        <script>
-          if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-              navigator
-              .serviceWorker
-              .register('/sw.js')
-              .then(registration => { console.log(`Service Worker registered! Scope: ${registration.scope}`); })
-              .catch(error => { console.log(`Service Worker registration failed: ${error}`); });
-            });
-          }
-        </script>
-
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="ChessDefense is a new type of game, a cross between chess and tower defense.">
+  <meta name="theme-color" content="#184A78">
+  <link rel="icon" href="/images/favicon.ico">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Spectral:wght@400;600&display=swap" rel="stylesheet">
+  <script async src="https://www.googletagmanager.com/gtag/js?id=UA-73943527-8"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'UA-73943527-8');
+  </script>
+  <script src="./config/development.js"></script>
+  <script src="./config/production.js"></script>
+  <script src="./boot.js"></script>
   <style>
-
     body {
-      margin: 0px;
-      background-color: #303030;
+      margin: 0;
+      background-color: #120c0a;
+      color: #f6efe2;
+      font-family: Spectral, Palatino, "Palatino Linotype", serif;
     }
-    
-    .site {
-      height: 100vh;
-      width: 100vw;
-      display: grid;
-      grid-template-rows: 64px auto 64px;
-    }
-
-    main {
-      margin: auto;
-    }
-
   </style>
 </head>
-
 <body>
-
   <application-shell></application-shell>
-
-  <script
-    type="module"
-    src="./deploy/application-shell.js"></script>
-
- 
-  <!-- Firebase -->
-  <script
-    src="https://www.gstatic.com/firebasejs/7.22.0/firebase-app.js"
-    Set-Cookie: __Secure-ID=8; SameSite=None; Secure; Domain=gstatic.com ></script>
-  <script
-    src="https://www.gstatic.com/firebasejs/7.22.0/firebase-auth.js"
-    Set-Cookie: __Secure-ID=9; SameSite=None; Secure; Domain=gstatic.com ></script>
-  <script
-    src="https://www.gstatic.com/firebasejs/7.22.0/firebase-firestore.js" 
-    Set-Cookie: __Secure-ID=10; SameSite=None; Secure; Domain=gstatic.com ></script>
-  <script
-    src="https://www.gstatic.com/firebasejs/7.22.0/firebase-storage.js"
-    Set-Cookie: __Secure-ID=11; SameSite=None; Secure; Domain=gstatic.com ></script>
-  <script
-    src="https://www.gstatic.com/firebasejs/7.22.0/firebase-messaging.js"
-    Set-Cookie: __Secure-ID=12; SameSite=None; Secure; Domain=gstatic.com ></script>
-  <script
-    src="https://www.gstatic.com/firebasejs/7.22.0/firebase-analytics.js"
-    Set-Cookie: __Secure-ID=13; SameSite=None; Secure; Domain=gstatic.com ></script>
-
-  <script>
-  // Initialize Firebase
-  var admin = {
-    apiKey: "AIzaSyAWXOpxGc_GbTYckgNPpRhEWzOpeRxMAOg",
-    authDomain: "chess-defense.firebaseapp.com",
-    databaseURL: "https://chess-defense.firebaseio.com",
-    projectId: "chess-defense",
-    storageBucket: "chess-defense.appspot.com",
-    messagingSenderId: "1056334501744",
-    appId: "1:1056334501744:web:7d256ce8e20946d4e1a1b5"
-  };
-
-  const application           = firebase.initializeApp(admin);
-
-  firebase
-    .firestore()
-    .settings({ cacheSizeBytes: firebase.firestore.CACHE_SIZE_UNLIMITED })
-
-  const firestore             = firebase.firestore(application);
-  const usersCollection       = firestore.collection('users');
-  const contractors           = firestore.collection('contractors');
-
-  </script>
-
+  <script type="module" src="./out/application-shell.js"></script>
 </body>
-
 </html>
-
-<!--
-
-  <script type="module" src="src/one-square.js" async></script>
-  <script type="module" src="src/four-square.js" async></script>
-  <script type="module" src="src/board-square.js" async></script>
-  <script type="module" src="src/chess-king.js" async></script>
-  <script type="module" src="src/chess-queen.js" async></script>
-  <script type="module" src="src/chess-rook.js" async></script>
-  <script type="module" src="src/chess-knight.js" async></script>
-  <script type="module" src="src/chess-bishop.js" async></script>
-  <script type="module" src="src/chess-pawn.js" async></script>
-  <script type="module" src="src/box-block.js" async></script>
-
--->

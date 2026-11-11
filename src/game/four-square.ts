@@ -1,76 +1,37 @@
-import { css, CSSResult, customElement, html, LitElement, TemplateResult } from "lit-element";
+import { LitElement, css, html, type CSSResultGroup, type TemplateResult } from 'lit';
+import { customElement, property } from 'lit/decorators.js';
 
-import "./one-square.js";
+import './square-space.js';
 
+/**
+ * The 2×2 army grid inside one chess square.
+ * `walls` is top-left, top-right, bottom-left, bottom-right: -1 if empty, otherwise life ratio.
+ */
 @customElement('four-square')
 export class FourSquare extends LitElement {
- 
-  constructor() {
-    super();
- }
+  @property({ type: Array }) walls: number[] = [-1, -1, -1, -1];
+  @property({ type: Boolean, reflect: true }) etched = false;
 
-
- static get styles():CSSResult  {
-  return css`
-
-    		.green {
-          background-color: rgb(118,150,86);
-    		}
-
-    		.white {
-    			background-color:rgb(238,238,210);
-        }
-        
-        .orange {
-    			background-color: rgb(238,238,210);
-        }
-        
-        .pink {
-    			background-color: rgb(118,150,86);
-    		}
-
-    		slot {
-      
-        }
-        
-        `
+  static override get styles(): CSSResultGroup {
+    return css`
+      :host { display: block; width: 100%; height: 100%; pointer-events: none; opacity: 0.28; }
+      :host([etched]) { opacity: 1; }
+      .grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        grid-template-rows: 1fr 1fr;
+        width: 100%;
+        height: 100%;
       }
-      
-      protected render():TemplateResult {
-        return html`
-
-      <div  style="
-            height:   100%;
-            width:    100%;
-       
-            position: relative;
-            z-index: 1;
-
-            display:  grid;
-            grid-template-columns: 1fr;">
-
-      <slot></slot>
-      <div style="height:   100%;
-                  width:    100%;
-  
-                  position: absolute;
-                  z-index: -1;
-             
-                  display:  grid;
-                  grid-gap: 2px;
-                  grid-template-columns: 1fr 1fr;
-                  grid-template-rows: 1fr 1fr;
-        					">
-          
-                  
-        <one-square id="aa" class="green">  </one-square>
-        <one-square class="white">  </one-square>
-        <one-square class="orange"> </one-square>
-        <one-square class="pink">   </one-square>
-      
-      </div>
-</div>
-      `
+    `;
   }
 
+  protected override render(): TemplateResult {
+    const walls = this.walls;
+    return html`
+      <div class="grid">
+        ${[0, 1, 2, 3].map((index) => html`<square-space .ratio=${walls[index] ?? -1}></square-space>`)}
+      </div>
+    `;
+  }
 }

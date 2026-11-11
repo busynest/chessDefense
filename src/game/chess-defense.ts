@@ -1,61 +1,1095 @@
-import { css, CSSResult, customElement, html, LitElement, TemplateResult } from "lit-element";
+import { LitElement, css, html, type CSSResultGroup, type PropertyValues, type TemplateResult } from 'lit';
+import { customElement, property, state } from 'lit/decorators.js';
+import { connect } from 'pwa-helpers/connect-mixin.js';
 
-import "./four-square";
-import "./board-square";
-import "./chess-king";
-import "./chess-queen";
-import "./chess-rook";
-import "./chess-knight";
-import "./chess-bishop";
-import "./chess-pawn";
-import "./box-block";
+import { towerAt } from './chess.js';
+import {
+  applySnapshot,
+  beginOnline,
+  resumeOnline,
+  setLink,
+  setHoldAi,
+  controlsSide,
+  markRecord,
+  openOnline,
+  playAim,
+  playBlock,
+  playUpgrade,
+  playRepair,
+  playOvercharge,
+  playSpell,
+  playUnblock,
+  playerSide,
+  selectSquare,
+  setOnlineNote,
+  setPlacing,
+  showMenu,
+  startLocal,
+  tick,
+  togglePause,
+  type GameSliceState,
+} from './game_state.js';
+import { handleAim, handleOvercharge, handleRepair, handleSpell, handleUpgrade } from './input.js';
+import { rememberMatch, recentMatches } from './history.js';
+import { clearRematch, closeMatch, claimForfeit, createMatchDoc, joinMatchDoc, matchCode, noteApplied, offerRematch, publishSnapshot, pulseMatch, readMatch, rematchAgreed, signedInUid, watchInputs, watchMatch, type MatchDoc } from './online.js';
+import { forfeitState, Presence, RECONNECT_MS, secondsLeft } from './link.js';
+import { rememberPose } from './film.js';
+import { createMatch } from './setup.js';
+import { shouldPublish } from './publish.js';
+import { loadCareer, recordResult } from './record.js';
+import { armAudio, playTap, playVictory, playWave } from './sound.js';
+import './board-square.js';
+import { markTutorial, setDifficulty, setMuted, setOpponent } from '../prefs/prefs_state.js';
+import { connectStore, store, type RootState } from '../store.js';
+import type { Difficulty, GameState, Personality, PieceKind, PlayerCommand, Side, SoldierKind, SpellId } from './types.js';
+import { BLOCKS, PIECES, SOLDIERS, SPELLS, SUDDEN, combatOf, overchargeCost, overcharged, repairCost, squareName, upgradeCost } from './units.js';
+import type { Unsubscribe } from 'firebase/firestore';
 
 @customElement('chess-defense')
-export class ChessDefense extends LitElement {
+export class ChessDefense extends connect(connectStore)(LitElement) {
+  @property({ type: Boolean }) active = false;
+  @state() private slice: GameSliceState | null = null;
+  @state() private signedIn = false;
+  @state() private career = '';
+  @state() private difficulty: Difficulty = 'normal';
+  @state() private opponent: Personality = 'fortress';
+  @state() private joinValue = '';
 
-  // @property ({type: Object}) private game = [];
+  private raf = 0;
+  private last = 0;
+  private acc = 0;
+  private code = '';
+  private stopMatch: Unsubscribe | null = null;
+  private stopInputs: Unsubscribe | null = null;
+  private seen = new Set<string>();
+  private lastPublish = -1;
+  private saving = false;
+  private careerUid = '';
+  private heardWave = -1;
+  private heardEnd = false;
+  @state() private tutorial = -1;
+  @state() private muted = false;
 
-  constructor() {
-    super();
+  private readonly steps: { text: string; coach: string }[] = [
+    { text: 'These towers never move and never capture. This pawn is yours. The ring is its range.', coach: 'pawn' },
+    { text: 'Each tower sends its soldier out of its own square. If the tower falls, those soldiers fade with it.', coach: 'wave' },
+    { text: 'Walls go on the two ranks in front of your towers. The gold center stays open. Every row keeps a gap. Each side can own 36.', coach: 'walls' },
+    { text: 'Tap an enemy tower, then Target. The next wave marches there. Clear sends it back to the King.', coach: 'target' },
+    { text: 'Upgrade spends gold. Level 3 is as high as a tower goes. Overcharge is the short burst on a level 3 tower.', coach: 'upgrade' },
+    { text: 'Repair spends gold to refill a wounded tower, then that tower has to cool down.', coach: 'repair' },
+    { text: 'Blessing, Heal, and Blast belong to the Queen. They are on her Spells tab.', coach: 'blessing' },
+    { text: 'At five minutes the kings are exposed. Hits land harder, and a soldier in range strikes the tower before dueling. The opponent has been waiting. Skip or finish and it starts to play.', coach: 'sudden' },
+  ];
+  private rematchBusy = false;
+  private presence = new Presence();
+  private pulseTimer = 0;
+  private matchPulse: { host?: number; guest?: number } = {};
+  private sawPeer = false;
+  private relisten = 0;
+  private forfeited = false;
+  private film: GameState[] = [];
+  @state() private replay = -1;
+  @state() private replayPlaying = false;
+  @state() private replaySpeed = 1;
+  @state() private panelTab: 'upgrade' | 'repair' | 'target' | 'spells' = 'upgrade';
+  private replayTimer = 0;
+
+  override stateChanged(state: RootState): void {
+    this.slice = state.game;
+    this.difficulty = state.prefs.difficulty;
+    this.opponent = state.prefs.opponent;
+    this.muted = state.prefs.muted;
+    this.signedIn = state.user.current !== null;
+    const uid = state.user.current?.uid ?? '';
+    if (uid !== this.careerUid) {
+      this.careerUid = uid;
+      this.career = '';
+      if (uid) void loadCareer(uid).then((record) => { this.career = `${record.wins}–${record.losses}–${record.draws}`; }).catch(() => { this.career = ''; });
+    }
   }
 
-  static get styles():CSSResult  {
-    return css`
-        :host {
+  protected override firstUpdated(): void {
+    window.addEventListener('keydown', this.onKey);
+    window.addEventListener('pointerdown', this.armOnce);
+    window.addEventListener('keydown', this.armOnce);
+    window.addEventListener('chessdefense-tour', this.onTour);
+  }
 
-        }
+  override disconnectedCallback(): void {
+    window.removeEventListener('keydown', this.onKey);
+    window.removeEventListener('pointerdown', this.armOnce);
+    window.removeEventListener('keydown', this.armOnce);
+    window.removeEventListener('chessdefense-tour', this.onTour);
+    super.disconnectedCallback();
+    this.stopLoop();
+    this.teardown();
+    this.stopReplay();
+  }
 
-        `
+  private armOnce = (): void => {
+    armAudio();
+    window.removeEventListener('pointerdown', this.armOnce);
+    window.removeEventListener('keydown', this.armOnce);
+  };
+
+  private onTour = (): void => {
+    this.start('ai');
+    this.tutorial = 0;
+    store.dispatch(setHoldAi(true));
+    this.aimCoach();
+  };
+
+  protected override updated(changed: PropertyValues): void {
+    this.syncLoop();
+    this.syncOnline();
+    this.syncSound();
+    this.placeCoach();
+    if (changed.has('slice') || changed.has('active')) void this.persist();
+  }
+
+  private onKey = (event: KeyboardEvent): void => {
+    const target = event.target;
+    if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement) return;
+    const slice = store.getState().game;
+    if (slice.game.status === 'menu') return;
+    const key = event.key.toLowerCase();
+    if (key === 'p' || event.key === ' ') {
+      event.preventDefault();
+      if (slice.game.status === 'playing' || slice.game.status === 'paused') store.dispatch(togglePause());
+      return;
+    }
+    if (key === 'escape') {
+      if (slice.placing) store.dispatch(setPlacing(null));
+      else if (slice.game.status === 'playing' || slice.game.status === 'paused') store.dispatch(togglePause());
+      return;
+    }
+    if (key === 'm') {
+      this.leave();
+      return;
+    }
+    if (slice.game.status !== 'playing') return;
+    const side = playerSide(slice);
+    if (!side) return;
+    const selected = slice.selected;
+    if (key === 'w') {
+      store.dispatch(setPlacing(slice.placing === side ? null : side));
+    } else if (selected && key === 'u') {
+      handleUpgrade(side, selected.file, selected.rank);
+    } else if (selected && key === 'r') {
+      handleRepair(side, selected.file, selected.rank);
+    } else if (selected && key === 'o') {
+      handleOvercharge(side, selected.file, selected.rank);
+    } else if (key === 'b') {
+      handleSpell(side, 'blessing');
+    } else if (key === 'h') {
+      handleSpell(side, 'heal');
+    } else if (key === 'l') {
+      handleSpell(side, 'blast');
+    } else if (key === 't' && selected) {
+      const marked = towerAt(slice.game, selected.file, selected.rank);
+      if (!marked) return;
+      const attacker: Side = marked.side === 'white' ? 'black' : 'white';
+      if (!controlsSide(slice, attacker)) return;
+      const current = slice.game.waveTarget[attacker];
+      if (current && current.file === marked.file && current.rank === marked.rank) handleAim(attacker, -1, -1);
+      else handleAim(attacker, marked.file, marked.rank);
+    }
+  };
+
+  private abandonIfHost = (): void => {
+    const slice = store.getState().game;
+    if (slice.role !== 'host' || !slice.onlineCode) return;
+    if (slice.game.status === 'victory' || slice.game.status === 'menu') return;
+    void closeMatch(slice.onlineCode).catch(() => undefined);
+  };
+
+  private leave(): void {
+    this.abandonIfHost();
+    this.tutorial = -1;
+    store.dispatch(showMenu());
+  }
+
+  private syncSound(): void {
+    const game = this.slice?.game;
+    if (!game || game.status === 'menu') {
+      this.heardWave = -1;
+      this.heardEnd = false;
+      return;
+    }
+    if (game.wave > 0 && game.wave !== this.heardWave) {
+      this.heardWave = game.wave;
+      playWave();
+    }
+    if (game.status === 'victory' && !this.heardEnd) {
+      this.heardEnd = true;
+      rememberPose(this.film, game);
+      playVictory();
+    }
+  }
+
+  private syncLoop(): void {
+    const running = this.active && this.slice?.game.status === 'playing' && this.slice.role !== 'guest';
+    if (running && this.raf === 0) {
+      this.last = 0;
+      this.raf = requestAnimationFrame(this.frame);
+    }
+    if (!running) this.stopLoop();
+  }
+
+  private stopLoop(): void {
+    if (this.raf) cancelAnimationFrame(this.raf);
+    this.raf = 0;
+    this.acc = 0;
+  }
+
+  private frame = (now: number): void => {
+    this.raf = requestAnimationFrame(this.frame);
+    if (!this.active || document.hidden) return;
+    const slice = store.getState().game;
+    if (slice.role === 'guest' || slice.link === 'reconnecting' || slice.game.status !== 'playing') return;
+    if (this.last === 0) this.last = now;
+    let delta = now - this.last;
+    this.last = now;
+    if (delta > 200) delta = 200;
+    this.acc += delta;
+    while (this.acc >= 100) {
+      this.acc -= 100;
+      store.dispatch(tick());
+    }
+    rememberPose(this.film, store.getState().game.game);
+  };
+
+  private syncOnline(): void {
+    const slice = store.getState().game;
+    if (slice.onlineCode !== this.code) {
+      this.teardown();
+      this.code = slice.onlineCode;
+      this.seen.clear();
+      this.lastPublish = -1;
+      this.sawPeer = false;
+      this.forfeited = false;
+      this.presence = new Presence();
+      this.matchPulse = {};
+      if (this.code) void this.openSession(this.code, slice.role);
+    }
+    if (slice.role === 'host' && slice.link !== 'reconnecting' && shouldPublish(slice.game.status, slice.game.tick, this.lastPublish)) {
+      this.lastPublish = slice.game.tick;
+      void publishSnapshot(slice.onlineCode, slice.game, [...this.seen]).catch((error: unknown) => {
+        store.dispatch(setOnlineNote(error instanceof Error ? error.message : 'Could not sync the match.'));
+      });
+    }
+  }
+
+  private async openSession(code: string, role: GameSliceState['role']): Promise<void> {
+    try {
+      const data = await readMatch(code);
+      if (this.code !== code) return;
+      for (const id of data.appliedIds ?? []) this.seen.add(id);
+      this.matchPulse = data.pulse ?? {};
+    } catch {
+      /* The live listener reports a missing match. */
+    }
+    if (this.code !== code) return;
+    this.stopMatch?.();
+    this.stopInputs?.();
+    this.stopMatch = watchMatch(code, (data) => this.onMatch(data), (message) => this.onLinkError(message));
+    if (role === 'host') {
+      this.stopInputs = watchInputs(code, (id, command) => this.onInput(id, command), (message) => this.onLinkError(message), this.seen);
+    }
+    this.startPulse();
+  }
+
+  private onLinkError(message: string): void {
+    store.dispatch(setOnlineNote(message || 'Reconnecting…'));
+    store.dispatch(setLink('reconnecting'));
+    if (this.relisten) return;
+    this.relisten = window.setTimeout(() => {
+      this.relisten = 0;
+      const slice = store.getState().game;
+      if (!this.code || slice.onlineCode !== this.code) return;
+      void this.openSession(this.code, slice.role);
+    }, 1000);
+  }
+
+  private startPulse(): void {
+    this.stopPulse();
+    const beat = (): void => {
+      const slice = store.getState().game;
+      if (!slice.onlineCode || (slice.role !== 'host' && slice.role !== 'guest')) return;
+      void pulseMatch(slice.onlineCode, slice.role).catch(() => undefined);
+      this.reviewLink();
+    };
+    beat();
+    this.pulseTimer = window.setInterval(beat, 2000);
+  }
+
+  private stopPulse(): void {
+    if (this.pulseTimer) window.clearInterval(this.pulseTimer);
+    this.pulseTimer = 0;
+  }
+
+  private reviewLink(): void {
+    const slice = store.getState().game;
+    if (slice.game.mode !== 'online' || slice.role === 'none') return;
+    if (slice.game.status === 'victory' || slice.game.status === 'menu' || slice.game.status === 'lobby') return;
+    const peer = slice.role === 'host' ? (this.matchPulse.guest ?? 0) : (this.matchPulse.host ?? 0);
+    if (!this.sawPeer) {
+      if (peer > 0) this.sawPeer = true;
+      return;
+    }
+    const phase = this.presence.see(Date.now(), peer);
+    if (phase !== slice.link) store.dispatch(setLink(phase));
+    if (phase === 'reconnecting') {
+      const left = secondsLeft(Date.now(), this.presence.noticedAt);
+      store.dispatch(setOnlineNote(`Reconnecting… ${left}s`));
+    } else if (phase === 'live' && slice.onlineNote.startsWith('Reconnecting')) {
+      store.dispatch(setOnlineNote('Match live.'));
+    }
+    if (phase !== 'forfeit' || this.forfeited) return;
+    this.forfeited = true;
+    if (slice.role === 'host') {
+      const next = forfeitState(slice.game, 'white', 'black');
+      store.dispatch(applySnapshot(next));
+      void publishSnapshot(slice.onlineCode, next, [...this.seen]).catch(() => undefined);
+      return;
+    }
+    const next = forfeitState(slice.game, 'black', 'white');
+    store.dispatch(applySnapshot(next));
+    void claimForfeit(slice.onlineCode, 'black', 'white').catch(() => undefined);
+  }
+
+  private teardown(): void {
+    this.stopMatch?.();
+    this.stopInputs?.();
+    this.stopMatch = null;
+    this.stopInputs = null;
+    this.stopPulse();
+    if (this.relisten) window.clearTimeout(this.relisten);
+    this.relisten = 0;
+  }
+
+  private onMatch(data: MatchDoc): void {
+    const slice = store.getState().game;
+    this.matchPulse = data.pulse ?? this.matchPulse;
+    if ((data.pulse?.host ?? 0) > 0 && (data.pulse?.guest ?? 0) > 0) this.sawPeer = true;
+    if (data.forfeit && slice.role === 'host' && data.forfeit.by === 'white' && slice.game.status !== 'victory') {
+      const next = forfeitState(store.getState().game.game, data.forfeit.winner, 'white');
+      store.dispatch(applySnapshot(next));
+      void publishSnapshot(slice.onlineCode, next, [...this.seen]).catch(() => undefined);
+      return;
+    }
+    if (slice.role === 'host' && data.guestId && slice.game.status === 'lobby') {
+      store.dispatch(openOnline());
+      const live = store.getState().game.game;
+      void publishSnapshot(slice.onlineCode, live).catch((error: unknown) => {
+        store.dispatch(setOnlineNote(error instanceof Error ? error.message : 'Could not open the match.'));
+      });
+    }
+    if (slice.role === 'guest' && data.status === 'abandoned') {
+      store.dispatch(setOnlineNote('The host left the match.'));
+    }
+    const agree = data.rematch;
+    if (slice.role === 'host' && rematchAgreed({ rematch: agree }) && !this.rematchBusy) {
+      this.rematchBusy = true;
+      const fresh = createMatch({
+        mode: 'online',
+        difficulty: 'normal',
+        seed: (slice.game.seed + 1) >>> 0 || 1,
+        humanSide: 'white',
+      });
+      this.sawPeer = false;
+      this.presence = new Presence();
+      this.forfeited = false;
+      store.dispatch(setLink('live'));
+      store.dispatch(applySnapshot(fresh));
+      store.dispatch(setOnlineNote('Rematch live.'));
+      void publishSnapshot(slice.onlineCode, fresh)
+        .then(() => clearRematch(slice.onlineCode))
+        .catch((error: unknown) => {
+          store.dispatch(setOnlineNote(error instanceof Error ? error.message : 'Could not start the rematch.'));
+        })
+        .finally(() => { this.rematchBusy = false; });
+    }
+    if (slice.role === 'guest' && agree?.host && !agree.guest) {
+      store.dispatch(setOnlineNote('The host wants a rematch.'));
+    }
+    if (slice.role === 'guest' && data.snapshot) {
+      rememberPose(this.film, data.snapshot);
+      store.dispatch(applySnapshot(data.snapshot));
+      if (store.getState().game.link === 'reconnecting') {
+        this.reviewLink();
+        return;
       }
-
-      protected render():TemplateResult {
-        return html`
-      
-
-     <board-square></board-square>
-     
-  `
+      const status = data.status === 'abandoned' ? 'abandoned' : data.snapshot.status;
+      const note = status === 'abandoned'
+        ? 'The host left the match.'
+        : status === 'victory'
+          ? (data.snapshot.winner === 'black' ? 'Black won.' : data.snapshot.winner === 'white' ? 'White won.' : 'Draw.')
+          : status === 'playing' ? 'Match live.' : '';
+      if (note) store.dispatch(setOnlineNote(note));
+    }
+    this.reviewLink();
   }
 
-
-  _heightWidth() {
-    
+  private onInput(id: string, command: PlayerCommand): void {
+    if (this.seen.has(id)) return;
+    this.seen.add(id);
+    if (this.code) void noteApplied(this.code, id).catch(() => undefined);
+    if (store.getState().game.role !== 'host' || command.side !== 'black') return;
+    if (command.type === 'upgrade') {
+      store.dispatch(playUpgrade({ file: command.file, rank: command.rank, side: 'black' }));
+    } else if (command.type === 'repair') {
+      store.dispatch(playRepair({ file: command.file, rank: command.rank, side: 'black' }));
+    } else if (command.type === 'overcharge') {
+      store.dispatch(playOvercharge({ file: command.file, rank: command.rank, side: 'black' }));
+    } else if (command.type === 'spell') {
+      store.dispatch(playSpell({ side: 'black', spell: command.spell }));
+    } else if (command.type === 'block') {
+      store.dispatch(playBlock({ side: 'black', x: command.x, y: command.y }));
+    } else if (command.type === 'target') {
+      store.dispatch(playAim({ side: 'black', file: command.file, rank: command.rank }));
+    } else {
+      store.dispatch(playUnblock({ side: 'black', x: command.x, y: command.y }));
+    }
   }
 
-  _createBoard() {
-
+  private async persist(): Promise<void> {
+    const slice = store.getState().game;
+    if (!this.active || slice.game.status !== 'victory' || slice.record !== 'idle' || this.saving) return;
+    rememberMatch({
+      mode: slice.game.mode,
+      winner: slice.game.winner ?? 'draw',
+      wave: slice.game.wave,
+      seconds: Math.round(slice.game.tick / 10),
+      at: Date.now(),
+    });
+    if (slice.game.mode === 'local') {
+      store.dispatch(markRecord('skipped'));
+      return;
+    }
+    const uid = store.getState().user.current?.uid;
+    if (!uid) {
+      store.dispatch(markRecord('skipped'));
+      return;
+    }
+    const side = playerSide(slice);
+    const winner = slice.game.winner;
+    const result = winner === 'draw' || side === null ? 'draw' : winner === side ? 'win' : 'loss';
+    this.saving = true;
+    try {
+      await recordResult(uid, result, slice.game.mode, slice.game.wave);
+      store.dispatch(markRecord('saved'));
+    } catch {
+      store.dispatch(markRecord('error'));
+    } finally {
+      this.saving = false;
+    }
   }
 
-  _populateBuildings() {
-
+  private start(mode: 'ai' | 'local'): void {
+    const seed = (Date.now() ^ Math.floor(Math.random() * 1_000_000_000)) >>> 0 || 1;
+    const seen = store.getState().prefs.seenTutorial;
+    store.dispatch(startLocal({ mode, difficulty: this.difficulty, seed, personality: mode === 'ai' ? this.opponent : undefined }));
+    if (mode === 'ai') store.dispatch(selectSquare({ file: 3, rank: 1 }));
+    this.tutorial = mode === 'ai' && !seen ? 0 : -1;
+    if (this.tutorial === 0) store.dispatch(setHoldAi(true));
+    this.heardWave = -1;
+    this.heardEnd = false;
+    this.film = [];
+    this.replay = -1;
+    this.replayPlaying = false;
+    this.stopReplay();
+    playTap();
   }
 
-  _homeplayerReady() {
-
+  private advanceTutorial(skip: boolean): void {
+    if (skip || this.tutorial >= this.steps.length - 1) {
+      this.tutorial = -1;
+      store.dispatch(setHoldAi(false));
+      store.dispatch(markTutorial());
+      return;
+    }
+    this.tutorial += 1;
+    this.aimCoach();
   }
 
-  _outsideplayerReady() {
-
+  private exposedClock(tick: number): string {
+    const left = Math.max(0, Math.ceil((SUDDEN.tick - tick) / 10));
+    const minutes = Math.floor(left / 60);
+    const seconds = String(left % 60).padStart(2, '0');
+    return `${minutes}:${seconds}`;
   }
 
+  private coachCell(): { file: number; rank: number } {
+    const step = this.tutorial >= 0 ? this.steps[this.tutorial] : undefined;
+    if (step?.coach === 'pawn' || step?.coach === 'upgrade' || step?.coach === 'repair') return { file: 3, rank: 1 };
+    if (step?.coach === 'walls') return { file: 4, rank: 2 };
+    if (step?.coach === 'target') return { file: 4, rank: 7 };
+    if (step?.coach === 'blessing') return { file: 3, rank: 0 };
+    return { file: -1, rank: -1 };
+  }
+
+  private aimCoach(): void {
+    if (this.tutorial < 0) return;
+    const step = this.steps[this.tutorial];
+    if (!step) return;
+    if (step.coach === 'target') {
+      this.panelTab = 'target';
+      store.dispatch(selectSquare({ file: 4, rank: 7 }));
+    } else if (step.coach === 'blessing') {
+      this.panelTab = 'spells';
+      store.dispatch(selectSquare({ file: 3, rank: 0 }));
+    } else if (step.coach === 'repair') {
+      this.panelTab = 'repair';
+      store.dispatch(selectSquare({ file: 3, rank: 1 }));
+    } else if (step.coach === 'upgrade' || step.coach === 'pawn') {
+      this.panelTab = 'upgrade';
+      store.dispatch(selectSquare({ file: 3, rank: 1 }));
+    }
+  }
+
+  private placeCoach(): void {
+    const arrow = this.shadowRoot?.getElementById('coach-arrow');
+    if (!arrow) return;
+    if (this.tutorial < 0) {
+      arrow.hidden = true;
+      return;
+    }
+    const step = this.steps[this.tutorial];
+    const target = step ? this.shadowRoot?.querySelector(`[data-coach="${step.coach}"]`) : null;
+    if (!target) {
+      arrow.hidden = true;
+      return;
+    }
+    const rect = target.getBoundingClientRect();
+    arrow.hidden = false;
+    arrow.style.left = `${rect.left + Math.min(rect.width / 2, 80)}px`;
+    arrow.style.top = `${Math.max(8, rect.top - 22)}px`;
+  }
+
+  private async askRematch(): Promise<void> {
+    const slice = store.getState().game;
+    if (!slice.onlineCode || this.rematchBusy) return;
+    this.rematchBusy = true;
+    try {
+      await offerRematch(slice.onlineCode, slice.role === 'guest' ? 'guest' : 'host');
+      store.dispatch(setOnlineNote(slice.role === 'guest' ? 'Rematch offered.' : 'Waiting for the guest.'));
+    } catch (error) {
+      store.dispatch(setOnlineNote(error instanceof Error ? error.message : 'Could not offer a rematch.'));
+    } finally {
+      this.rematchBusy = false;
+    }
+  }
+
+  private async host(): Promise<void> {
+    const uid = signedInUid();
+    if (!uid) {
+      store.dispatch(setOnlineNote('Sign in before hosting a match.'));
+      return;
+    }
+    const code = matchCode();
+    const seed = (Date.now() ^ Math.floor(Math.random() * 1_000_000_000)) >>> 0 || 1;
+    try {
+      await createMatchDoc(code, uid, seed);
+      store.dispatch(beginOnline({ seed, role: 'host', code }));
+    } catch (error) {
+      store.dispatch(setOnlineNote(error instanceof Error ? error.message : 'Could not create the match.'));
+    }
+  }
+
+  private async join(): Promise<void> {
+    const uid = signedInUid();
+    if (!uid) {
+      store.dispatch(setOnlineNote('Sign in before joining a match.'));
+      return;
+    }
+    const code = this.joinValue.trim().toUpperCase();
+    try {
+      const data = await readMatch(code);
+      if (data.status === 'abandoned' || data.status === 'victory') throw new Error('That match is already over.');
+      if (data.forfeit) throw new Error('That match is already over.');
+      if (data.hostId === uid) {
+        if (!data.snapshot) throw new Error('Open your own match from this browser, or share the code.');
+        const seen = data.pulse?.host ?? 0;
+        if (seen > 0 && Date.now() - seen > RECONNECT_MS) throw new Error('That match is already over.');
+        store.dispatch(resumeOnline({ role: 'host', code, snapshot: data.snapshot }));
+        return;
+      }
+      if (data.guestId && data.guestId !== uid) throw new Error('That match already has two players.');
+      if (!data.guestId) await joinMatchDoc(code, uid);
+      if (data.snapshot && data.snapshot.status !== 'lobby') {
+        const seen = data.pulse?.guest ?? 0;
+        if (seen > 0 && Date.now() - seen > RECONNECT_MS) throw new Error('That match is already over.');
+        store.dispatch(resumeOnline({ role: 'guest', code, snapshot: data.snapshot }));
+        return;
+      }
+      store.dispatch(beginOnline({ seed: data.seed, role: 'guest', code }));
+    } catch (error) {
+      store.dispatch(setOnlineNote(error instanceof Error ? error.message : 'Could not join the match.'));
+    }
+  }
+
+  static override get styles(): CSSResultGroup {
+    return css`
+      :host { display: block; color: #f6efe2; }
+      h1, h2 { font-family: Cinzel, Palatino, serif; letter-spacing: 0.04em; }
+      h1 { margin: 0; text-align: center; font-size: 2.4rem; color: #f6e7a8; text-shadow: 0 2px 0 #2a160c; }
+      .lede { text-align: center; margin: 6px 0 0; color: #e6d3b4; }
+      .menu, .play { display: grid; gap: 14px; }
+      .tabs { display: flex; flex-wrap: wrap; gap: 4px; }
+      .tabs button { flex: 1 1 calc(50% - 4px); min-height: 36px; padding: 0 6px; }
+      .tabs button[aria-selected="true"] { outline: 2px solid #f6e7a8; }
+      .tab-body { min-height: 44px; }
+      .recap { width: 100%; border-collapse: collapse; font-size: 0.88rem; margin: 8px 0; }
+      .recap td { padding: 2px 8px 2px 0; }
+      .replay { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+      .reconnect {
+        margin: 0;
+        padding: 10px 12px;
+        border-radius: 10px;
+        background: #8c3a2a;
+        color: #fff6e8;
+        text-align: center;
+        font-family: Cinzel, Palatino, serif;
+        letter-spacing: 0.04em;
+      }
+      .card, .hud, .end {
+        background:
+          linear-gradient(180deg, rgba(62, 42, 28, 0.92), rgba(22, 14, 10, 0.92));
+        border: 1px solid #c4a574;
+        border-radius: 14px;
+        padding: 14px;
+        box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35);
+      }
+      .choices, .spells, .row { display: flex; flex-wrap: wrap; gap: 8px; }
+      .choices label { display: flex; flex-direction: column; gap: 4px; font-size: 0.85rem; }
+      .choices select { min-height: 40px; min-width: 9.5rem; font: inherit; }
+      button, .link {
+        min-height: 44px;
+        border-radius: 8px;
+        border: 1px solid #e6c98a;
+        padding: 0 14px;
+        background: linear-gradient(#a24a36, #6d2c22);
+        color: #fff6e8;
+        font-family: Cinzel, Palatino, serif;
+        font-weight: 700;
+        cursor: pointer;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+      }
+      button.quiet, .link { background: linear-gradient(#3d4e68, #243044); }
+      button.repair { background: linear-gradient(#2f6b45, #1c4630); }
+      button.charge { background: linear-gradient(#c9862a, #8a4e12); color: #fff8e8; }
+      .role { margin: 0; line-height: 1.35; }
+      .actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+      .actions button, .actions .level { min-height: 40px; }
+      @media (max-width: 720px) {
+        .role, .gold { font-size: 0.92rem; }
+        button, .link { padding: 0 10px; font-size: 0.82rem; }
+        .actions { gap: 6px; }
+      }
+      button:disabled { opacity: 0.45; cursor: default; }
+      label { display: grid; gap: 4px; font-size: 0.9rem; }
+      select, input {
+        min-height: 44px;
+        border-radius: 8px;
+        border: 1px solid #8d6b4a;
+        padding: 0 10px;
+        background: #2a211c;
+        color: #f6efe2;
+      }
+      .note { min-height: 1.2em; color: #f6e7a8; }
+      .play { align-items: start; }
+      @media (min-width: 960px) {
+        .play { grid-template-columns: minmax(280px, 320px) minmax(0, 1fr); }
+      }
+      .hud { display: grid; gap: 8px; }
+      .gold { font-variant-numeric: tabular-nums; }
+      .wave {
+        font-family: Cinzel, Palatino, serif;
+        color: #f6e7a8;
+        font-size: 1.05rem;
+      }
+      .end {
+        margin-top: 12px;
+        text-align: center;
+      }
+      .banner { text-align: center; min-height: 1.2em; color: #f6e7a8; font-family: Cinzel, Palatino, serif; }
+      .coach { margin: 0; color: #f3e6cf; font-size: 0.92rem; }
+      .exposed { color: #f6e7a8; font-size: 0.92rem; }
+      .pointer {
+        position: fixed;
+        z-index: 30;
+        width: 0;
+        height: 0;
+        border-left: 9px solid transparent;
+        border-right: 9px solid transparent;
+        border-bottom: 16px solid #f6e7a8;
+        filter: drop-shadow(0 2px 2px #000);
+        pointer-events: none;
+      }
+      button:focus-visible, a:focus-visible, select:focus-visible {
+        outline: 3px solid #f6e7a8;
+        outline-offset: 2px;
+      }
+      .dock { display: none; }
+      @media (max-width: 720px) {
+        .play { display: flex; flex-direction: column; }
+        .table { order: -2; }
+        .hud { order: 0; padding: 10px; }
+        .hud .spells { display: none; }
+        .tabs button { flex: 1 1 22%; font-size: 0.78rem; padding: 0 4px; }
+        .role, .inspect-stats { display: none; }
+        h1 { font-size: 1.7rem; }
+        .dock {
+          display: flex;
+          order: -1;
+          gap: 6px;
+          flex-wrap: wrap;
+          padding: 8px;
+          background: rgba(28, 18, 12, 0.94);
+          border: 1px solid #c4a574;
+          border-radius: 12px;
+        }
+        .dock button { flex: 1 1 30%; min-height: 44px; }
+      }
+    `;
+  }
+
+  protected override render(): TemplateResult {
+    const slice = this.slice;
+    if (!slice) return html``;
+    if (slice.game.status === 'menu') return this.menu(slice);
+    return html`
+      <div class="play">
+        <div id="coach-arrow" class="pointer" hidden></div>
+        ${this.hud(slice)}
+        <div class="table">
+          ${slice.link === 'reconnecting' ? html`<p class="reconnect" role="status">Reconnecting…</p>` : ''}
+          <p class="banner">${slice.game.banner?.text ?? ''}</p>
+          <board-square
+            .pose=${this.replay >= 0 ? (this.film[this.replay] ?? null) : null}
+            .coachFile=${this.coachCell().file}
+            .coachRank=${this.coachCell().rank}
+          ></board-square>
+          ${slice.game.status === 'victory' ? this.victory(slice) : ''}
+        </div>
+      </div>
+    `;
+  }
+
+  private menu(slice: GameSliceState): TemplateResult {
+    return html`
+      <section class="menu">
+        <h1>Chess Defense</h1>
+        <p style="text-align:center; margin:0;">Two kings. One board. The towers never move. Their soldiers do.</p>
+        <div class="card">
+          <div class="choices">
+            <label>Difficulty
+              <select .value=${this.difficulty} @change=${(event: Event) => store.dispatch(setDifficulty((event.target as HTMLSelectElement).value as Difficulty))}>
+                <option value="easy">Easy</option>
+                <option value="normal">Normal</option>
+                <option value="hard">Hard</option>
+              </select>
+            </label>
+            <label>Opponent
+              <select .value=${this.opponent} @change=${(event: Event) => store.dispatch(setOpponent((event.target as HTMLSelectElement).value as Personality))}>
+                <option value="rusher">Rusher</option>
+                <option value="fortress">Fortress</option>
+                <option value="tactician">Tactician</option>
+              </select>
+            </label>
+            <button type="button" @click=${() => this.start('ai')}>Play vs AI</button>
+            <button type="button" class="quiet" @click=${() => this.start('local')}>Local 2 player</button>
+            <a class="link" href="/how-to">How to play</a>
+          </div>
+        </div>
+        <div class="card">
+          <strong>Online 1v1</strong>
+          <p>Sign in, then host a code or join one. The host runs the match. You play White when you host, Black when you join. Enter the same code within 30 seconds to resume a dropped match.</p>
+          <div class="row">
+            <button type="button" @click=${() => this.host()}>Host match</button>
+            <input .value=${this.joinValue} @input=${(event: Event) => { this.joinValue = (event.target as HTMLInputElement).value; }} placeholder="Code" maxlength="4" aria-label="Match code" />
+            <button type="button" class="quiet" @click=${() => this.join()}>Join</button>
+          </div>
+          <p class="note">${slice.onlineNote}</p>
+          <p>${this.signedIn ? `Record ${this.career || '…'}` : 'Sign in with the Login button to save wins and losses. Local and versus-AI matches do not need an account.'}</p>
+          ${recentMatches().length ? html`
+            <p>Recent on this browser: ${recentMatches().map((row) => `${row.winner} in ${row.seconds}s`).join(' · ')}</p>
+          ` : ''}
+        </div>
+      </section>
+    `;
+  }
+
+  private hud(slice: GameSliceState): TemplateResult {
+    const game = slice.game;
+    const selected = slice.selected ? towerAt(game, slice.selected.file, slice.selected.rank) : undefined;
+    const remain = Math.max(0, (game.nextWaveTick - game.tick) * 0.1);
+    const waveLabel = game.wave === 0
+      ? `Build · wave 1 in ${remain.toFixed(0)}s`
+      : `Wave ${game.wave} · next ${remain.toFixed(0)}s`;
+    const sides: Side[] = game.mode === 'local' ? ['white', 'black'] : [playerSide(slice) ?? 'white'];
+    return html`
+      <aside class="hud" aria-label="Match controls">
+        <div class="row">
+          <button type="button" class="quiet" @click=${() => store.dispatch(togglePause())} ?disabled=${game.status === 'lobby' || game.status === 'victory'}>
+            ${game.status === 'paused' ? 'Resume' : 'Pause'}
+          </button>
+          <button type="button" class="quiet" @click=${() => this.leave()}>Menu</button>
+          <button type="button" class="quiet" @click=${() => { this.armOnce(); store.dispatch(setMuted(!this.muted)); }}>${this.muted ? 'Unmute' : 'Mute'}</button>
+        </div>
+        <div class="wave" data-coach="wave" aria-live="polite">${waveLabel}</div>
+        <div class="exposed" data-coach="sudden">${game.tick >= SUDDEN.tick ? 'Kings exposed — hits land harder' : `Kings exposed in ${this.exposedClock(game.tick)}`}</div>
+        ${(['white', 'black'] as const).filter((side) => controlsSide(slice, side)).map((side) => {
+          const mark = game.waveTarget[side];
+          const marked = mark ? towerAt(game, mark.file, mark.rank) : undefined;
+          const name = marked ? `${PIECES[marked.kind].label} ${squareName(marked.file, marked.rank)}` : 'Enemy King';
+          return html`<div>Next wave target: ${name}${mark ? html` <button type="button" class="quiet" @click=${() => handleAim(side, -1, -1)}>Clear</button>` : ''}</div>`;
+        })}
+        <div class="row">
+          ${sides.map((side) => html`
+            <button
+              type="button"
+              class=${slice.placing === side ? '' : 'quiet'}
+              data-coach=${side === 'white' ? 'walls' : 'black-walls'}
+              aria-pressed=${slice.placing === side ? 'true' : 'false'}
+              @click=${() => store.dispatch(setPlacing(slice.placing === side ? null : side))}>
+              ${side === 'white' ? 'Walls' : 'Black walls'} ${livingWalls(game, side)}/${BLOCKS.max}
+            </button>
+          `)}
+        </div>
+        ${game.mode === 'online' ? html`<div>Code <strong>${slice.onlineCode}</strong> · ${slice.role === 'host' ? 'White' : 'Black'}</div>` : ''}
+        <p class="note">${slice.onlineNote}</p>
+        <div class="gold">W ${Math.floor(game.gold.white)}g ${Math.floor(game.mana.white)}m · B ${Math.floor(game.gold.black)}g ${Math.floor(game.mana.black)}m</div>
+        ${this.tutorial >= 0 ? html`
+          <p class="coach">Step ${this.tutorial + 1} of ${this.steps.length}. ${this.steps[this.tutorial]?.text}</p>
+          <div class="row">
+            <button type="button" @click=${() => this.advanceTutorial(false)}>Next</button>
+            <button type="button" class="quiet" @click=${() => this.advanceTutorial(true)}>Skip tutorial</button>
+          </div>
+        ` : game.wave === 0 ? html`<p class="coach">Towers stay on their squares. Each tower sends its soldiers out of its own gate, and those soldiers fade if the tower falls. Each side may place ${BLOCKS.max} walls. Tap an enemy tower and press T to aim the next wave.</p>` : ''}
+        ${selected ? this.inspect(selected) : html`<div>Tap a tower. Upgrade, repair, and target sit on separate tabs.</div>`}
+      </aside>
+      ${this.dock(slice)}
+    `;
+  }
+
+  private dock(slice: GameSliceState): TemplateResult {
+    const game = slice.game;
+    const sides: Side[] = game.mode === 'local' ? ['white', 'black'] : [playerSide(slice) ?? 'white'];
+    return html`
+      <div class="dock">
+        <button type="button" @click=${() => store.dispatch(togglePause())}>${game.status === 'paused' ? 'Resume' : 'Pause'}</button>
+        ${sides.map((side) => html`
+          <button type="button" @click=${() => store.dispatch(setPlacing(slice.placing === side ? null : side))}>${side === 'white' ? 'White' : 'Black'} walls</button>
+          ${(['blessing', 'heal', 'blast'] as SpellId[]).map((spell) => {
+            const queen = game.towers.some((tower) => tower.side === side && tower.kind === 'queen' && tower.hp > 0);
+            return html`<button type="button" ?disabled=${!queen || game.mana[side] < SPELLS[spell].mana} @click=${() => handleSpell(side, spell)}>${side === 'black' && sides.length > 1 ? 'B ' : ''}${SPELLS[spell].label}</button>`;
+          })}
+        `)}
+      </div>
+    `;
+  }
+
+  private inspect(tower: GameState['towers'][number]): TemplateResult {
+    const slice = this.slice;
+    const stats = combatOf(tower.kind, tower.level);
+    const piece = PIECES[tower.kind];
+    const cost = tower.level < 3 ? upgradeCost(tower.kind, tower.level) : 0;
+    const mine = slice ? controlsSide(slice, tower.side) : false;
+    const attacker: Side = tower.side === 'white' ? 'black' : 'white';
+    const canAim = slice ? controlsSide(slice, attacker) : false;
+    const marked = slice?.game.waveTarget[attacker];
+    const aimed = !!marked && marked.file === tower.file && marked.rank === tower.rank;
+    const tab = this.panelTab === 'spells' && tower.kind !== 'queen' ? 'upgrade' : this.panelTab;
+    return html`
+      <div>
+        <strong>${tower.side} ${piece.label}</strong>
+        ${squareName(tower.file, tower.rank)}
+        · level ${tower.level}
+        · ${Math.ceil(tower.hp)}/${tower.maxHp}
+      </div>
+      <div class="tabs" role="tablist" aria-label="Tower actions">
+        <button type="button" role="tab" aria-selected=${tab === 'upgrade' ? 'true' : 'false'} data-coach="upgrade" @click=${() => { this.panelTab = 'upgrade'; }}>Upgrade</button>
+        <button type="button" role="tab" aria-selected=${tab === 'repair' ? 'true' : 'false'} data-coach="repair" @click=${() => { this.panelTab = 'repair'; }}>Repair</button>
+        <button type="button" role="tab" aria-selected=${tab === 'target' ? 'true' : 'false'} data-coach="target" @click=${() => { this.panelTab = 'target'; }}>Target</button>
+        ${tower.kind === 'queen' ? html`<button type="button" role="tab" aria-selected=${tab === 'spells' ? 'true' : 'false'} data-coach="blessing" @click=${() => { this.panelTab = 'spells'; }}>Spells</button>` : ''}
+      </div>
+      <div class="tab-body">
+        ${tab === 'upgrade' ? html`
+          <p class="role">${piece.role}</p>
+          <div class="inspect-stats">${stats.damage} damage · range ${stats.range.toFixed(1)} · every ${(stats.attackTicks / 10).toFixed(1)}s${overcharged(tower.overchargeUntil, this.slice?.game.tick ?? 0) ? ' · overcharged' : ''}</div>
+          <div class="actions">
+            ${mine && tower.level < 3 ? html`
+              <button type="button" @click=${() => handleUpgrade(tower.side, tower.file, tower.rank)}>Upgrade ${cost}</button>
+            ` : mine ? html`<span class="level">Level 3</span>` : html`<span>Not your tower.</span>`}
+            ${mine ? this.chargeButton(tower) : ''}
+          </div>
+        ` : ''}
+        ${tab === 'repair' ? html`<div class="actions">${mine ? this.repairButton(tower) : html`<span>Not your tower.</span>`}</div>` : ''}
+        ${tab === 'target' ? html`
+          <div class="actions">
+            ${canAim ? html`
+              <button type="button" @click=${() => handleAim(attacker, aimed ? -1 : tower.file, aimed ? -1 : tower.rank)}>${aimed ? 'Clear target' : 'Target'}</button>
+            ` : html`<span>Select an enemy tower to aim the next wave.</span>`}
+          </div>
+        ` : ''}
+        ${tab === 'spells' && slice ? this.spells(slice, tower.side) : ''}
+      </div>
+    `;
+  }
+
+  private repairButton(tower: GameState['towers'][number]): TemplateResult {
+    const slice = this.slice;
+    const missing = Math.max(0, tower.maxHp - tower.hp);
+    const cost = repairCost(missing);
+    const wait = slice ? Math.max(0, tower.repairReadyTick - slice.game.tick) : 0;
+    const label = missing <= 0 ? 'Whole' : wait > 0 ? `Repair ${(wait / 10).toFixed(0)}s` : `Repair ${cost}`;
+    return html`
+      <button
+        type="button"
+        class="repair"
+        ?disabled=${missing <= 0 || wait > 0}
+        @click=${() => handleRepair(tower.side, tower.file, tower.rank)}>
+        ${label}
+      </button>
+    `;
+  }
+
+  private chargeButton(tower: GameState['towers'][number]): TemplateResult {
+    if (tower.level < 3) return html``;
+    const tick = this.slice?.game.tick ?? 0;
+    const active = overcharged(tower.overchargeUntil, tick);
+    const wait = Math.max(0, tower.overchargeReadyTick - tick);
+    const label = active
+      ? `Charged ${Math.ceil((tower.overchargeUntil - tick) / 10)}s`
+      : wait > 0
+        ? `Charge ${Math.ceil(wait / 10)}s`
+        : `Overcharge ${overchargeCost(tower.overchargeUses)}`;
+    return html`
+      <button
+        type="button"
+        class="charge"
+        ?disabled=${active || wait > 0}
+        @click=${() => handleOvercharge(tower.side, tower.file, tower.rank)}>
+        ${label}
+      </button>
+    `;
+  }
+
+  private spells(slice: GameSliceState, side: Side): TemplateResult {
+    const game = slice.game;
+    const queen = game.towers.some((tower) => tower.side === side && tower.kind === 'queen' && tower.hp > 0);
+    const allowed = controlsSide(slice, side);
+    return html`
+      <div class="spells">
+        ${(['blessing', 'heal', 'blast'] as SpellId[]).map((spell) => html`
+          <button
+            type="button"
+            ?disabled=${!allowed || !queen || game.mana[side] < SPELLS[spell].mana}
+            title=${SPELLS[spell].summary}
+            data-coach=${spell === 'blessing' && side === 'white' ? 'blessing' : ''}
+            @click=${() => handleSpell(side, spell)}>
+            ${side === 'black' && slice.game.mode === 'local' ? 'B ' : ''}${SPELLS[spell].label} ${SPELLS[spell].mana}
+          </button>
+        `)}
+      </div>
+    `;
+  }
+
+  private victory(slice: GameSliceState): TemplateResult {
+    const game = slice.game;
+    const winner = game.winner;
+    const text = winner === 'draw' ? 'Draw' : winner === 'white' ? 'White wins' : 'Black wins';
+    const saved = slice.record === 'saved' ? 'Record saved.' : slice.record === 'error' ? 'Could not save the record.' : slice.record === 'skipped' ? 'Played on this browser.' : '';
+    const whiteLeft = game.towers.filter((tower) => tower.side === 'white' && tower.hp > 0).length;
+    const blackLeft = game.towers.filter((tower) => tower.side === 'black' && tower.hp > 0).length;
+    const seconds = Math.round(game.tick / 10);
+    return html`
+      <div class="end">
+        <h2>${text}</h2>
+        <p>${winner === 'draw' ? 'Both King towers fell together.' : 'The enemy King tower has fallen.'}</p>
+        <p>Wave ${game.wave} · ${seconds}s${game.tick >= SUDDEN.tick ? ' · kings exposed' : ''}</p>
+        <p>Towers left: White ${whiteLeft}, Black ${blackLeft}. Walls left: White ${livingWalls(game, 'white')}, Black ${livingWalls(game, 'black')}.</p>
+        <p>Gold left: White ${Math.floor(game.gold.white)}, Black ${Math.floor(game.gold.black)}. ${saved}</p>
+        ${this.recap(game)}
+        <div class="replay">
+          <button type="button" @click=${() => this.toggleReplay()}>${this.replayPlaying ? 'Pause' : 'Play last 30s'}</button>
+          <button type="button" class="quiet" @click=${() => this.setReplaySpeed(1)}>1×</button>
+          <button type="button" class="quiet" @click=${() => this.setReplaySpeed(2)}>2×</button>
+          <button type="button" class="quiet" @click=${() => this.setReplaySpeed(4)}>4×</button>
+        </div>
+        <div class="row" style="justify-content:center;">
+          ${game.mode === 'online'
+            ? html`<button type="button" @click=${() => this.askRematch()}>Rematch</button>`
+            : html`<button type="button" @click=${() => this.start(game.mode === 'local' ? 'local' : 'ai')}>Rematch</button>`}
+          <button type="button" @click=${() => this.leave()}>Back to menu</button>
+        </div>
+      </div>
+    `;
+  }
+
+  private recap(game: GameState): TemplateResult {
+    const ledger = game.ledger;
+    const towers = (Object.keys(PIECES) as PieceKind[])
+      .map((kind) => ({ kind, amount: Math.round(ledger?.tower[kind] ?? 0) }))
+      .filter((row) => row.amount > 0);
+    const soldiers = (Object.keys(SOLDIERS) as SoldierKind[])
+      .map((kind) => ({ kind, amount: Math.round(ledger?.soldier[kind] ?? 0) }))
+      .filter((row) => row.amount > 0);
+    const spells = (['white', 'black'] as const).map((side) => {
+      const book = ledger?.spells[side];
+      const cast = book ? book.blessing + book.heal + book.blast : 0;
+      return `${side === 'white' ? 'White' : 'Black'} ${cast}`;
+    }).join(', ');
+    return html`
+      <table class="recap">
+        <tbody>
+          ${towers.map((row) => html`<tr><td>${PIECES[row.kind].label}</td><td>${row.amount} tower damage</td></tr>`)}
+          ${soldiers.map((row) => html`<tr><td>${SOLDIERS[row.kind].label}</td><td>${row.amount} soldier damage</td></tr>`)}
+          <tr><td>Walls built</td><td>White ${ledger?.walls.white ?? 0}, Black ${ledger?.walls.black ?? 0}</td></tr>
+          <tr><td>Spells cast</td><td>${spells}</td></tr>
+        </tbody>
+      </table>
+    `;
+  }
+
+  private toggleReplay(): void {
+    if (this.film.length === 0) return;
+    if (this.replay < 0 || this.replay >= this.film.length - 1) this.replay = 0;
+    this.replayPlaying = !this.replayPlaying;
+    this.pumpReplay();
+  }
+
+  private setReplaySpeed(speed: number): void {
+    this.replaySpeed = speed;
+    if (this.replay < 0) this.replay = 0;
+    this.replayPlaying = true;
+    this.pumpReplay();
+  }
+
+  private pumpReplay(): void {
+    this.stopReplay();
+    if (!this.replayPlaying) return;
+    const ms = Math.max(40, Math.round(500 / this.replaySpeed));
+    this.replayTimer = window.setInterval(() => {
+      if (this.replay >= this.film.length - 1) {
+        this.replayPlaying = false;
+        this.stopReplay();
+        return;
+      }
+      this.replay += 1;
+    }, ms);
+  }
+
+  private stopReplay(): void {
+    if (this.replayTimer) window.clearInterval(this.replayTimer);
+    this.replayTimer = 0;
+  }
+}
+
+function livingWalls(game: GameState, side: Side): number {
+  return game.blocks.filter((block) => block.side === side && block.hp > 0).length;
 }

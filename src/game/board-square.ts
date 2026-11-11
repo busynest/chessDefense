@@ -1,415 +1,618 @@
-import { css, CSSResult, customElement, html, TemplateResult } from "lit-element";
-import { PageViewElement } from "../lazy-loader";
+import { LitElement, css, html, type CSSResultGroup, type PropertyValues, type TemplateResult } from 'lit';
+import { customElement, property, state } from 'lit/decorators.js';
+import { connect } from 'pwa-helpers/connect-mixin.js';
+
+import { blockProblem } from './commands.js';
+import { towerAt } from './chess.js';
+import { pieceSvg } from './glyphs.js';
+import { handleCell, handleSquare } from './input.js';
+import './one-square.js';
+import type { SoldierKind } from './types.js';
+import { playCollapse, playHit, playKing, playSoldier, playSpell, playStrike, playWall } from './sound.js';
+import { blitSprite, spriteAtlas, type Pose } from './sprites.js';
+import { connectStore, type RootState } from '../store.js';
+import type { GameState, PieceKind, Side, Square } from './types.js';
+import { previewRoute } from './pathing.js';
+import { BLOCKS, WAVES, buildableRows, combatOf, overcharged } from './units.js';
 
 @customElement('board-square')
-export class BoardSquare extends PageViewElement {
+export class BoardSquare extends connect(connectStore)(LitElement) {
+  @state() private game: GameState | null = null;
+  @state() private selected: Square | null = null;
+  @state() private hover: Square | null = null;
+  @state() private placing: 'white' | 'black' | null = null;
+  @state() private ghost: SquareCell | null = null;
+  @state() private bright = false;
+  @property({ type: Number }) coachFile = -1;
+  @property({ type: Number }) coachRank = -1;
+  /** When set, the board draws this pose instead of the live match. Replay uses it. */
+  @property({ attribute: false }) pose: GameState | null = null;
+  private ruins: Ruin[] = [];
+  private ashes: Ash[] = [];
+  private hits: Hit[] = [];
+  private flashes = new Set<string>();
+  private shake = false;
+  private ruinTimer = 0;
+  private seenShots = new Set<string>();
+  private paintWait = 0;
+  private lastX = new Map<string, number>();
+  private hurt = new Map<string, number>();
 
-  // @property ({type: Number})  private widthThis = false;
-
-
-  constructor() {
-    super();
+  override stateChanged(state: RootState): void {
+    this.bright = state.prefs.palette === 'bright';
+    this.selected = state.game.selected;
+    this.placing = state.game.placing;
+    if (this.pose) {
+      this.game = this.pose;
+      return;
+    }
+    const next = state.game.game;
+    if (this.game && next && this.game.status !== 'menu') {
+      const ids = new Set(next.towers.map((tower) => tower.id));
+      const soldiers = new Set(next.soldiers.map((soldier) => soldier.id));
+      const now = performance.now();
+      for (const tower of this.game.towers) {
+        if (!ids.has(tower.id)) {
+          this.ruins.push({ file: tower.file, rank: tower.rank, side: tower.side, kind: tower.kind, born: now });
+          this.shake = !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+          if (tower.kind === 'king') playKing();
+          else playCollapse();
+          window.setTimeout(() => { this.shake = false; this.requestUpdate(); }, 420);
+        }
+      }
+      for (const tower of next.towers) {
+        const prev = this.game.towers.find((item) => item.id === tower.id);
+        if (!prev || tower.hp >= prev.hp - 0.4) continue;
+        this.hits.push({
+          x: tower.file * 2 + 1,
+          y: tower.rank * 2 + 1.6,
+          text: String(Math.max(1, Math.round(prev.hp - tower.hp))),
+          born: now,
+          side: tower.side,
+        });
+        playHit();
+        const key = `${tower.file},${tower.rank}`;
+        this.flashes.add(key);
+        window.setTimeout(() => { this.flashes.delete(key); this.requestUpdate(); }, 280);
+      }
+      for (const soldier of next.soldiers) {
+        const prev = this.game.soldiers.find((item) => item.id === soldier.id);
+        if (prev && soldier.hp < prev.hp - 0.4) this.hurt.set(soldier.id, now + 160);
+        if (prev && soldier.attackReadyTick > prev.attackReadyTick) playSoldier(soldier.kind);
+      }
+      for (const soldier of this.game.soldiers) {
+        if (!soldiers.has(soldier.id)) {
+          this.ashes.push({
+            x: soldier.x,
+            y: soldier.y,
+            side: soldier.side,
+            kind: soldier.kind,
+            born: now,
+            linked: soldier.originId !== '' && !ids.has(soldier.originId),
+          });
+        }
+      }
+      const previousBlocks = new Set(this.game.blocks.map((block) => `${block.x},${block.y}`));
+      if (next.blocks.some((block) => !previousBlocks.has(`${block.x},${block.y}`))) playWall();
+      const previousEffects = new Set(this.game.effects.map((effect) => effect.id));
+      for (const effect of next.effects) {
+        if (previousEffects.has(effect.id)) continue;
+        playSpell(effect.spell);
+        break;
+      }
+      this.ruins = this.ruins.filter((ruin) => now - ruin.born < 1500);
+      this.ashes = this.ashes.filter((ash) => now - ash.born < 700);
+      this.hits = this.hits.filter((hit) => now - hit.born < 700);
+      if (this.ruins.length > 0 || this.ashes.length > 0) {
+        window.clearTimeout(this.ruinTimer);
+        this.ruinTimer = window.setTimeout(() => this.requestUpdate(), 1600);
+      }
+    }
+    for (const shot of next?.projectiles ?? []) {
+      if (this.seenShots.has(shot.id)) continue;
+      this.seenShots.add(shot.id);
+      playStrike(shot.kind);
+    }
+    if (this.seenShots.size > 80) this.seenShots.clear();
+    this.game = next;
   }
 
-  firstUpdated() {
-   
+  protected override updated(changed: PropertyValues): void {
+    if (changed.has('pose') && this.pose) this.game = this.pose;
+    this.paintSoldiers();
   }
 
-  _rook() {
-
+  private keyedSquare(file: number, rank: number): boolean {
+    if (this.selected) return this.selected.file === file && this.selected.rank === rank;
+    return file === 0 && rank === 0;
   }
 
-  _block() {
-
+  private moveKey(file: number, rank: number): void {
+    handleSquare(file, rank);
+    void this.updateComplete.then(() => {
+      const squares = this.renderRoot.querySelectorAll('one-square');
+      for (const square of squares) {
+        const tile = square as HTMLElement & { file: number; rank: number };
+        if (tile.file !== file || tile.rank !== rank) continue;
+        tile.shadowRoot?.querySelector('button')?.focus();
+        return;
+      }
+    });
   }
 
+  private paintSoldiers(): void {
+    const canvas = this.renderRoot.querySelector('canvas');
+    const game = this.game;
+    if (!canvas || !game) return;
+    const width = canvas.clientWidth;
+    const height = canvas.clientHeight;
+    if (width < 2 || height < 2) {
+      if (this.paintWait < 8) {
+        this.paintWait += 1;
+        window.requestAnimationFrame(() => this.paintSoldiers());
+      }
+      return;
+    }
+    this.paintWait = 0;
+    const ratio = window.devicePixelRatio || 1;
+    const px = Math.round(width * ratio);
+    const py = Math.round(height * ratio);
+    if (canvas.width !== px || canvas.height !== py) {
+      canvas.width = px;
+      canvas.height = py;
+    }
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+    ctx.clearRect(0, 0, width, height);
+    const atlas = spriteAtlas(ratio, this.bright);
+    const cellW = width / 16;
+    const cellH = height / 16;
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const crowd = game.soldiers.length > 48;
+    const now = performance.now();
+    for (const soldier of game.soldiers) {
+      const spot = exitSpot(game, soldier);
+      let py = (15 - spot.y + 0.5) * cellH;
+      const px = (spot.x + 0.5) * cellW;
+      if (!reduced && !crowd) py -= Math.sin(game.tick * 0.8 + spot.x) * cellH * 0.05;
+      const prev = this.lastX.get(soldier.id);
+      const flip = prev !== undefined && spot.x < prev - 0.04;
+      this.lastX.set(soldier.id, spot.x);
+      const cooling = soldier.attackReadyTick - game.tick;
+      const attacking = !reduced && cooling >= 5 && cooling <= 12;
+      const pose: Pose = attacking ? 'attack' : 'walk';
+      const frame = reduced ? 1 : attacking ? Math.min(2, 12 - cooling) : (Math.floor(game.tick / 2) + spot.x) % 4;
+      if (soldier.buffUntil >= game.tick) {
+        ctx.fillStyle = 'rgba(246, 226, 122, 0.35)';
+        ctx.beginPath();
+        ctx.arc(px, py, cellW * 0.42, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      blitSprite(ctx, atlas, soldier.kind, soldier.side, pose, frame, px, py, cellW * 0.95, cellH * 1.25, flip);
+      if (soldier.power >= 1.3) {
+        ctx.fillStyle = 'rgba(240, 215, 138, 0.9)';
+        ctx.fillRect(px - 2, py - cellH * 0.7, 4, 2);
+      }
+      if ((this.hurt.get(soldier.id) ?? 0) > now) {
+        ctx.save();
+        ctx.globalAlpha = 0.55;
+        ctx.fillStyle = '#fff';
+        ctx.beginPath();
+        ctx.ellipse(px, py - cellH * 0.15, cellW * 0.28, cellH * 0.4, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+    for (const ash of this.ashes) {
+      const age = Math.min(1, (now - ash.born) / 700);
+      ctx.save();
+      ctx.globalAlpha = 1 - age;
+      blitSprite(
+        ctx,
+        atlas,
+        ash.kind,
+        ash.side,
+        'death',
+        age > 0.45 ? 1 : 0,
+        (ash.x + 0.5) * cellW,
+        (15 - ash.y + 0.5) * cellH + age * cellH * 0.3,
+        cellW * 0.95,
+        cellH * 1.25,
+        false,
+      );
+      ctx.restore();
+    }
+  }
 
-
-  static get styles():CSSResult  {
+  static override get styles(): CSSResultGroup {
     return css`
-
-    :host {
-    }
-
-    .grid {
-
-      height: 100%;
-      max-width: 800px;
-      margin: auto;
-      display: grid;
-      grid-gap: 2px;
-      grid-template-columns:  1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr;
-      grid-template-rows:     1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr;
-    }
-
-    four-square {
- 
-    }
-
-    chess-pawn, chess-rook, chess-knight, chess-bishop, chess-king, chess-queen {
-
-     
-   
-    }
-
-    @media only screen and (min-width: 800px) { .grid { height: 700px; width: 700px; } }
-    @media only screen and (max-width: 800px) { .grid { height: 700px; width: 700px; } }
-    @media only screen and (max-width: 700px) { .grid { height: 600px; width: 600px; } }
-    @media only screen and (max-width: 600px) { .grid { height: 500px; width: 500px; } }
-    @media only screen and (max-width: 500px) { .grid { height: 400px; width: 400px; } }
-    @media only screen and (max-width: 400px) { .grid { height: 300px; width: 300px; } }
-    @media only screen and (max-width: 300px) { .grid { height: 260px; width: 260px; } }
-
-
-        `
-    }
-
-  protected render():TemplateResult {
-    return html`
-
-     
-
-     <!--
-
-            position:   absolute;
-          z-index:    3;
-
-     width:      100%;
-     height:     100%;
-
-     -->
-
-     <!-- Chess Defense Game -->
-     <div id="grid" class="grid">
-    	
-     <!-- 1 -->
-     <four-square id="a1">
-        <chess-rook id="RLB" on-click="_rook" new="pop"></chess-rook>
-     </four-square>
-
-     <!-- 2 -->
-     <four-square id="b1">
-       <chess-knight></chess-knight>
-     </four-square>
-
-     <!-- 3 -->
-     <four-square id="c1">
-       <chess-bishop myWidth="{{widthThis}}"></chess-bishop>
-     </four-square>
-
-     <!-- 4 -->
-     <four-square id="d1">
-       <chess-king></chess-king>
-     </four-square>
-
-     <!-- 5 -->
-     <four-square id="e1">
-       <chess-queen></chess-queen>
-     </four-square>
-
-     <!-- 6 -->
-     <four-square id="f1">
-       <chess-bishop></chess-bishop>
-     </four-square>
-
-     <!-- 7 -->
-     <four-square id="g1">
-       <chess-knight></chess-knight>
-     </four-square>
-
-     <!-- 8 -->
-     <four-square id="h1">
-       <chess-rook on-click="_rook"></chess-rook>
-     </four-square>
-     
-
-     
-     <!-- 9 -->
-     <four-square id="a2">
-       <chess-pawn></chess-pawn>
-     </four-square>
-
-     <!-- 10 -->
-     <four-square id="b2">
-       <chess-pawn></chess-pawn>
-     </four-square>
-
-     <!-- 11 -->
-     <four-square id="c2">
-       <chess-pawn></chess-pawn>
-     </four-square>
-
-     <!-- 12 -->
-     <four-square id="d2">
-       <chess-pawn></chess-pawn>
-     </four-square>
-
-     <!-- 13 -->
-     <four-square id="e2">
-       <chess-pawn></chess-pawn>
-     </four-square>
-
-     <!-- 14 -->
-     <four-square id="f2">
-       <chess-pawn></chess-pawn>
-     </four-square>
-
-     <!-- 15 -->
-     <four-square id="g2">
-       <chess-pawn></chess-pawn>
-     </four-square>
-
-     <!-- 16 -->
-     <four-square id="h2">
-       <chess-pawn></chess-pawn>
-     </four-square>
-     
-
-     
-     <!-- 17 -->
-     <four-square>
-     </four-square>
-     <!-- 18 -->
-     <four-square>
-     </four-square>
-     <!-- 19 -->
-     <four-square>
-     </four-square>
-     <!-- 20 -->
-     <four-square>
-     </four-square>
-     <!-- 21 -->
-     <four-square>
-     </four-square>
-     <!-- 22 -->
-     <four-square>
-     </four-square>
-     <!-- 23 -->
-     <four-square>
-     </four-square>
-     <!-- 24 -->
-     <four-square>
-     </four-square>
-     
-     
-
-     <!-- 25 -->
-     <four-square>
-     </four-square>
-     <!-- 26 -->
-     <four-square>
-     </four-square>
-     <!-- 27 -->
-     <four-square>
-     </four-square>
-     <!-- 28 -->
-     <four-square>
-     </four-square>
-     <!-- 29 -->
-     <four-square>
-     </four-square>
-     <!-- 30 -->
-     <four-square>
-     </four-square>
-     <!-- 31 -->
-     <four-square>
-     </four-square>
-     <!-- 32 -->
-     <four-square>
-     </four-square>
-     
-
-     
-     <!-- 33 -->
-     <four-square>
-     </four-square>
-     <!-- 34 -->
-     <four-square>
-     </four-square>
-     <!-- 35 -->
-     <four-square>
-     </four-square>
-     <!-- 36 -->
-     <four-square>
-     </four-square>
-     <!-- 37 -->
-     <four-square>
-     </four-square>
-     <!-- 38 -->
-     <four-square>
-     </four-square>
-     <!-- 39 -->
-     <four-square>
-     </four-square>
-     <!-- 40 -->
-     <four-square>
-     </four-square>
-     
-
-     
-     <!-- 41 -->
-     <four-square>
-     </four-square>
-     <!-- 42 -->
-     <four-square>
-     </four-square>
-     <!-- 43 -->
-     <four-square>
-     </four-square>
-     <!-- 44 -->
-     <four-square>
-     </four-square>
-     <!-- 45 -->
-     <four-square>
-     </four-square>
-     <!-- 47 -->
-     <four-square>
-     </four-square>
-     <!-- 48 -->
-     <four-square>
-     </four-square>
-     <!-- 49 -->
-     <four-square>
-     </four-square>
-     
-
-     
-     <!-- 50 -->
-     <four-square id="a7">
-           <chess-pawn></chess-pawn>
-     </four-square>      
-     <!-- 51 -->
-     <four-square id="b7">
-           <chess-pawn></chess-pawn>
-     </four-square>
-     <!-- 52 -->
-     <four-square id="c7">
-           <chess-pawn></chess-pawn>
-     </four-square>
-     <!-- 53 -->
-     <four-square id="d7">
-           <chess-pawn></chess-pawn>
-     </four-square>
-     <!-- 54 -->
-     <four-square id="e7">
-           <chess-pawn></chess-pawn>
-     </four-square>
-     <!-- 55 -->
-     <four-square id="f7">
-           <chess-pawn></chess-pawn>
-     </four-square>
-     <!-- 56 -->
-     <four-square id="g7">
-           <chess-pawn></chess-pawn>
-     </four-square>
-     <!-- 57 -->
-     <four-square id="h7">
-           <chess-pawn></chess-pawn>
-     </four-square>
-     
-     
-
-     <!-- 58 -->
-     <four-square id="a8">
-           <chess-rook on-click="_rook"></chess-rook>
-     </four-square>
-     <!-- 59 -->
-     <four-square id="b8">
-           <chess-knight></chess-knight>
-     </four-square>
-     <!-- 60 -->
-     <four-square id="c8">
-           <chess-bishop></chess-bishop>
-     </four-square>
-     <!-- 61 -->
-     <four-square id="d8">
-           <chess-king></chess-king>
-     </four-square>
-     <!-- 62 -->
-     <four-square id="e8">
-           <chess-queen></chess-queen>
-     </four-square>
-     <!-- 63 -->
-     <four-square id="f8">
-           <chess-bishop></chess-bishop>
-     </four-square>
-     <!-- 64 -->
-     <four-square id="g8">
-           <chess-knight></chess-knight>
-     </four-square>
-     <!-- 64 -->
-     <four-square id="h8">
-           <chess-rook on-click="_rook"></chess-rook>
-     </four-square>
-
-     </div>
-
-	`
+      :host {
+        display: block;
+        width: min(100%, 720px);
+        margin: 0 auto;
+        padding: 10px;
+        border-radius: 18px;
+        background:
+          linear-gradient(180deg, #5c4634, #2a1d14 40%, #1a120e);
+        box-shadow:
+          0 22px 30px rgba(0, 0, 0, 0.55),
+          inset 0 1px 0 rgba(255, 220, 170, 0.35);
+      }
+      .frame.shake { animation: jar 0.42s linear; }
+      @keyframes jar {
+        0% { transform: translate(0, 0); }
+        20% { transform: translate(-3px, 2px); }
+        40% { transform: translate(3px, -2px); }
+        60% { transform: translate(-2px, -1px); }
+        80% { transform: translate(2px, 1px); }
+        100% { transform: translate(0, 0); }
+      }
+      .layer {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        z-index: 6;
+        pointer-events: none;
+        overflow: visible;
+      }
+      .frame {
+        position: relative;
+        display: grid;
+        grid-template-columns: repeat(8, 1fr);
+        width: 100%;
+        border: 6px solid #3a2c22;
+        border-radius: 8px;
+        overflow: hidden;
+        box-shadow: inset 0 0 0 2px #c4a574, 0 0 22px rgba(255, 160, 70, 0.16);
+      }
+      .actors, .maze {
+        position: absolute;
+        inset: 0;
+        z-index: 5;
+      }
+      .actors { pointer-events: none; }
+      .route {
+        position: absolute;
+        width: 3.2%;
+        height: 3.2%;
+        border-radius: 50%;
+        transform: translate(-50%, -50%);
+        opacity: 0.85;
+        pointer-events: none;
+      }
+      .route.white { background: #f4f7ff; box-shadow: 0 0 6px #f4f7ff; }
+      .route.black { background: #ffb089; box-shadow: 0 0 6px #ffb089; }
+      .maze { touch-action: none; }
+      .band { position: absolute; left: 0; right: 0; height: 6.25%; pointer-events: none; }
+      .band.allowed { background: rgba(70, 160, 210, 0.34); box-shadow: inset 0 0 18px rgba(140, 210, 255, 0.35); }
+      .band.reserved {
+        background: repeating-linear-gradient(
+          90deg,
+          rgba(246, 214, 120, 0.42) 0 8px,
+          rgba(90, 60, 24, 0.28) 8px 16px
+        );
+      }
+      .ghost { position: absolute; box-sizing: border-box; }
+      .ghost.ok { background: rgba(140, 230, 180, 0.45); box-shadow: 0 0 14px #8dffc0, inset 0 0 0 2px #f3fff8; }
+      .ghost.bad { background: rgba(220, 50, 40, 0.5); box-shadow: 0 0 14px #ff6a4a, inset 0 0 0 2px #ffe0d8; }
+      .range {
+        position: absolute;
+        border-radius: 50%;
+        border: 2px dashed rgba(246, 231, 168, 0.9);
+        background: rgba(246, 214, 120, 0.12);
+        box-shadow: inset 0 0 18px rgba(246, 214, 120, 0.2);
+        transform: translate(-50%, -50%);
+        pointer-events: none;
+      }
+      .mend {
+        position: absolute;
+        width: 12%;
+        height: 12%;
+        border-radius: 50%;
+        transform: translate(-50%, -50%);
+        background: radial-gradient(circle, rgba(160, 255, 190, 0.55), transparent 70%);
+        box-shadow: 0 0 16px rgba(120, 255, 170, 0.8);
+        pointer-events: none;
+      }
+      .unit, .shot, .pulse, .ruin {
+        position: absolute;
+        transform: translate(-50%, -50%);
+      }
+      .unit {
+        width: 5.4%;
+        height: 6.6%;
+        transform: translate(-50%, -72%);
+        animation: march 0.42s ease-in-out infinite;
+      }
+      .unit.buff { filter: drop-shadow(0 0 4px #f6e27a); }
+      .unit.strike { filter: brightness(1.7) drop-shadow(0 0 4px #fff1c4); }
+      .unit.white::after, .unit.black::after {
+        content: '';
+        position: absolute;
+        left: 50%;
+        bottom: -8%;
+        width: 42%;
+        height: 22%;
+        transform: translateX(-50%);
+      }
+      .unit.white::after { border-radius: 50%; background: #7ec8ff; }
+      .unit.black::after { background: #ffb15a; transform: translateX(-50%) rotate(45deg); }
+      .crowd .unit { animation: none; }
+      .unit svg { width: 100%; height: 100%; }
+      .hit {
+        position: absolute;
+        z-index: 6;
+        transform: translate(-50%, -50%);
+        color: #fff6d8;
+        font-weight: 800;
+        font-size: 1.15rem;
+        background: rgba(40, 12, 6, 0.88);
+        border-radius: 6px;
+        padding: 0 5px;
+        text-shadow: 0 1px 0 #3a180c;
+        animation: rise 0.8s ease-out forwards;
+        pointer-events: none;
+      }
+      .hit.black { color: #ffd0b0; }
+      @keyframes rise {
+        from { opacity: 1; translate: 0 0; }
+        to { opacity: 0; translate: 0 -14px; }
+      }
+      .shot { width: 2.6%; height: 0.9%; border-radius: 2px; background: #f4e7b0; box-shadow: 0 0 6px #fff1c0; }
+      .shot.shell { width: 3%; height: 3%; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #fff, #8d8a84 55%, #2a2a28); box-shadow: 0 0 8px #ffb060; }
+      .shot.arrow { width: 3.6%; height: 0.7%; background: linear-gradient(90deg, transparent, #f7f1e1 30%, #f7f1e1); }
+      .shot.magic { width: 2.8%; height: 2.8%; border-radius: 50%; background: radial-gradient(circle, #fff6c8, #c47bff 70%); box-shadow: 0 0 10px #e4b0ff; }
+      .pulse { border-radius: 50%; }
+      .pulse i, .pulse b {
+        position: absolute;
+        border-radius: 50%;
+        border: 3px solid currentColor;
+        box-shadow: 0 0 16px currentColor, inset 0 0 12px currentColor;
+        animation: ring 1.15s ease-out infinite;
+      }
+      .pulse i { inset: 4%; }
+      .pulse b { inset: 22%; animation-delay: 0.4s; }
+      .pulse::before {
+        content: "";
+        position: absolute;
+        inset: 12%;
+        background:
+          radial-gradient(circle at 18% 28%, currentColor 0 4px, transparent 5px),
+          radial-gradient(circle at 72% 22%, currentColor 0 3px, transparent 4px),
+          radial-gradient(circle at 36% 74%, currentColor 0 4px, transparent 5px),
+          radial-gradient(circle at 80% 68%, currentColor 0 3px, transparent 4px);
+      }
+      .pulse.blessing { color: #ffe38a; background: radial-gradient(circle, rgba(255, 214, 90, 0.62), rgba(255, 190, 60, 0.16) 58%, transparent 74%); }
+      .pulse.heal { color: #9dffc4; background: radial-gradient(circle, rgba(120, 230, 160, 0.58), rgba(80, 200, 140, 0.14) 60%, transparent 74%); }
+      .pulse.blast { color: #ffb088; background: radial-gradient(circle, rgba(255, 90, 40, 0.62), rgba(255, 60, 20, 0.18) 55%, transparent 72%); }
+      .ruin { width: 12%; height: 15%; animation: crumble 1.4s ease-in forwards; filter: drop-shadow(0 0 8px #ffb060); }
+      .ruin svg { width: 100%; height: 100%; }
+      .ruin::after {
+        content: "";
+        position: absolute;
+        left: 8%;
+        right: 8%;
+        bottom: -6%;
+        height: 36%;
+        background:
+          radial-gradient(circle at 22% 40%, #f0e2c8 0 5px, transparent 6px),
+          radial-gradient(circle at 48% 70%, #8a6a48 0 6px, transparent 7px),
+          radial-gradient(circle at 74% 36%, #efe6d4 0 4px, transparent 5px);
+      }
+      .ash {
+        width: 3.2%;
+        height: 3.2%;
+        border-radius: 50%;
+        background: radial-gradient(circle, rgba(255, 220, 160, 0.9), rgba(80, 40, 20, 0.2) 70%, transparent);
+        animation: puff 0.65s ease-out forwards;
+      }
+      .ash.linked {
+        width: 4.4%;
+        height: 4.4%;
+        background: radial-gradient(circle, rgba(255, 244, 220, 0.95), rgba(180, 80, 40, 0.35) 60%, transparent);
+        animation: puff 0.9s ease-out forwards;
+      }
+      @keyframes march { 50% { transform: translate(-50%, -80%); } }
+      @keyframes ring { to { transform: scale(1.28); opacity: 0; } }
+      @keyframes crumble {
+        0% { transform: translate(-50%, -62%) rotate(-16deg) scale(1.08); opacity: 1; filter: brightness(1.7) drop-shadow(0 0 10px #ffb060); }
+        18% { transform: translate(-40%, -28%) rotate(18deg) scale(0.82); opacity: 1; }
+        100% { transform: translate(-50%, 28%) rotate(32deg) scale(0.18); opacity: 0; filter: grayscale(1); }
+      }
+      @keyframes puff { to { transform: translate(-50%, -80%) scale(1.8); opacity: 0; } }
+      @media (prefers-reduced-motion: reduce) {
+        .unit, .pulse i, .pulse b, .ruin, .ash, .hit, .frame.shake { animation: none; }
+      }
+    `;
   }
 
+  protected override render(): TemplateResult {
+    const game = this.game;
+    if (!game || game.status === 'menu') return html``;
+    const focus = this.selected ?? this.hover;
+    const focusTower = focus ? towerAt(game, focus.file, focus.rank) : undefined;
+    const fresh = game.wave > 0 && game.nextWaveTick - game.tick > WAVES.gapTicks - 10;
+    const squares = [];
+    for (let rank = 7; rank >= 0; rank -= 1) {
+      for (let file = 0; file < 8; file += 1) {
+        const tower = towerAt(game, file, rank);
+        const hint = this.selected && this.selected.file === file && this.selected.rank === rank ? 'selected' : '';
+        const marked: Side | '' = tower && game.waveTarget.white && game.waveTarget.white.file === file && game.waveTarget.white.rank === rank
+          ? 'white'
+          : tower && game.waveTarget.black && game.waveTarget.black.file === file && game.waveTarget.black.rank === rank
+            ? 'black'
+            : '';
+        const walls = [
+          wallRatio(game, file * 2, rank * 2 + 1),
+          wallRatio(game, file * 2 + 1, rank * 2 + 1),
+          wallRatio(game, file * 2, rank * 2),
+          wallRatio(game, file * 2 + 1, rank * 2),
+        ];
+        squares.push(html`
+          <one-square
+            .file=${file}
+            .rank=${rank}
+            .dark=${(file + rank) % 2 === 0}
+            .hint=${hint}
+            .kind=${tower?.kind ?? ''}
+            .side=${tower?.side ?? ''}
+            .hp=${tower?.hp ?? 0}
+            .maxHp=${tower?.maxHp ?? 1}
+            .level=${tower?.level ?? 1}
+            .walls=${walls}
+            .etched=${this.placing !== null}
+            ?portal=${fresh && !!tower}
+            ?charged=${!!tower && overcharged(tower.overchargeUntil, game.tick)}
+            .label=${tower ? `${tower.side} ${tower.kind}` : 'empty square'}
+            .marked=${marked}
+            ?flash=${this.flashes.has(`${file},${rank}`)}
+            ?coach=${this.coachFile === file && this.coachRank === rank}
+            ?keyed=${this.keyedSquare(file, rank)}
+            @square-click=${(event: CustomEvent<{ file: number; rank: number }>) => handleSquare(event.detail.file, event.detail.rank)}
+            @square-key=${(event: CustomEvent<{ file: number; rank: number }>) => this.moveKey(event.detail.file, event.detail.rank)}
+            @square-hover=${(event: CustomEvent<{ file: number; rank: number; on: boolean }>) => {
+              this.hover = event.detail.on ? { file: event.detail.file, rank: event.detail.rank } : null;
+            }}
+          ></one-square>
+        `);
+      }
+    }
+    return html`
+      <div class="frame ${this.shake ? 'shake' : ''} ${this.bright ? 'bright' : ''}">
+        ${squares}
+        ${focusTower ? this.ring(focusTower) : ''}
+        ${game.towers.filter((tower) => tower.mendedTick > 0 && game.tick - tower.mendedTick < 24).map((tower) => html`
+          <div class="mend" style="left:${(tower.file + 0.5) / 8 * 100}%; top:${(7 - tower.rank + 0.5) / 8 * 100}%"></div>
+        `)}
+        <div class="actors ${game.soldiers.length > 48 ? 'crowd' : ''}">
+          ${(['white', 'black'] as const).flatMap((side) => previewRoute(game, side).map((cell) => html`
+            <div class="route ${side}" style="left:${(cell.x + 0.5) / 16 * 100}%; top:${(15 - cell.y + 0.5) / 16 * 100}%"></div>
+          `))}
+          ${game.effects.map((effect) => {
+            const size = effect.spell === 'heal' ? effect.radius * 2 / 8 * 100 : effect.radius * 2 / 16 * 100;
+            const left = (effect.file + 0.5) / 8 * 100;
+            const top = (7 - effect.rank + 0.5) / 8 * 100;
+            return html`<div class="pulse ${effect.spell}" style="left:${left}%; top:${top}%; width:${size}%; height:${size}%"><i></i><b></b></div>`;
+          })}
+          ${this.ruins.map((ruin) => html`
+            <div class="ruin" style="left:${(ruin.file + 0.5) / 8 * 100}%; top:${(7 - ruin.rank + 0.5) / 8 * 100}%">
+              ${pieceSvg(ruin.kind, ruin.side, 0.2, 1)}
+            </div>
+          `)}
+          <canvas class="layer"></canvas>
+          ${this.ashes.map((ash) => html`
+            <div class="ash ${ash.side} ${ash.linked ? 'linked' : ''}" style="left:${(ash.x + 0.5) / 16 * 100}%; top:${(15 - ash.y + 0.5) / 16 * 100}%"></div>
+          `)}
+          ${this.hits.map((hit) => html`
+            <div class="hit ${hit.side}" style="left:${(hit.x + 0.5) / 16 * 100}%; top:${(15 - hit.y + 0.5) / 16 * 100}%">${hit.text}</div>
+          `)}
+          ${game.projectiles.map((shot) => {
+            const t = Math.min(1, (game.tick - shot.born) / Math.max(1, shot.life));
+            const x = shot.x + (shot.tx - shot.x) * t;
+            const y = shot.y + (shot.ty - shot.y) * t;
+            const angle = Math.atan2(shot.y - shot.ty, shot.tx - shot.x) * 180 / Math.PI;
+            return html`<div class="shot ${shot.kind === 'shot' ? 'magic' : shot.kind}" style="left:${(x + 0.5) / 16 * 100}%; top:${(15 - y + 0.5) / 16 * 100}%; transform: translate(-50%, -50%) rotate(${angle}deg)"></div>`;
+          })}
+        </div>
+        ${this.placing ? this.maze(game) : ''}
+      </div>
+    `;
+  }
+
+  private ring(tower: GameState['towers'][number]): TemplateResult {
+    const range = combatOf(tower.kind, tower.level).range;
+    const size = range * 2 / 16 * 100;
+    const left = (tower.file + 0.5) / 8 * 100;
+    const top = (7 - tower.rank + 0.5) / 8 * 100;
+    return html`<div class="range" style="left:${left}%; top:${top}%; width:${size}%; height:${size}%"></div>`;
+  }
+
+  private maze(game: GameState): TemplateResult {
+    const side = this.placing;
+    if (!side) return html``;
+    const ghost = this.ghost;
+    const own = ghost ? game.blocks.some((block) => block.x === ghost.x && block.y === ghost.y && block.hp > 0 && block.side === side) : false;
+    const problem = ghost && side && !own ? blockProblem(game, side, ghost.x, ghost.y) : '';
+    return html`
+      <div
+        class="maze"
+        @pointermove=${(event: PointerEvent) => this.track(event)}
+        @pointerdown=${(event: PointerEvent) => this.track(event)}
+        @pointerup=${(event: PointerEvent) => this.drop(event)}>
+        ${buildableRows(side).map((y) => html`<div class="band allowed" style="top:${(15 - y) / 16 * 100}%"></div>`)}
+        ${BLOCKS.centerRows.map((y) => html`<div class="band reserved" style="top:${(15 - y) / 16 * 100}%"></div>`)}
+        ${ghost ? html`<div class="ghost ${own || problem === '' ? 'ok' : 'bad'}" style="left:${ghost.x / 16 * 100}%; top:${(15 - ghost.y) / 16 * 100}%; width:${100 / 16}%; height:${100 / 16}%"></div>` : ''}
+      </div>
+    `;
+  }
+
+  private cellAt(event: PointerEvent): SquareCell | null {
+    const frame = event.currentTarget as HTMLElement;
+    const rect = frame.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return null;
+    const x = Math.min(15, Math.max(0, Math.floor(((event.clientX - rect.left) / rect.width) * 16)));
+    const y = 15 - Math.min(15, Math.max(0, Math.floor(((event.clientY - rect.top) / rect.height) * 16)));
+    return { x, y };
+  }
+
+  private track(event: PointerEvent): void {
+    this.ghost = this.cellAt(event);
+  }
+
+  private drop(event: PointerEvent): void {
+    const cell = this.cellAt(event);
+    this.ghost = cell;
+    if (cell) handleCell(cell.x, cell.y);
+  }
 }
 
-/**
+interface SquareCell {
+  x: number;
+  y: number;
+}
 
-    	<div style="height:100%; width:100%;">
-        <slot></slot>
-        <div style="height:100%; width:100%; display: grid; grid-template-columns: 50% 50%; grid-template-rows: 50% 50%;">
-          <four-square></four-square>
-          <four-square></four-square>
-          <four-square></four-square>
-          <four-square></four-square>
-        </div>
-      </div>
+interface Ruin {
+  file: number;
+  rank: number;
+  side: Side;
+  kind: PieceKind;
+  born: number;
+}
 
-      [a1,b1,c1,d1,e1,f1,g1,h1,a2,b2,c2,d2,e2,f2,g2,h2,a3,b3,c3,d3,e3,f3,g3,h3,a4,b4,c4,d4,e4,f4,g4,h4,a5,b5,c5,d5,e5,f5,g5,h5,a6,b6,c6,d6,e6,f6,g6,h6,a7,b7,c7,d7,e7,f7,g7,h7,a8,b8,c8,d8,e8,f8,g8,h8]
+interface Hit {
+  x: number;
+  y: number;
+  text: string;
+  born: number;
+  side: Side;
+}
 
+interface Ash {
+  x: number;
+  y: number;
+  side: Side;
+  kind: SoldierKind;
+  born: number;
+  /** The parent tower fell, so this soldier faded with it. */
+  linked: boolean;
+}
 
-      a1, b1, c1, d1, e1, f1, g1, h1,
-      a2, b2, c2, d2, e2, f2, g2, h2,
-      a3, b3, c3, d3, e3, f3, g3, h3,
-      a4, b4, c4, d4, e4, f4, g4, h4,
-      a5, b5, c5, d5, e5, f5, g5, h5,
-      a6, b6, c6, d6, e6, f6, g6, h6,
-      a7, b7, c7, d7, e7, f7, g7, h7,
-      a8, b8, c8, d8, e8, f8, g8, h8
+function exitSpot(game: GameState, soldier: GameState['soldiers'][number]): { x: number; y: number } {
+  const age = game.tick - soldier.born;
+  const parent = game.towers.find((tower) => tower.id === soldier.originId);
+  if (!parent || age < 0 || age >= 8) return { x: soldier.x, y: soldier.y };
+  const blend = age / 8;
+  const ox = parent.file * 2 + 0.5;
+  const oy = parent.rank * 2 + 0.5;
+  return {
+    x: ox + (soldier.x - ox) * blend,
+    y: oy + (soldier.y - oy) * blend,
+  };
+}
 
-var arena, grid, i;
-    arena = [
-      "a1", "b1", "c1", "d1", "e1", "f1", "g1", "h1",
-      "a2", "b2", "c2", "d2", "e2", "f2", "g2", "h2",
-      "a3", "b3", "c3", "d3", "e3", "f3", "g3", "h3",
-      "a4", "b4", "c4", "d4", "e4", "f4", "g4", "h4",
-      "a5", "b5", "c5", "d5", "e5", "f5", "g5", "h5",
-      "a6", "b6", "c6", "d6", "e6", "f6", "g6", "h6",
-      "a7", "b7", "c7", "d7", "e7", "f7", "g7", "h7",
-      "a8", "b8", "c8", "d8", "e8", "f8", "g8", "h8"
-    ];
-
-
-**/
-
-/*
-      box: {
-        type: Array,
-        value: [
-          {x:"a1"}, {x:"b1"}, {x:"c1"}, {x:"d1"}, {x:"e1"}, {x:"f1"}, {x:"g1"}, {x:"h1"},
-          {x:"a2"}, {x:"b2"}, {x:"c2"}, {x:"d2"}, {x:"e2"}, {x:"f2"}, {x:"g2"}, {x:"h2"},
-          {x:"a3"}, {x:"b3"}, {x:"c3"}, {x:"d3"}, {x:"e3"}, {x:"f3"}, {x:"g3"}, {x:"h3"},
-          {x:"a4"}, {x:"b4"}, {x:"c4"}, {x:"d4"}, {x:"e4"}, {x:"f4"}, {x:"g4"}, {x:"h4"},
-          {x:"a5"}, {x:"b5"}, {x:"c5"}, {x:"d5"}, {x:"e5"}, {x:"f5"}, {x:"g5"}, {x:"h5"},
-          {x:"a6"}, {x:"b6"}, {x:"c6"}, {x:"d6"}, {x:"e6"}, {x:"f6"}, {x:"g6"}, {x:"h6"},
-          {x:"a7"}, {x:"b7"}, {x:"c7"}, {x:"d7"}, {x:"e7"}, {x:"f7"}, {x:"g7"}, {x:"h7"},
-          {x:"a8"}, {x:"b8"}, {x:"c8"}, {x:"d8"}, {x:"e8"}, {x:"f8"}, {x:"g8"}, {x:"h8"}
-        ]
-      }
-
-    <!-- Chess Defense Game -->
-    <div id="grid" class="grid">
-
-          <dom-repeat items="{{boxes}}">
-            <template><div id="[[box.x]]"></div></template>
-          </dom-repeat>
-
-    </div>
-
-*/
+function wallRatio(game: GameState, x: number, y: number): number {
+  const block = game.blocks.find((item) => item.x === x && item.y === y && item.hp > 0);
+  return block ? block.hp / block.maxHp : -1;
+}

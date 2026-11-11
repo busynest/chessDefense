@@ -1,43 +1,38 @@
 {
   "name": "chessdefense",
-  "flat": true,
-  "version": "1.1.1",
-  "description": "ChessDefense is a New Type of Game, a cross between Chess + Tower Defense!",
-  "main": "application-shell.js",
+  "version": "3.0.0",
+  "description": "ChessDefense is a new type of game, a cross between chess and tower defense.",
+  "type": "module",
   "repository": "https://www.chessdefense.com",
   "author": "Modern Projects",
   "license": "MIT",
   "private": true,
   "scripts": {
-    "build": "polymer build --auto-base-path && workbox injectManifest workbox-config.js",
-    "rollup": "rollup -c",
-    "long": "rollup deploy/application-shell.js --format es --name 'ApplicationShell' --file application-shell.js",
-    "storybook": "start-storybook -p 6006",
-    "build-storybook": "build-storybook"
+    "start": "tsc && concurrently -k -n tsc,web \"tsc --watch --preserveWatchOutput\" \"web-dev-server --config web-dev-server.config.mjs\"",
+    "build": "tsc && rollup -c",
+    "typecheck": "tsc --noEmit",
+    "test": "tsc && node --test out/game/rules.test.js",
+    "dev:emulators": "concurrently -k -n emu,app \"firebase emulators:start --only database,auth,firestore --project contractors-centre\" \"npm start\"",
+    "test:online": "tsc && firebase emulators:exec --only database,auth,firestore --project contractors-centre \"node scripts/online-match.mjs\"",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
-    "es-dev-server": "^1.57.4",
-    "lit-element": "^2.4.0",
+    "@reduxjs/toolkit": "^2.12.0",
+    "firebase": "^12.0.0",
+    "lit": "^3.3.0",
+    "pwa-auth": "^3.8.0",
     "pwa-helpers": "^0.9.1",
-    "redux": "^4.0.5",
-    "redux-thunk": "^2.3.0",
-    "reselect": "^4.0.0",
-    "ts-loader": "^8.0.4",
-    "tslint": "^6.1.3",
-    "workbox-sw": "^5.1.4"
+    "redux": "^5.0.1",
+    "tslib": "^2.8.1"
   },
   "devDependencies": {
-    "@babel/core": "^7.11.6",
-    "@storybook/addon-actions": "^6.0.21",
-    "@storybook/addon-essentials": "^6.0.21",
-    "@storybook/addon-links": "^6.0.21",
-    "@storybook/web-components": "^6.0.21",
-    "babel-loader": "^8.1.0",
-    "lit-html": "^1.3.0",
-    "ts-lit-plugin": "^1.2.1",
-    "typescript": "^4.0.3",
-    "polymer-cli": "^1.9.11",
-    "polyserve": "^0.27.0",
-    "prpl-server": "^1.4.2"
+    "@rollup/plugin-node-resolve": "^16.0.0",
+    "@rollup/plugin-replace": "^6.0.2",
+    "@playwright/test": "^1.56.0",
+    "@web/dev-server": "^0.4.6",
+    "concurrently": "^9.2.0",
+    "firebase-tools": "^14.22.0",
+    "rollup": "^4.40.0",
+    "typescript": "^5.9.0"
   }
 }

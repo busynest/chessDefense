@@ -1,37 +1,24 @@
-import { css, CSSResult, customElement, html, LitElement, TemplateResult } from "lit-element";
+import { LitElement, css, type CSSResultGroup } from 'lit';
+import { customElement, property } from 'lit/decorators.js';
+
+import { pieceSvg } from './glyphs.js';
+import type { Side } from './types.js';
 
 @customElement('chess-pawn')
 export class ChessPawn extends LitElement {
+  @property({ type: String }) side: Side = 'white';
+  @property({ type: Number }) hp = 1;
+  @property({ type: Number }) maxHp = 1;
+  @property({ type: Number }) level = 1;
 
-  constructor() {
-    super();
-  }
-
-  _pawn() {
- 
-  }
-
-  static get styles():CSSResult  {
+  static override get styles(): CSSResultGroup {
     return css`
-
-      :host {
-        
-      }
-
-      svg { width: 100%; height: 100%; }
-
-    `
+      :host { display: grid; place-items: center; width: 100%; height: 100%; pointer-events: none; }
+      svg { width: 96%; height: 96%; }
+    `;
   }
 
-  protected render():TemplateResult {
-    return html`
-
-    <div>
-      <svg viewBox="0 0 100 100" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg" on-click="_pawn">
-        <circle stroke="green" stroke-width="4" fill="white" cx="50" cy="50" r="15" />
-      </svg>
-    </div>
-
-  `
+  protected override render() {
+    return pieceSvg('pawn', this.side, this.maxHp > 0 ? this.hp / this.maxHp : 1, this.level);
   }
 }

@@ -1,0 +1,207 @@
+export type Side = 'white' | 'black';
+export type PieceKind = 'pawn' | 'knight' | 'bishop' | 'rook' | 'queen' | 'king';
+export type SoldierKind = 'peasant' | 'knight' | 'archer' | 'cannon' | 'mage' | 'guard';
+export type SpellId = 'blessing' | 'heal' | 'blast';
+export type Mode = 'ai' | 'local' | 'online';
+export type Difficulty = 'easy' | 'normal' | 'hard';
+export type Personality = 'rusher' | 'fortress' | 'tactician';
+export type MatchStatus = 'menu' | 'lobby' | 'playing' | 'paused' | 'victory';
+
+export interface Square {
+  file: number;
+  rank: number;
+}
+
+export interface Cell {
+  x: number;
+  y: number;
+}
+
+export interface Tower {
+  id: string;
+  side: Side;
+  kind: PieceKind;
+  file: number;
+  rank: number;
+  hp: number;
+  maxHp: number;
+  /** 1, 2, or 3. Gold raises this. Towers never leave their square. */
+  level: number;
+  attackReadyTick: number;
+  /** Next tick this tower may be repaired. */
+  repairReadyTick: number;
+  /** Tick of the last repair, for the mend flash. 0 if never. */
+  mendedTick: number;
+  /** Overcharge boost lasts until this tick. */
+  overchargeUntil: number;
+  /** Next tick this level-3 tower may be overcharged again. */
+  overchargeReadyTick: number;
+  /** How many times this tower has been overcharged. The price climbs. */
+  overchargeUses: number;
+  hurtBy: Side | null;
+}
+
+export interface Soldier {
+  id: string;
+  side: Side;
+  kind: SoldierKind;
+  x: number;
+  y: number;
+  hp: number;
+  maxHp: number;
+  attackReadyTick: number;
+  repathTick: number;
+  path: Cell[];
+  buffUntil: number;
+  buffStr: number;
+  buffSpeed: number;
+  /** Wave scaling times the parent tower's level. 1 is a level-1 wave-1 soldier. */
+  power: number;
+  rootedUntil: number;
+  slowUntil: number;
+  hurtBy: Side | null;
+  /** Enemy tower this soldier is locked onto. Null means the enemy King. */
+  aim: Square | null;
+  /** Path cache. A new value means walls or towers changed. */
+  navStamp: number;
+  /** Tower that released this soldier. When that tower falls, the soldier falls with it. */
+  originId: string;
+  /** Tick the soldier left its tower, for the exit. */
+  born: number;
+}
+
+export interface Projectile {
+  id: string;
+  side: Side;
+  kind: 'shot' | 'arrow' | 'shell' | 'magic';
+  x: number;
+  y: number;
+  tx: number;
+  ty: number;
+  born: number;
+  life: number;
+}
+
+export interface Block {
+  x: number;
+  y: number;
+  side: Side;
+  hp: number;
+  maxHp: number;
+  hurtBy: Side | null;
+}
+
+export interface Pulse {
+  id: string;
+  side: Side;
+  spell: SpellId;
+  file: number;
+  rank: number;
+  until: number;
+  radius: number;
+}
+
+export interface Banner {
+  text: string;
+  until: number;
+}
+
+/** Damage dealt, walls placed, and spells cast. Carried on the match so a guest sees the same recap. */
+export interface Ledger {
+  tower: Partial<Record<PieceKind, number>>;
+  soldier: Partial<Record<SoldierKind, number>>;
+  walls: Record<Side, number>;
+  spells: Record<Side, Record<SpellId, number>>;
+}
+
+export interface GameState {
+  tick: number;
+  status: MatchStatus;
+  mode: Mode;
+  difficulty: Difficulty;
+  /** How the computer spends, when set. Otherwise the difficulty's usual style. */
+  personality?: Personality;
+  /** The side played by the human in a vs-AI match. Online host is white. */
+  humanSide: Side;
+  winner: Side | 'draw' | null;
+  seed: number;
+  rng: number;
+  /** Black's own random stream, so White acting first does not spend Black's rolls. */
+  rngBlack: number;
+  nextId: number;
+  wave: number;
+  nextWaveTick: number;
+  gold: Record<Side, number>;
+  mana: Record<Side, number>;
+  towers: Tower[];
+  soldiers: Soldier[];
+  projectiles: Projectile[];
+  blocks: Block[];
+  effects: Pulse[];
+  banner: Banner | null;
+  /** Tower the next wave will march on. Null means the enemy King. */
+  waveTarget: Record<Side, Square | null>;
+  navHash: number;
+  navStamp: number;
+  /** Running totals for the end-of-match recap. */
+  ledger: Ledger;
+  /** While true, a versus-AI match does not take a computer turn. The tour uses this. */
+  holdAi?: boolean;
+  /**
+   * The side that steps off one tick sooner. Even seeds give it to White,
+   * odd seeds to Black, so a mirrored match still has a winner and neither
+   * color is the one that always moves first.
+   */
+  initiative: Side;
+}
+
+export interface UpgradeCommand {
+  type: 'upgrade';
+  side: Side;
+  file: number;
+  rank: number;
+}
+
+export interface RepairCommand {
+  type: 'repair';
+  side: Side;
+  file: number;
+  rank: number;
+}
+
+export interface OverchargeCommand {
+  type: 'overcharge';
+  side: Side;
+  file: number;
+  rank: number;
+}
+
+export interface SpellCommand {
+  type: 'spell';
+  side: Side;
+  spell: SpellId;
+}
+
+export interface BlockCommand {
+  type: 'block';
+  side: Side;
+  x: number;
+  y: number;
+}
+
+export interface UnblockCommand {
+  type: 'unblock';
+  side: Side;
+  x: number;
+  y: number;
+}
+
+/** file < 0 clears the mark. The next wave then marches on the King. */
+export interface TargetCommand {
+  type: 'target';
+  side: Side;
+  file: number;
+  rank: number;
+}
+
+export type PlayerCommand = UpgradeCommand | RepairCommand | OverchargeCommand | SpellCommand | BlockCommand | UnblockCommand | TargetCommand;

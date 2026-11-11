@@ -1,77 +1,30 @@
+import { configureStore, type ThunkAction, type UnknownAction } from '@reduxjs/toolkit';
+import type { AnyAction, Store } from 'redux';
 
-declare global {
-  interface Window {
-    process?: Object;
-    __REDUX_DEVTOOLS_EXTENSION_COMPOSE__?: typeof compose;
-  }
-}
+import { appReducer } from './application/application_state.js';
+import { gameReducer } from './game/game_state.js';
+import { prefsReducer, savePrefs } from './prefs/prefs_state.js';
+import { userReducer } from './user/user_state.js';
 
-import {
-  createStore,
-  compose,
-  applyMiddleware,
-  combineReducers,
-  Reducer,
-  StoreEnhancer
-} from 'redux';
+export const store = configureStore({
+  reducer: {
+    app: appReducer,
+    user: userReducer,
+    game: gameReducer,
+    prefs: prefsReducer,
+  },
+});
 
-import thunk, { ThunkMiddleware } from 'redux-thunk';
-import { lazyReducerEnhancer }    from 'pwa-helpers/lazy-reducer-enhancer';
+store.subscribe(() => {
+  savePrefs(store.getState().prefs);
+});
 
-import {
-  app,
-  AppAction,
-  AppState
-} from './application/application_state';
+export type RootState = ReturnType<typeof store.getState>;
+export type AppDispatch = typeof store.dispatch;
+export type AppThunk<Return = void> = ThunkAction<Return, RootState, undefined, UnknownAction>;
 
-import { drawer } from './interface/drawer_state';
-import { drawerState, drawerAction } from './interface/drawer_state';
-
-import {
-  settings,
-  profileAction,
-  profileState
-} from './interface/settings_state';
-
-import {
-  mutual,
-  publicAction,
-  publicState
-} from './interface/public_state';
-
-
-// Overall state extends static states and partials lazy states.
-export interface RootState {
-  app?:           AppState;
-  drawer?:        drawerState;
-  settings?:      profileState;
-  mutual?:        publicState;
-}
-
-export type RootAction =
-  AppAction
-| drawerAction
-| profileAction
-| publicAction ;
-
-// Sets up a Chrome extension for time travel debugging.
-// See https://github.com/zalmoxisus/redux-devtools-extension for more information.
-const devCompose: <Ext0, Ext1, StateExt0, StateExt1>(
-  f1: StoreEnhancer<Ext0, StateExt0>, f2: StoreEnhancer<Ext1, StateExt1>
-) => StoreEnhancer<Ext0 & Ext1, StateExt0 & StateExt1> =
- window.__REDUX_DEVTOOLS_EXTENSION_COMPOSE__ || compose;
-
- export const store = createStore(
-  state => state as Reducer<RootState, RootAction>,
-  devCompose(
-      lazyReducerEnhancer(combineReducers),
-      applyMiddleware(thunk as ThunkMiddleware<RootState, RootAction>)
-  )
-);
-
-store.addReducers({
-  app,
-  drawer,
-  settings,
-  mutual
- });
+/**
+ * pwa-helpers' published `connect` signature still asks for Redux 4's `AnyAction`.
+ * The runtime store is the Redux 5 / RTK store above; this view keeps the mixin typed.
+ */
+export const connectStore = store as unknown as Store<RootState, AnyAction>;

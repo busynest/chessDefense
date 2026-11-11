@@ -1,35 +1,167 @@
+# Chess Defense
 
-[Chess Defense](https://www.chessdefense.com)
+Two medieval kings defend their towns on one board. The chess pieces are towers. They never move.
 
-# 1v1
-* Two Medieval Kings command an onslaught of villagers to brawl with magic and strategy to defend their own towns of Chess.
-* Each Chess Tower spawns a unique villager to raid with different values of Strength, Life, Speed.
-* 6 Types of Towers: King, Queen = Magic upgrades , Rook, Bishop, Knight, Pawn = Peasant
-* 4 Types of villagers: Archer, Knight, iron canon, Peasant.
-* Magic upgrades:
+## Rules
 
-# [NODEJS](https://nodejs.org/en/)
+There are two layers.
 
-  Node.js® is a JavaScript runtime built on Chrome's V8 JavaScript engine. Node.js uses an event-driven, non-blocking I/O model that makes it lightweight and efficient. Node.js' package ecosystem, npm, is the largest ecosystem of open source libraries in the world.
+**Towers, the 8×8.** Chess pieces are tower-defense buildings in that piece's silhouette. They begin in the standard starting position, White along the bottom, and they stay there for the whole match. They never move and never capture. Each tower shoots in its own way and, every wave, sends its soldier. Destroying the enemy King tower wins the match.
 
-# Firestore / Hosting / Cloud Functions / Storage
+| Tower | Role | Level 1 shot | Upgrade |
+| --- | --- | --- | --- |
+| Pawn | Arrow outpost | 3 damage, range 3.2, every 0.8s | 18, then 29 |
+| Knight | Close cleave that roots | 6 damage, range 3.3, every 1.6s | 26, then 42 |
+| Bishop | Piercing bolt that slows | 4 damage, range 6.4, every 1.4s, 2 targets | 26, then 42 |
+| Rook | Cannon splash | 9 damage, range 5.4, every 2.2s | 34, then 54 |
+| Queen | Area magic, and the spell anchor | 5 damage, range 4.6, every 1.6s | 40, then 64 |
+| King | Keep, modest shot, damage aura within 2 squares | 4 damage, range 3, every 1.2s. 720 life | 30, then 48 |
 
-# [WEBCOMPONENTS 1.2.0](https://www.webcomponents.org/)
+A level adds a quarter more damage, a little range, more life, and slightly stronger soldiers. Level 3 is the top. The King's aura adds 12% damage to friendly towers within two chess squares, and more after an upgrade. Corner rooks stand outside that aura.
 
-  Web components are a set of web platform APIs that allow you to create new custom, reusable, encapsulated HTML tags to use in web pages and web apps. Custom components and widgets build on the Web Component standards, will work across modern browsers, and can be used with any JavaScript library or framework that works with HTML.
+**Armies, the 16×16.** Every chess square is split into four cells. Soldiers do not spawn in a trickle. After an 18 second build, every living tower releases its soldier from the front of that tower's own square. The soldier walks out through its own pieces. A wall on the square in front does not send it to a shared rank. If a wall ever covers the tower's own front cells, the soldier uses the nearest open cell ahead. Pawns send peasants, knights send knights, bishops send archers, rooks send iron cannons, the Queen sends a mage, and the King sends a royal guard. A soldier belongs to the tower that launched it. When that tower is destroyed, its soldiers on the board fade at once, and nobody is paid a bounty for them. A side can have 40 soldiers out. Anyone past that cap is not saved for later. They are lost for that wave. The next wave is 15 seconds later. After five minutes the kings are exposed: a soldier's hit on a King is a full hit instead of 15%, hits on every other tower are doubled, and a soldier in range of a tower strikes it before dueling. Wave 1 and 2 send one soldier per tower. Waves 3 and 4 send two. Wave 5 and after send three, and each wave adds 15% life and strength.
 
-# Redux
+Each side can mark one living enemy tower for the next wave. The mark is free. Until it is changed, the default is the enemy King. Soldiers of that wave path to the marked tower's attack ring, fight enemy soldiers they meet, and strike the tower. If it falls, they retarget to the nearest living enemy tower that is closer to the enemy King than they are, and if none is, they march on the King. If the marked tower falls before the wave launches, the wave goes to the King and the board says so. The mark can change during the build and between waves. It applies to the wave that launches next. A dotted line previews the route while a tower is marked. A tower at zero life is destroyed and leaves the 8×8. Its four cells open up, and it stops sending waves. Towers also shoot soldiers that walk into their range.
 
-# 64 - GRID BOARD
-  <\one-square>
-  * Chess tower does not move / or moves slowly.
-# 256 - GRID BOARD
-  <\four-square>
-  * Waves of Villagers and Blocks
-# Full Block / 1/4 BLOCK
- <\square-space>
-  * 
+**Blocks.** Each player spends 12 gold to place a wall on the two chess ranks directly in front of that side's towers. White's ranks are 3 and 4 (army rows 4–7). Black's ranks are 5 and 6 (army rows 8–11). The rows on the midline, army rows 7 and 8, never take a wall, so the armies can always cross the center. That leaves White rows 4–6 and Black rows 9–11. Every one of those rows must keep at least one open cell. Each side may own 36 living walls. Selling or destroying a wall frees the slot. A 37th wall is rejected with "Wall limit reached (36/36)". A wall that cuts any tower off from an enemy attack ring, or that adds more than 8 steps to the open-board route from any tower, is rejected too. A placement that would seal every route from one home rank to the other is still rejected. A wall has 28 life. Soldiers walk through a gap and only break a wall when it blocks every route, so a maze stalls and a sealed lane gets chewed open. Picking up your own wall refunds 6 gold. Walls cannot sit on a tower cell or on another wall. A wall in front of a tower does not silence that tower: the soldier still leaves that tower's own square.
 
-Queens have magical powers
+**Economy.** Both towns earn 3 gold and 3 mana each second, starting from 36 gold and 14 mana. Gold pays for walls, tower upgrades, repair, and Overcharge. Mana pays for Queen spells. Gold caps at 120 and mana at 100.
 
+**Queen magic.** Only a living Queen can cast, and every spell is centered on her.
 
+- **Blessing** (24 mana). Friendly soldiers within 5 cells gain 4 strength and 35% speed, plus 6 life, for 6 seconds.
+- **Heal** (28 mana). Friendly towers within 2 chess squares regain 30 life.
+- **Blast** (36 mana). Enemy soldiers within 6 cells take 16 damage. Enemy towers within 2 squares take 10.
+
+**Repair.** Tap a wounded tower and spend gold for the life it is missing, about one gold per eight life, at least 4. The tower cannot be repaired again for 8 seconds. Soldiers that reach the King deal 15% of a normal hit, so one leaker wounds the keep.
+
+**Overcharge.** A level 3 tower can spend gold to hit 50% harder and faster for 8 seconds. Soldiers it launches in that window are stronger. The first charge on a tower costs 36. The next one on that same tower costs 28 more, then 28 more again. It cannot be bought again for 30 seconds. The button shows the price for that tower. The tower glows gold while the boost lasts.
+
+**Win.** Soldiers and Queen spells are the only way a tower falls. Destroy the enemy King tower and you win. If both King towers fall on the same step, the match is a draw.
+
+### Units
+
+| Tower | Builds each wave | Life |
+| --- | --- | --- |
+| Pawn | Peasant | 56 |
+| Knight | Knight | 96 |
+| Bishop | Archer | 64 |
+| Rook | Iron Cannon | 120 |
+| Queen | Mage | 100 |
+| King | Royal Guard | 720 |
+
+The shot table above is the tower's own attack. The soldier table is the army it sends.
+
+| Soldier | Strength | Life | Speed | Range | Attack |
+| --- | --- | --- | --- | --- | --- |
+| Peasant | 5 | 24 | 2.2 | 1 | 0.8s |
+| Knight | 11 | 40 | 3.2 | 1 | 0.9s |
+| Archer | 7 | 22 | 2.0 | 4 | 1.0s |
+| Iron Cannon | 12 | 32 | 1.1 | 5 | 1.6s |
+| Mage | 8 | 26 | 1.8 | 3 | 1.1s |
+| Royal Guard | 12 | 54 | 1.5 | 1 | 0.8s |
+
+Speed is cells per second. Range is Chebyshev distance on the 16×16 grid, so 1 includes diagonals. Strength is the damage of one hit. Kills pay a small gold bounty.
+
+Projectiles show the shot. The damage lands when the attack fires, not when the drawing arrives. That keeps the match deterministic.
+
+## How to play
+
+Open the site and choose a mode.
+
+- **Versus AI.** You are White. Difficulty and personality are separate. Easy thinks slowly, skips some decisions, and holds gold back. Normal sits between that and Hard, which thinks every 1.2 seconds and spends as soon as a buy is paid for. Rusher banks gold on pawns and then knights. Fortress walls and repairs before it upgrades the front. Tactician finishes the queen first, blesses the launch, and moves the mark onto a wounded tower.
+- **Local 2 player.** Both colors are live at once on one screen. White and Black can each upgrade, repair, overcharge, place walls, and cast while the armies keep marching. This is split control, not a turn-based hot-seat, because the match is real time.
+- **Online 1v1.** Sign in, host a four-letter code, and send it to the other player. The host is White and runs the simulation. The guest is Black and sends upgrades, repairs, Overcharge, walls, spells, and the next-wave target to the host. A guest cannot command White's towers. The host publishes the position about twice a second. The guest is looking at that snapshot, so orders arrive a short moment later. If the host closes the tab, the match stops.
+
+Tap one of your towers. A ring shows its range, and Upgrade spends gold. The wall button opens block placement: the two ranks in front of your towers are shaded, the center strip is marked so it stays open, a green cell is legal, and a red cell is not. Tap a cell to build. Tap your own wall to sell it. Spell buttons sit in the side panel, or above the board on a phone. Pause freezes the armies. The page also pauses while the tab is hidden. Menu leaves the match. Rematch starts the same mode with a new layout seed.
+
+Sign in to save a win, loss, or draw from versus-AI and online matches. Local games are not recorded, because two players share one account. The record is `wins–losses–draws`.
+
+## Design decisions
+
+These are the calls the brief left open.
+
+- White sits on rank 1. The human is White against the AI.
+- Towers never move and never capture. Soldiers and Queen spells damage towers, including the King. Destroying the enemy King tower wins.
+- Soldiers attack in waves, not a stream. Eighteen seconds of building, then a launch, then fifteen seconds until the next one.
+- Soldiers do not occupy cells. A lane can stack. Towers occupy their four cells, and player blocks occupy one.
+- Soldiers step off the front of the tower that launched them and walk through their own pieces until they reach open ground. After that, every tower blocks. They path to the attack ring of their marked tower, not into its footprint. Ranged soldiers stop at their range. Equal shortest steps are spread by soldier so a wave is not one file. Paths are recomputed when a wall or a tower changes. Walls sit on the two ranks in front of each side's towers. The center rows stay open, every build row keeps a gap, and a block that cuts every route from one home rank to the other is rejected. Each side may own 36 living walls. A maze may add at most 8 steps to the open-board route from any tower to any enemy attack ring. Soldiers can also break a block they are standing against, so a maze is not permanent.
+- Aiming the next wave is free. The match setup picks a personality for the computer, on top of Easy, Normal, or Hard. Rusher marks a wounded pawn, or the queen when the opponent has walled the camp or raised that queen, and it spends on pawns before knights and a short wall. Fortress marks the weakest exposed tower, fills a short wall, and repairs. Tactician marks the queen until a tower is wounded, then switches, and it finishes the queen before any other upgrade. Even seeds give White the direct steps and odd seeds give them to Black, so a mirror does not belong to one color. Tab reaches one square, and the arrow keys move across the board.
+- Each side is capped at 40 soldiers. A tower that would launch past that cap loses those soldiers for the wave. They are not queued.
+- The opening has no neutral stones. The maze is whatever the players, or the AI, pay for.
+- The clock is a fixed 100ms step, drawn from `requestAnimationFrame`. The simulation never reads the frame delta except to decide how many steps are due. A long hitch applies at most 200ms.
+- Gold and mana are separate. Walls, upgrades, repair, and Overcharge spend gold. Queen spells spend mana.
+- Queen spells are self-centered so a phone can cast without a second targeting gesture.
+- The King sends a royal guard. The King tower does not move. A soldier dies with the tower that launched it, and that death pays no bounty. Soldiers that could not leave because the side was already at 40 are not kept for a later wave.
+- Local play is simultaneous. A hot-seat turn would freeze one town while its armies were still the thing that loses.
+- Online play is host-authoritative rather than lockstep. Firestore latency is a poor shared clock, and one simulator cannot drift from itself. Guest commands are checked against that side's towers, so a guest cannot command White. The host publishes the position every half second, and once more when the match ends, so the guest sees the same King fall. Each command id is applied once. If a peer's pulse goes stale, the match pauses under a Reconnecting banner. They can return for 30 seconds and resume from the host snapshot. After that the side that left forfeits. The emulator test delays commands by 150ms ±50ms and drops 2% of them.
+- Match history is per signed-in user. Versus AI and online write `users/{uid}` and `users/{uid}/history`. Local matches do not.
+- The same seed and the same commands replay the same match. The AI reads a stored random state, not `Math.random`.
+
+## Develop
+
+Display type is [Cinzel](https://fonts.google.com/specimen/Cinzel) and body type is [Spectral](https://fonts.google.com/specimen/Spectral), both served by Google Fonts under the SIL Open Font License, with Palatino as the fallback. Every picture on the board is original. The towers are SVG. The six soldiers are original drawings rasterized into a sprite atlas in the browser: peasant, mounted knight, archer, iron cannon, mage, and royal guard, in White steel-and-blue and Black obsidian-and-amber, plus the Bright palette in Settings. No asset pack is used. The tones are original oscillators, credited here, not a sound library.
+
+The stack is Lit 3, Redux Toolkit 2, pwa-auth, and Firebase 12. TypeScript is compiled with `tsc`. Development uses `@web/dev-server`. Production uses Rollup. There is no Vite and no Polymer.
+
+Sound is original synthesis in the browser (oscillators only). No sampled recordings are shipped. Each soldier, shot, spell, wall, collapse, and the fallen king has its own voice. A quiet drone is optional in Settings. The page stays silent until the first click or key, then the saved volume and mute apply. Difficulty, the tutorial flag, and the palette are saved in this browser too.
+
+To play on this machine, emulators and the dev server together:
+
+```bash
+npm install
+npm run dev:emulators
+```
+
+Open http://127.0.0.1:8080 . That host selects the development Firebase config. Sign in from the Login button with any email and password if you want a saved record or an online match. Versus AI and local 2 player work signed out. The first versus-AI match is a skippable tour against an opponent that waits: towers, soldiers, wall ranks, the open center, gaps, targeting, upgrade, repair, the Queen's spells, and the five-minute exposure. How to play can replay it. When it ends, the chosen personality starts. The result lists damage, walls, and spells, and can play the last 30 seconds. Pause is P or Space. Menu is M.
+
+```bash
+npm test
+npm run test:online
+npm run test:e2e
+npm run build
+```
+
+`npm test` compiles and runs the rule tests with Node's test runner. They cover upgrades, repair, Overcharge pricing, Easy spending a full bank on pawns, pathing, the King falling, spells, deterministic replays, and a scripted win against the easy AI.
+
+`npm run test:e2e` plays a versus-AI match in Chrome from the title screen through the results and back to the menu. It needs the dev server, and reuses one that is already on port 8080.
+
+`npm start` serves http://127.0.0.1:8080 and keeps `tsc --watch` running, without starting the emulators. Sign-in and online matches need `npm run dev:emulators` instead.
+
+### Local online matches
+
+`config/development.js` and `config/production.js` hold the contractors-centre web config. `boot.js` runs before the app module. On `localhost` or `127.0.0.1` it selects the development config, whose Realtime Database URL is `http://localhost:9000?ns=emulationui`. Any other host selects production, `https://contractors-centre.firebaseio.com`. Both keys land on `window.process.env` together: `NODE_ENV` and `FIREBASE_CONFIG`. pwa-auth reads that config when it loads.
+
+On localhost the page also talks to the Auth emulator on port 9099 and the Firestore emulator on port 8088. A production host does not. Sign-in and online matches on this machine need those emulators running.
+
+```bash
+npm run dev:emulators
+```
+
+Then open http://127.0.0.1:8080 . Sign in from the Login button with any email and password. The emulator keeps those accounts on this machine only.
+
+`npm run test:online` boots the same emulators, plays a host and a guest through create, join, build, a wall, upgrade, repair, Overcharge, a spell, a wave, a dropped guest listener, and the King falling, then exits.
+
+`npm run build` writes the hosting bundle to `dist/`. `dist/` is not committed. Firebase Hosting is pointed at it.
+
+```bash
+npx firebase deploy --only hosting,firestore:rules,storage,database
+```
+
+Deploy the rules with the site. Until those rules are published, online matches and saved records are rejected by Firebase.
+
+### Layout
+
+`src/game/units.ts` holds every stat. `src/game/simulate.ts` is the pure step function. `src/game/chess.ts` looks up which tower stands on a square. `src/game/pathing.ts` is the 16×16 search. `src/game/ai.ts` chooses one action for the computer. `src/game/game_state.ts` is the Redux slice. The board components (`board-square`, `one-square`, `four-square`, `square-space`, `box-block`, and the six piece elements) only draw. `chess-defense` owns the menu, the clock, and the online listeners.
+
+### Firebase
+
+`src/firebase-config.ts` reads the config `boot.js` already chose, and passes that same JSON to the pwa-auth elements. pwa-auth still provides `<user-icon>`, `<user-drawer>`, `<user-login>`, `<user-settings>`, and `<email-reset>`. The Firebase project is contractors-centre.
+
+`firestore.rules` lets a signed-in player read and write only `users/{their uid}`, create a match they host, join a match that has an empty guest seat, and append inputs stamped with their own uid. The host may update the match document. Guests may not overwrite the snapshot after they have joined. Feedback can be created by a signed-in user.
+
+`storage.rules` allows an image under 5 MB at `pwa-auth/{uid}/…`, which is where profile photos go. `database.rules.json` limits the Realtime Database to `users/{uid}` for that same user.
+
+Online play on a deployed host uses the contractors-centre project. Localhost uses the emulators instead, so a match can be played before those rules are published. The Realtime Database emulator is port 9000, namespace `emulationui`, matching the development database URL.
+
+The contractors-centre web key is a real Identity Toolkit key. A request from `https://contractors-centre.firebaseapp.com` is accepted. A request from `http://localhost:8080` or `http://127.0.0.1:8080` is rejected with `API_KEY_HTTP_REFERRER_BLOCKED`. That is why local sign-in goes through the Auth emulator.
